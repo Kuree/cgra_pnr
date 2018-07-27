@@ -25,28 +25,29 @@ def is_legal(board, pos, blk_id):
     # blocks, i.e., IO pins.
     # hard code everything for now
     x, y = pos
+    repeat = len(board[0]) // 4
     if board[y][x] is not None:
         return False
     if blk_id[0] == "i":
-        if y == 0 or y == 19:
-            return x in range(2, 18)
-        elif x == 0 or x == 19:
-            return y in range(2, 18)
-        elif pos in [(2, 1), (1, 3), (3, 18), (18, 3)]:
+        if y == 0 or y == len(board) - 1:
+            return x in range(2, len(board[0]) -2)
+        elif x == 0 or x == len(board[0]) - 1:
+            return y in range(2, len(board[0]) - 2)
+        elif pos in [(2, 1), (1, 3), (3, len(board) - 2), (len(board[0]) - 2, 3)]:
             return True
         else:
             return False
     elif blk_id[0] == "m":
         if (x - 1) % 4 != 0:
             return False
-        if y < 2 or y > 17 - 1: # size
+        if y < 2 or y > len(board) - 4: # size
             return False
         # size
         return board[y + 1][x] is None and board[y - 1][x] is None
     elif blk_id[0] == "p":
-        if x < 2 or y < 2 or x > 17 or y > 17:
+        if x < 2 or y < 2 or x > len(board[0]) - 3 or y > len(board) - 3:
             return False
-        return x not in [1 + 4 * i for i in range(4)]
+        return x not in [5 + 4 * i for i in range(repeat)]
     else:
         raise Exception("Unknown type for block", blk_id)
 
@@ -66,7 +67,7 @@ def place_special_blocks(board, blks, board_pos):
     # place io in the middle of each sides
     io_count = 0
     mem_count = 0
-    io_start = 9
+    io_start = len(board[0]) // 2 - 1
     for blk_id in blks:
         if blk_id[0] == "i":
             if io_count % 4 == 0:
@@ -81,7 +82,7 @@ def place_special_blocks(board, blks, board_pos):
                     x = io_start - tap // 8
                 else:
                     x = io_start + tap // 8 + 1
-                y = 19
+                y = len(board) - 1
             elif io_count % 4 == 2:
                 tap = io_count - 2
                 if tap % 8 == 0:
@@ -95,7 +96,7 @@ def place_special_blocks(board, blks, board_pos):
                     y = io_start - tap // 8
                 else:
                     y = io_start + tap // 8 + 1
-                x = 19
+                x = len(board[0]) - 1
             pos = (x, y)
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
