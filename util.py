@@ -92,7 +92,7 @@ def compute_centroid(cluster_cells):
         y_sum = 0
         for cell in cells:
             x_sum += cell[0]
-            y_sum += cell[0]
+            y_sum += cell[1]
         pos_x = int(x_sum / cluster_size)
         pos_y = int(y_sum / cluster_size)
         result[cluster_id] = (pos_x, pos_y)
