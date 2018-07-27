@@ -100,5 +100,17 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# PyCharm settigns
+.idea
+
 # mypy
 .mypy_cache/
+
+# placement files
+*.n2v
+*.json
+*.place
+*.emb
+
+# binary files
+metapath2vec
