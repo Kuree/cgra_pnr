@@ -96,10 +96,3 @@ def parse_emb(filename, filter_hyperedge=True, filter_complex=False):
         input_data[netid] = inputs
     return num_dim, input_data
 
-
-# test
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage:", sys.argv[0], "<netlist_filename>", file=sys.stderr)
-        exit(1)
-    print(len(parse_netlist(sys.argv[1])))

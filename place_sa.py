@@ -67,8 +67,6 @@ def place_special_blocks(board, blks, board_pos):
     io_count = 0
     mem_count = 0
     io_start = 9
-    mem_start_x = 9
-    mem_start_y = 9
     for blk_id in blks:
         if blk_id[0] == "i":
             if io_count % 4 == 0:

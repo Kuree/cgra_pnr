@@ -113,7 +113,7 @@ class SAClusterPlacer(Annealer):
         xx = bbox1[0] + pos[0]
         yy = bbox1[1] + pos[1]
         if xx > len(self.board[0]) - 2 or xx < 2 or \
-           yy > len(self.board) or yy < 2:
+           yy > len(self.board) - 2 or yy < 2:
             return False
         overlap_size = 0
         for c_id in state:
@@ -203,10 +203,12 @@ class SAClusterPlacer(Annealer):
     def __is_cell_legal(self, pos, check_bound=True):
         # this is injecting board specific knowledge here
         x, y = pos
-        if x in [5 + j * 4 for j in range(4)]:
+        repeat = len(self.board) // 4
+        if x in [5 + j * 4 for j in range(repeat)]:
             return False
         if check_bound:
-            if x < 2 or x > 18 - 1 or y < 2 or y > 18 - 1:
+            if x < 2 or x > len(self.board[0]) - 3 or y < 2 or \
+               y > len(self.board) - 3:
                 return False
         return True
 

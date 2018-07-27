@@ -157,7 +157,7 @@ def alias_draw(J, q):
         return J[kk]
 
 def build_walks(netlist_filename):
-    _, nx_G, _ = parser.parse_netlist(netlist_filename)
+    _, nx_G, _, _ = parser.parse_netlist(netlist_filename)
     p = 1
     q = 0.5
     num_walks = 10
@@ -183,5 +183,10 @@ if __name__ == "__main__":
         print("Usage:", sys.argv[0], "<netlist_filename>", file=sys.stderr)
         exit(1)
     filename = sys.argv[1]
+    emb_file = filename.replace(".json", ".emb")
+    if os.path.isfile(emb_file):
+        print("skipping", emb_file)
+        exit(0)
     print("processing", filename)
+    random.seed(0)
     build_walks(filename)
