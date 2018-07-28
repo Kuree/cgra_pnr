@@ -156,6 +156,7 @@ def alias_draw(J, q):
     else:
         return J[kk]
 
+
 def build_walks(netlist_filename):
     _, nx_G, _, _ = parser.parse_netlist(netlist_filename)
     p = 1
@@ -177,6 +178,7 @@ def build_walks(netlist_filename):
     emb_name = netlist_filename.replace(".json", ".emb")
     cmd = [NETLIST2VEC, "-train", output_name, "-output", emb_name, "-size", str(num_dim)]
     subprocess.call(cmd)
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

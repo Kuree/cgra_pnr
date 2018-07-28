@@ -99,7 +99,7 @@ def compute_centroid(cluster_cells):
     return result
 
 
-def save_placement(board_pos, id_to_name, place_file):
+def save_placement(board_pos, id_to_name, dont_care, place_file):
     blk_keys = list(board_pos.keys())
     blk_keys.sort(key=lambda x:int(x[1:]))
     with open(place_file, "w+") as f:
@@ -109,9 +109,25 @@ def save_placement(board_pos, id_to_name, place_file):
                                                       "Block ID")
         f.write(header)
         f.write("-" * len(header) + "\n")
+        name_to_id = {}
         for blk_id in blk_keys:
             x, y = board_pos[blk_id]
             f.write("{0}\t\t{1}\t{2}\t\t#{3}\n".format(id_to_name[blk_id],
                                                           x,
                                                           y,
                                                           blk_id))
+        # reverse the index
+        for blk_id in id_to_name:
+            name_to_id[id_to_name[blk_id]] = blk_id
+
+        # write out absorbed components
+        for blk_name in dont_care:
+            connected_name = dont_care[blk_name]
+            assert(connected_name is not None)
+            connected_id = name_to_id[connected_name]
+            x, y = board_pos[connected_id]
+            blk_id = name_to_id[blk_name]
+            f.write("{0}\t\t{1}\t{2}\t\t#{3}\n".format(blk_name,
+                                                       x,
+                                                       y,
+                                                       blk_id))

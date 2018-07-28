@@ -114,3 +114,7 @@ venv.bak/
 
 # binary files
 metapath2vec
+
+# cgra files
+cgra_info.txt
+serpent.log*

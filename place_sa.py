@@ -154,30 +154,9 @@ def main():
     # place the spacial blocks first
     place_special_blocks(board, special_blocks, fixed_blk_pos)
 
-    data_x = np.zeros((len(emb), num_dim))
-    blks = list(emb.keys())
-    for i in range(len(blks)):
-        data_x[i] = emb[blks[i]]
-
-    # simple heuristics to calculate the clusters
-    num_clusters = int(np.ceil(len(emb) / 30)) + 1
-    print("num of clusters", num_clusters)
-    kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(data_x)
-    cluster_ids = kmeans.labels_
-    clusters = {}
-    for i in range(len(blks)):
-        cid = cluster_ids[i]
-        if cid not in clusters:
-            clusters[cid] = set([blks[i]])
-        else:
-            clusters[cid].add(blks[i])
-
-    cluster_sizes = [len(clusters[s]) for s in clusters]
-    print("cluster average:", np.average(cluster_sizes), "std:",
-          np.std(cluster_sizes), "total:", np.sum(cluster_sizes))
+    clusters = prepare_cluster_data(emb, num_dim)
 
     cluster_placer = SAClusterPlacer(clusters, netlists, board, fixed_blk_pos)
-
 
     cluster_placer.anneal()
 
@@ -212,8 +191,38 @@ def main():
     for r in results:
         board_pos.update(r)
 
-    color_index = "imop"
+    # save the placement file
+    placement_filename = netlist_filename.replace(".json", ".place")
+    save_placement(board_pos, id_to_name, dont_care, placement_filename)
 
+    visualize_placement(board, board_pos)
+
+
+def prepare_cluster_data(emb, num_dim):
+    data_x = np.zeros((len(emb), num_dim))
+    blks = list(emb.keys())
+    for i in range(len(blks)):
+        data_x[i] = emb[blks[i]]
+    # simple heuristics to calculate the clusters
+    num_clusters = int(np.ceil(len(emb) / 30)) + 1
+    print("num of clusters", num_clusters)
+    kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(data_x)
+    cluster_ids = kmeans.labels_
+    clusters = {}
+    for i in range(len(blks)):
+        cid = cluster_ids[i]
+        if cid not in clusters:
+            clusters[cid] = set([blks[i]])
+        else:
+            clusters[cid].add(blks[i])
+    cluster_sizes = [len(clusters[s]) for s in clusters]
+    print("cluster average:", np.average(cluster_sizes), "std:",
+          np.std(cluster_sizes), "total:", np.sum(cluster_sizes))
+    return clusters
+
+
+def visualize_placement(board, board_pos):
+    color_index = "imop"
     scale = 30
     im, draw = draw_board(20, 20, scale)
     for blk_id in board_pos:
@@ -221,14 +230,9 @@ def main():
         index = color_index.index(blk_id[0])
         color = color_palette[index]
         draw_cell(draw, pos, color, scale)
-
     for blk_id in board_pos:
         pos = board_pos[blk_id]
         place_on_board(board, blk_id, pos)
-
-    # save the placement file
-    placement_filename = netlist_filename.replace(".json", ".place")
-    save_placement(board_pos, id_to_name, placement_filename)
     plt.imshow(im)
     plt.show()
 

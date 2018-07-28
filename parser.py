@@ -5,46 +5,59 @@ import os
 import networkx as nx
 
 
+def parse_connection(netlist_filename):
+    # just parse the connection without verifying
+    connections, _ = read_netlist_json(netlist_filename)
+    nets = []
+    for conn in connections:
+        for v in conn:
+            raw_names = v.split(".")
+            assert(len(raw_names) > 1)
+            if len(raw_names) == 2:
+                pass
+
+
 def parse_netlist(netlist_filename):
     """parse the netlist. also perform simple "packing" while reading out
        connections.
     """
-    assert(os.path.isfile(netlist_filename))
-    with open(netlist_filename) as f:
-        raw_data = json.load(f)
-    namespace = raw_data["namespaces"]
-    design = namespace["global"]["modules"]["DesignTop"]
-    instances = design["instances"]
-    connections = design["connections"]
+    connections, instances = read_netlist_json(netlist_filename)
     name_to_id = {}
+    pe_resources = {}
     id_count = 0
     # don't care list
-    dont_care = set()
+    dont_care = {}
+    # things we actually care in creating connection graph
+    care_set = set()
+    care_types = "pim"
     for name in instances:
         attrs = instances[name]
         if "genref" not in attrs:
             assert("modref" in attrs)
             assert(attrs["modref"] == u"corebit.const")
-            dont_care.add(name)
-            continue
-        instance_type = attrs["genref"]
-        if instance_type == "cgralib.PE":
-            blk_type = "p"
-        elif instance_type == "cgralib.IO":
-            blk_type = "i"
-        elif instance_type == "cgralib.Mem":
-            blk_type = "m"
-        elif instance_type == "coreir.const":
-            dont_care.add(name)
-            continue
-        elif instance_type == "coreir.reg":
-            dont_care.add(name)
-            continue
+            dont_care[name] = None
+            blk_type = "b"
         else:
-            raise Exception("Unknown instance type", instance_type)
+            instance_type = attrs["genref"]
+            if instance_type == "cgralib.PE":
+                blk_type = "p"
+            elif instance_type == "cgralib.IO":
+                blk_type = "i"
+            elif instance_type == "cgralib.Mem":
+                blk_type = "m"
+            elif instance_type == "coreir.const":
+                dont_care[name] = None
+                blk_type = "c"
+            elif instance_type == "coreir.reg":
+                dont_care[name] = None
+                blk_type = "r"
+            else:
+                raise Exception("Unknown instance type", instance_type)
         blk_id = blk_type + str(id_count)
         id_count += 1
         name_to_id[name] = blk_id
+        if blk_type in care_types:
+            care_set.add(name)
     # read the connections and pack them
     g = nx.Graph()
     netlists = {}
@@ -56,13 +69,33 @@ def parse_netlist(netlist_filename):
         hyper_edge = []
         for v in conn:
             blk_name = v.split(".")[0]
-            if blk_name not in name_to_id and blk_name not in dont_care:
+            if blk_name not in name_to_id:
                 raise Exception("cannot find", blk_name, "in instances")
-            if blk_name in name_to_id:
+            if blk_name in care_set:
                 blk_id = name_to_id[blk_name]
                 g.add_edge(edge_id, blk_id)
                 hyper_edge.append(blk_id)
+            elif blk_name in dont_care and dont_care[blk_name] is None:
+                # absorb consts and registers
+                for v2 in conn:
+                    name2 = v2.split(".")[0]
+                    if name2 not in dont_care and name2 != blk_name:
+                        dont_care[blk_name] = name2
+                        print("Absorb", blk_name, "into", dont_care[blk_name])
+                        break
+
         netlists[edge_id] = hyper_edge
+    # remove the ones that doesn't have connections
+    remove_set = set()
+    for blk_name in dont_care:
+        if dont_care[blk_name] is None:
+            print("WARNING: Failed to absorb", blk_name,
+                  "\n         Caused by:",
+                  "No connection", file=sys.stderr)
+            remove_set.add(blk_name)
+    for blk_name in remove_set:
+        dont_care.pop(blk_name, None)
+
     for edge in g.edges():
         g[edge[0]][edge[1]]['weight'] = 1
     g = g.to_undirected()
@@ -70,8 +103,18 @@ def parse_netlist(netlist_filename):
     id_to_name = {}
     for b_id in name_to_id:
         id_to_name[name_to_id[b_id]] = b_id
-
     return netlists, g, dont_care, id_to_name
+
+
+def read_netlist_json(netlist_filename):
+    assert (os.path.isfile(netlist_filename))
+    with open(netlist_filename) as f:
+        raw_data = json.load(f)
+    namespace = raw_data["namespaces"]
+    design = namespace["global"]["modules"]["DesignTop"]
+    instances = design["instances"]
+    connections = design["connections"]
+    return connections, instances
 
 
 # parse the ones generated by metapath2vec
