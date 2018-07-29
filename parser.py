@@ -7,14 +7,10 @@ import networkx as nx
 
 def parse_connection(netlist_filename):
     # just parse the connection without verifying
-    connections, _ = read_netlist_json(netlist_filename)
-    nets = []
-    for conn in connections:
-        for v in conn:
-            raw_names = v.split(".")
-            assert(len(raw_names) > 1)
-            if len(raw_names) == 2:
-                pass
+    connections, instances = read_netlist_json(netlist_filename)
+    _, g, id_to_name, netlists = pack_netlists(connections,
+                                                       instances)
+    return g, id_to_name, netlists
 
 
 def parse_netlist(netlist_filename):
@@ -22,8 +18,47 @@ def parse_netlist(netlist_filename):
        connections.
     """
     connections, instances = read_netlist_json(netlist_filename)
+    dont_care, g, id_to_name, raw_netlists = pack_netlists(connections,
+                                                           instances)
+    netlists = {}
+    for net_id in raw_netlists:
+        hyper_edge = raw_netlists[net_id]
+        netlists[net_id] = [e[0] for e in hyper_edge]
+    return netlists, g, dont_care, id_to_name
+
+
+def convert2netlist(connections):
+    netlists = []
+    skip_index = set()
+    for i in range(len(connections)):
+        if i in skip_index:
+            continue
+        conn = connections[i]
+        assert(len(conn) == 2)
+        # brute force search
+        net = set()
+        net.add(conn[0])
+        net.add(conn[1])
+        for j in range(len(connections)):
+            if i == j:
+                continue
+            conn0 = connections[j][0]
+            conn1 = connections[j][1]
+
+            if conn0 in net:
+                net.add(conn1)
+                skip_index.add(j)
+            if conn1 in net:
+                skip_index.add(j)
+                net.add(conn0)
+        netlists.append(net)
+    print("INFO: before conversion connections", len(connections),
+          "after conversion netlists:", len(netlists))
+    return netlists
+
+
+def pack_netlists(connections, instances):
     name_to_id = {}
-    pe_resources = {}
     id_count = 0
     # don't care list
     dont_care = {}
@@ -33,8 +68,8 @@ def parse_netlist(netlist_filename):
     for name in instances:
         attrs = instances[name]
         if "genref" not in attrs:
-            assert("modref" in attrs)
-            assert(attrs["modref"] == u"corebit.const")
+            assert ("modref" in attrs)
+            assert (attrs["modref"] == u"corebit.const")
             dont_care[name] = None
             blk_type = "b"
         else:
@@ -68,13 +103,15 @@ def parse_netlist(netlist_filename):
         h_edge_count += 1
         hyper_edge = []
         for v in conn:
-            blk_name = v.split(".")[0]
+            raw_names = v.split(".")
+            blk_name = raw_names[0]
+            port = ".".join(raw_names[1:])
             if blk_name not in name_to_id:
                 raise Exception("cannot find", blk_name, "in instances")
             if blk_name in care_set:
                 blk_id = name_to_id[blk_name]
                 g.add_edge(edge_id, blk_id)
-                hyper_edge.append(blk_id)
+                hyper_edge.append((blk_id, port))
             elif blk_name in dont_care and dont_care[blk_name] is None:
                 # absorb consts and registers
                 for v2 in conn:
@@ -83,8 +120,8 @@ def parse_netlist(netlist_filename):
                         dont_care[blk_name] = name2
                         print("Absorb", blk_name, "into", dont_care[blk_name])
                         break
-
-        netlists[edge_id] = hyper_edge
+        if len(hyper_edge) > 1:
+            netlists[edge_id] = hyper_edge
     # remove the ones that doesn't have connections
     remove_set = set()
     for blk_name in dont_care:
@@ -95,7 +132,6 @@ def parse_netlist(netlist_filename):
             remove_set.add(blk_name)
     for blk_name in remove_set:
         dont_care.pop(blk_name, None)
-
     for edge in g.edges():
         g[edge[0]][edge[1]]['weight'] = 1
     g = g.to_undirected()
@@ -103,7 +139,10 @@ def parse_netlist(netlist_filename):
     id_to_name = {}
     for b_id in name_to_id:
         id_to_name[name_to_id[b_id]] = b_id
-    return netlists, g, dont_care, id_to_name
+
+    print("INFO: before packing netlists:", len(connections),
+          "after packing netlists:", len(netlists))
+    return dont_care, g, id_to_name, netlists
 
 
 def read_netlist_json(netlist_filename):
@@ -114,6 +153,8 @@ def read_netlist_json(netlist_filename):
     design = namespace["global"]["modules"]["DesignTop"]
     instances = design["instances"]
     connections = design["connections"]
+    # the standard json input is not a netlist
+    connections = convert2netlist(connections)
     return connections, instances
 
 
@@ -138,4 +179,22 @@ def parse_emb(filename, filter_hyperedge=True, filter_complex=False):
         inputs = [float(x) for x in raw_data[1:]]
         input_data[netid] = inputs
     return num_dim, input_data
+
+
+def parse_placement(placement_file):
+    with open(placement_file) as f:
+        lines = f.readlines()
+    lines = lines[2:]
+    placement = {}
+    id_to_name = {}
+    for line in lines:
+        raw_line = line.split()
+        assert(len(raw_line) == 4)
+        blk_name = raw_line[0]
+        x = int(raw_line[1])
+        y = int(raw_line[2])
+        blk_id = raw_line[-1][1:]
+        placement[blk_id] = (x, y)
+        id_to_name[blk_id] = blk_name
+    return placement, id_to_name
 

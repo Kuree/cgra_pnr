@@ -104,7 +104,7 @@ def place_special_blocks(board, blks, board_pos):
         elif blk_id[0] == "m":
             # just evenly distributed
             x = 5 + (mem_count % 4) * 4
-            y = 4 + (mem_count // 4) * 2
+            y = 4 + (mem_count // 4) * 4
             pos = (x, y)
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos

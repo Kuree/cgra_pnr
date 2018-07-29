@@ -1,0 +1,198 @@
+from __future__ import print_function, division
+from parser import parse_connection, parse_placement
+import sys
+import numpy as np
+from visualize import draw_board, draw_cell
+import matplotlib.pyplot as plt
+
+
+class Router:
+    def __init__(self, netlist_filename, placement_filename):
+        _, id_to_name, netlists = parse_connection(netlist_filename)
+        self.id_to_name = id_to_name
+        self.netlists = netlists
+
+        placement, _ = parse_placement(placement_filename)
+        self.placement = placement
+
+        # TODO: change this to support different size of boards
+        # NOTE: it's width x height
+        self.board_size = (20, 20)
+        self.channel_width = 5
+
+        # result
+        self.route_result = {}
+
+        margin = 0
+        # 4 directions
+        self.routing_resource = np.zeros((self.board_size[1],
+                                          self.board_size[0],
+                                          4,
+                                          self.channel_width), dtype=np.bool)
+        for i in range(margin, self.board_size[0] - margin):
+            for j in range(margin, self.board_size[1] - margin):
+                for k in range(4):
+                    for l in range(self.channel_width):
+                        self.routing_resource[i][j][k][l] = True
+
+    @staticmethod
+    def compute_direction(src, dst):
+        """ top -> 0 right -> 1 bottom -> 2 left -> 3"""
+        assert (src != dst)
+        x1, y1 = src
+        x2, y2 = dst
+        assert ((abs(x1 - x2) == 0 and abs(y1 - y2) == 1) or (abs(x1 - x2) == 1
+                                                              and abs(y1 - y2)
+                                                              == 0))
+
+        if x1 == x2:
+            if y2 > y1:
+                return 2
+            else:
+                return 0
+        if y1 == y2:
+            if x2 > x1:
+                return 1
+            else:
+                return 3
+        raise Exception("direction error " + "{}->{}".format(src, dst))
+
+    def get_neighbors(self, chan, pos):
+        x, y = pos
+        results = []
+        working_set = set()
+        # hard coded the pos for now
+        x_max = min(self.board_size[0] - 1, x + 1)
+        x_min = max(0, x - 1)
+        y_max = min(self.board_size[1] - 1, y + 1)
+        y_min = max(0, y - 1)
+        working_set.add((x, y_max))
+        working_set.add((x, y_min))
+        working_set.add((x_min, y))
+        working_set.add((x_max, y))
+        # remove itself, if there is any
+        if pos in working_set:
+            working_set.remove(pos)
+        for new_pos in working_set:
+            direction = Router.compute_direction(pos, new_pos)
+            if self.routing_resource[y][x][direction][chan]:
+                results.append(new_pos)
+        return results
+
+    def route(self):
+        print("INFO: Performing greedy BFS/A* routing")
+        for net_id in self.netlists:
+            net = self.netlists[net_id]
+
+            src = net[0][0]
+            dst_set_cpy = net[1:]
+            route_path = {}
+            # TODO: change how to present failure
+            failed_route = [None] * 100
+            for chan in range(self.channel_width):
+                final_path = []
+                dst_set = dst_set_cpy[:]
+                src_pos = self.placement[src]
+                while len(dst_set) > 0:
+                    dst = dst_set.pop(0)[0]
+                    dst_pos = self.placement[dst]
+
+                    # self loop prevention
+                    # this will happen if two operands share the same input
+                    if dst_pos == src_pos:
+                        # skip over the loop
+                        src_pos = dst_pos
+                        continue
+                    working_set = []
+                    finished_set = set()
+                    link = {}
+                    working_set.append(src_pos)
+                    terminate = False
+                    while len(working_set) > 0 and not terminate:
+                        # using manhattan distance as heuristics
+                        working_set.sort(
+                            key=lambda (x, y): abs(x - dst_pos[0]) +
+                                               abs(y - dst_pos[1]))
+                        point = working_set.pop(0)
+                        finished_set.add(point)
+                        points = self.get_neighbors(chan, point)
+                        for p in points:
+                            if p in finished_set or p in working_set:
+                                # we have already explored this position
+                                continue
+                            link[p] = point  # point backwards
+                            if p == dst_pos:
+                                # we have found it!
+                                terminate = True
+                                break
+                            else:
+                                working_set.append(p)
+                    if dst_pos not in link:
+                        # failed to route in this channel
+                        final_path = failed_route
+                        dst_set = []
+                        # early termination
+                        break
+                    # merge the search path to channel path
+                    pp = dst_pos
+                    path = []
+                    while pp != src_pos:
+                        path.append(pp)
+                        pp = link[pp]
+                    path.append(pp)
+                    path.reverse()
+                    # append this to the final path
+                    if len(final_path) == 0:
+                        final_path = path
+                    else:
+                        # skip the first one since src and dst overlap
+                        final_path = final_path + path[1:]
+
+                    # move along the hyper edge
+                    src_pos = dst_pos
+
+                route_path[chan] = final_path
+            # find the minimum route path
+            min_chan = 0
+            for i in range(1, self.channel_width):
+                if len(route_path[i]) < len(route_path[min_chan]):
+                    min_chan = i
+            if len(route_path[min_chan]) == len(failed_route):
+                raise Exception("Failed to route for net " + net_id)
+            # add the final path to the design
+            self.route_result[net_id] = (min_chan, route_path[min_chan])
+            # update routing resource
+            path = route_path[min_chan]
+            for index in range(0, len(path) - 1):
+                path_src = path[index]
+                path_dst = path[index + 1]
+                direction = Router.compute_direction(path_src, path_dst)
+                path_src_x, path_src_y = path_src
+                path_dst_x, path_dst_y = path_dst
+                self.routing_resource[path_src_y][path_src_x] \
+                    [direction][min_chan] = False
+                direction = Router.compute_direction(path_dst, path_src)
+                self.routing_resource[path_dst_y][path_dst_x] \
+                    [direction][min_chan] = False
+
+    def vis_routing_resource(self):
+        im, draw = draw_board(20, 20)
+        for i in range(self.board_size[0]):
+            for j in range(self.board_size[1]):
+                route_r = self.routing_resource[i][j]
+                r = np.sum(route_r)
+                color = int(255 * r / 4 / self.channel_width)
+                draw_cell(draw, (j, i), color=(255 - color, 0, color))
+        plt.imshow(im)
+        plt.show()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("Usage:", sys.argv[0], "<netlist.json> <netlist.place",
+              file=sys.stderr)
+
+        exit(1)
+    r = Router(sys.argv[1], sys.argv[2])
+    r.route()
+    r.vis_routing_resource()
