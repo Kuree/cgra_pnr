@@ -132,3 +132,6 @@ def save_placement(board_pos, id_to_name, dont_care, place_file):
                                                        y,
                                                        blk_id))
 
+
+def save_routing():
+    pass

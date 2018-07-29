@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 class Router:
     def __init__(self, netlist_filename, placement_filename,
                  avoid_congestion=True):
-        _, id_to_name, netlists = parse_connection(netlist_filename)
+        connections, id_to_name, netlists = parse_connection(netlist_filename)
+        self.connections = connections
         self.id_to_name = id_to_name
         self.netlists = netlists
 
@@ -47,7 +48,7 @@ class Router:
 
     @staticmethod
     def compute_direction(src, dst):
-        """ top -> 0 right -> 1 bottom -> 2 left -> 3"""
+        """ right -> 0 bottom -> 1 left -> 2 top -> 3 """
         assert (src != dst)
         x1, y1 = src
         x2, y2 = dst

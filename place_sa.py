@@ -126,7 +126,7 @@ def main():
               netlist_filename, file=sys.stderr)
         exit(1)
 
-    num_dim, raw_emb = parse_emb(netlist_embedding, filter_complex=False)
+    num_dim, raw_emb = parse_emb(netlist_embedding)
     netlists, g, dont_care, id_to_name = parse_netlist(netlist_filename)
     board = make_board(20, 20)
 
