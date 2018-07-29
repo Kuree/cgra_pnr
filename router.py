@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 
 
 class Router:
-    def __init__(self, netlist_filename, placement_filename):
+    def __init__(self, netlist_filename, placement_filename,
+                 avoid_congestion=True):
         _, id_to_name, netlists = parse_connection(netlist_filename)
         self.id_to_name = id_to_name
         self.netlists = netlists
@@ -34,6 +35,15 @@ class Router:
                 for k in range(4):
                     for l in range(self.channel_width):
                         self.routing_resource[i][j][k][l] = True
+
+        self.avoid_congestion = avoid_congestion
+
+    def heuristic_dist(self, depth, pos, dst):
+        x, y = pos
+        dist = abs(x - dst[0]) + abs(y - dst[1]) + depth[(x, y)]
+        if self.avoid_congestion:
+            dist += 10 / np.sum(self.routing_resource[y, x])
+        return dist
 
     @staticmethod
     def compute_direction(src, dst):
@@ -108,11 +118,12 @@ class Router:
                     link = {}
                     working_set.append(src_pos)
                     terminate = False
+                    depth = {src_pos: 0}
                     while len(working_set) > 0 and not terminate:
                         # using manhattan distance as heuristics
                         working_set.sort(
-                            key=lambda (x, y): abs(x - dst_pos[0]) +
-                                               abs(y - dst_pos[1]))
+                            key=lambda pos: self.heuristic_dist(depth, pos,
+                                                                dst_pos))
                         point = working_set.pop(0)
                         finished_set.add(point)
                         points = self.get_neighbors(chan, point)
@@ -121,6 +132,7 @@ class Router:
                                 # we have already explored this position
                                 continue
                             link[p] = point  # point backwards
+                            depth[p] = depth[point] + 1
                             if p == dst_pos:
                                 # we have found it!
                                 terminate = True
