@@ -1,5 +1,4 @@
 from __future__ import print_function
-import networkx as nx
 import numpy as np
 import sys
 import random
@@ -158,13 +157,21 @@ def alias_draw(J, q):
 
 
 def build_walks(netlist_filename):
-    _, nx_G, _, _ = parser.parse_netlist(netlist_filename)
+    _, ext = os.path.splitext(netlist_filename)
+    if ext == ".json":
+        from cgra import parse_netlist
+        _, nx_g, _, _ = parse_netlist(netlist_filename)
+    elif ext == ".packed":
+        from fpga import parse_packed
+        nx_g, _ = parse_packed(netlist_filename)
+    else:
+        raise Exception("Unrecognized netlist file: " + netlist_filename)
     p = 1
     q = 0.5
     num_walks = 10
     walk_length = 120
     num_dim = 12
-    G = Graph(nx_G, False, p, q)
+    G = Graph(nx_g, False, p, q)
     G.preprocess_transition_probs()
     # generate random walks
     walks = G.simulate_walks(num_walks, walk_length)

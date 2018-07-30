@@ -519,7 +519,7 @@ class SAClusterPlacer(Annealer):
 
         # squeeze them to the center
         for it in range(self.squeeze_iter):
-            print("iter:", it)
+            # print("iter:", it)
             for cluster_id in cluster_cells:
                 self.squeeze_cluster(cluster_cells, cluster_id)
 

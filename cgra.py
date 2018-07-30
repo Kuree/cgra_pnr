@@ -106,6 +106,7 @@ def place_special_blocks(board, blks, board_pos, place_on_board):
         else:
             raise Exception("Unknown block type", blk_id)
 
+
 def parse_connection(netlist_filename):
     # just parse the connection without verifying
     connections, instances = read_netlist_json(netlist_filename)
@@ -197,7 +198,6 @@ def pack_netlists(connections, instances):
     netlists = {}
     # hyper edge count
     h_edge_count = 0
-    need_to_absorb = set()
     for conn in connections:
         edge_id = "e" + str(h_edge_count)
         h_edge_count += 1
@@ -221,20 +221,27 @@ def pack_netlists(connections, instances):
                 else:
                     raise Exception("conn only has", conn)
                 name2 = v2.split(".")[0]
-                if name2 not in dont_care:
+                id2 = name_to_id[name2]
+                if name2 not in dont_care and id2[0] != "m":
+                    # reg cannot be put into memory
                     dont_care[blk_name] = name2
                     print("Absorb", blk_name, "into", dont_care[blk_name])
-                    #blk_id = name_to_id[name2]
-                    #hyper_edge.append((blk_id, port))
                 else:
-                    need_to_absorb.add((blk_name, port))
+                    # make them into a PE tile
+                    # first unregister its real id
+                    old_id = name_to_id.pop(blk_name, None)
+                    new_id = "p" + old_id[1:]
+                    name_to_id[blk_name] = new_id
+                    # then remove them from don't care
+                    dont_care.pop(blk_name, None)
+                    # add to the hyper edge
+                    hyper_edge.append((new_id, port))
+                    g.add_edge(edge_id, new_id)
+                    print("INFO: change", blk_name, "to a PE tile")
         if len(hyper_edge) > 1:
             netlists[edge_id] = hyper_edge
-    # try to absorb again
-    for blk_name, port in need_to_absorb:
-        if blk_name not in dont_care:
-            raise Exception("Failed to absorb " + blk_name)
-        print("Absorb", blk_name, "into", dont_care[blk_name])
+        else:
+            print("EMPTY EDGE:", hyper_edge)
     # remove the ones that doesn't have connections
     remove_set = set()
     for blk_name in dont_care:

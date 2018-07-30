@@ -221,16 +221,16 @@ def make_board(board_meta):
     capacity = 1
     for blk in blk_capacity:
         if blk_capacity[blk] > capacity:
-            capacity = blk_capacity[capacity]
+            capacity = blk_capacity[blk]
     if capacity > 1:
         board = []
         for y in range(height):
-            row = [[]] * width
+            row = [[] for i in range(width)]
             board.append(row)
     else:
         board = []
         for y in range(height):
-            row = [None] * width
+            row = [None for i in range(width)]
             board.append(row)
     return board
 
@@ -279,6 +279,7 @@ def generate_place_on_board(board_meta):
                 raise Exception("Illegal position for " + blk_id + " at " + \
                                 str(pos))
             board[y][x].append(blk_id)
+            print(board[y][x])
         else:
             if board[y][x] == blk_id:
                 return
