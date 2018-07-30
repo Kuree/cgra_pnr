@@ -159,23 +159,27 @@ def convert_cgra_type(tile_type):
     else:
         raise Exception("Unknown tile type " + tile_type)
 
-def parse_cgra(filename):
+
+def parse_cgra(filename, use_tile_addr=False):
     root = etree.parse(filename)
     layout_name = "CGRA"
     # only one layout in CGRA files
     board_dict = {}     # because CGRA file doesn't tell the size beforehand
     available_types = set()
+    tile_mapping = {}
     for tile in root.iter("tile"):
         if "type" not in tile.attrib or tile.attrib["type"] == "gst":
             continue
         tile_type = tile.attrib["type"]
         x = int(tile.attrib["col"])
         y = int(tile.attrib["row"])
+        tile_addr = int(tile.attrib["tile_addr"], 16)
         # TODO
         # need to parse track info for routing
         blk_type = convert_cgra_type(tile_type)
         board_dict[(x, y)] = blk_type
         available_types.add(blk_type)
+        tile_mapping[(x, y)] = tile_addr
     positions = list(board_dict.keys())
     positions.sort(key=lambda pos: pos[0] + pos[1], reverse=True)
     pos = positions[0]
@@ -210,7 +214,11 @@ def parse_cgra(filename):
     # the CGRA file sets the height for each tiles implicitly
     # no need to worry about the height
     layouts = {}
-    layouts[layout_name] = (layout_board, blk_height, blk_capacity, info)
+    if use_tile_addr:
+        layouts[layout_name] = (layout_board, blk_height, blk_capacity, info)
+    else:
+        layouts[layout_name] = (layout_board, blk_height, blk_capacity, info,
+                                tile_mapping)
     return layouts
 
 
@@ -233,6 +241,7 @@ def make_board(board_meta):
             row = [None for i in range(width)]
             board.append(row)
     return board
+
 
 def generate_is_cell_legal(board_meta):
     layout_board, blk_height, blk_capacity, _ = board_meta

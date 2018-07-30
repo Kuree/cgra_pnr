@@ -1,5 +1,5 @@
 from __future__ import print_function, division
-from cgra import parse_connection, parse_placement
+from arch.cgra import parse_connection, parse_placement, save_routing_result
 from arch import parse_cgra
 import sys
 import numpy as np
@@ -217,3 +217,7 @@ if __name__ == "__main__":
     r = Router(meta, sys.argv[2], sys.argv[3])
     r.route()
     r.vis_routing_resource()
+
+    route_file = sys.argv[3].replace(".place", ".route")
+    save_routing_result(r.route_result, route_file)
+

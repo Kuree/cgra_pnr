@@ -71,7 +71,7 @@ def main():
     emb = {}
     # import board specific functions as well as macro placement
     if arch_type == "fpga":
-        from fpga import parse_placement, parse_packed, save_placement
+        from arch.fpga import parse_placement, parse_packed, save_placement
         reference_placement = netlist_filename.replace(".packed", ".place")
         if not os.path.isfile(reference_placement):
             print("Cannot find reference placement file",
@@ -87,7 +87,7 @@ def main():
             else:
                 emb[blk_id] = raw_emb[blk_id]
     else:
-        from cgra import place_special_blocks, save_placement, parse_netlist
+        from arch.cgra import place_special_blocks, save_placement, parse_netlist
         netlists, g, dont_care, id_to_name = parse_netlist(netlist_filename)
         special_blocks = set()
         for blk_id in raw_emb:

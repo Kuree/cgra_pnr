@@ -345,13 +345,20 @@ class SAClusterPlacer(Annealer):
 
     def move(self):
         ids = set(self.clusters.keys())
-        id1, id2 = self.random.sample(ids, 2)
-        pos1, pos2 = self.state[id1], self.state[id2]
-        if self.is_legal(pos2, id1, self.state) and self.is_legal(pos1, id2,
-                                                                  self.state):
-            self.state[id1] = pos2
-            self.state[id2] = pos1
+        if len(ids) == 1:   # only one cluster
+            direct_move = True
         else:
+            direct_move = False
+        if not direct_move:
+            id1, id2 = self.random.sample(ids, 2)
+            pos1, pos2 = self.state[id1], self.state[id2]
+            if self.is_legal(pos2, id1, self.state) and \
+                    self.is_legal(pos1, id2, self.state):
+                self.state[id1] = pos2
+                self.state[id2] = pos1
+            else:
+                direct_move = True
+        if direct_move:
             # try to move cluster a little bit
             dx, dy = self.random.randrange(-2, 3), self.random.randrange(-2, 3)
             # only compute for cluster1
@@ -387,7 +394,7 @@ class SAClusterPlacer(Annealer):
         bbox = self.compute_bbox((offset_x, offset_y), square_size)
 
         # leave 1 for each side
-        # TODO: be more careful about the boundraries
+        # TODO: be more careful about the boundaries
         result = set()
         if search_all:
             x_min, x_max = self.clb_margin, len(board[0]) - self.clb_margin

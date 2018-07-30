@@ -3,6 +3,7 @@ import os
 import json
 import networkx as nx
 import sys
+import arch
 
 
 def save_placement(board_pos, id_to_name, dont_care, place_file):
@@ -151,6 +152,17 @@ def convert2netlist(connections):
             if conn1 in net and conn0 not in net:
                 skip_index.add(j)
                 net.append(conn0)
+
+        def sort_value(key):
+            raw_splits = key.split(".")
+            if "in" in raw_splits:
+                return 0
+            elif "out" in raw_splits:
+                return 2
+            else:
+                return 1
+        # rearrange the net so that it's src -> sink
+        net.sort(key=lambda p: sort_value(p))
         netlists.append(net)
     print("INFO: before conversion connections", len(connections),
           "after conversion netlists:", len(netlists))
@@ -173,6 +185,7 @@ def pack_netlists(connections, instances):
             dont_care[name] = None
             blk_type = "b"
         else:
+            # TODO: stupid 1 bit IO thing need to take care of
             instance_type = attrs["genref"]
             if instance_type == "cgralib.PE":
                 blk_type = "p"
@@ -240,8 +253,6 @@ def pack_netlists(connections, instances):
                     print("INFO: change", blk_name, "to a PE tile")
         if len(hyper_edge) > 1:
             netlists[edge_id] = hyper_edge
-        else:
-            print("EMPTY EDGE:", hyper_edge)
     # remove the ones that doesn't have connections
     remove_set = set()
     for blk_name in dont_care:
@@ -276,3 +287,210 @@ def read_netlist_json(netlist_filename):
     # the standard json input is not a netlist
     connections = convert2netlist(connections)
     return connections, instances
+
+
+def save_routing_result(routing_result, output_file):
+    with open(output_file, "w+") as f:
+        json.dump(routing_result, f)
+
+
+def parse_routing_result(routing_file):
+    with open(routing_file) as f:
+        return json.load(f)
+
+
+def compute_direction(src, dst):
+    """ right -> 0 bottom -> 1 left -> 2 top -> 3 """
+    assert (src != dst)
+    x1, y1 = src
+    x2, y2 = dst
+    assert ((abs(x1 - x2) == 0 and abs(y1 - y2) == 1) or (abs(x1 - x2) == 1
+                                                          and abs(y1 - y2)
+                                                          == 0))
+
+    if x1 == x2:
+        if y2 > y1:
+            return 2
+        else:
+            return 0
+    if y1 == y2:
+        if x2 > x1:
+            return 1
+        else:
+            return 3
+    raise Exception("direction error " + "{}->{}".format(src, dst))
+
+
+def mem_tile_fix(board_meta, from_pos, to_pos):
+    # this is just for the memory sides
+    # will remove the logic once they change the memory tile to 1x1
+    tile_mapping = board_meta[-1]
+    side1 = compute_direction(from_pos, to_pos)
+    side2 = compute_direction(to_pos, from_pos)
+    # add an offset if it's the bottom of a memory tile
+
+    if from_pos not in tile_mapping:
+        # MEM tile?
+        side1 += 4
+        tile1 = tile_mapping[from_pos[0], from_pos[0] - 1]
+    else:
+        tile1 = tile_mapping[from_pos]
+    if to_pos not in tile_mapping:
+        side2 += 4
+        tile2 = tile_mapping[to_pos[0], to_pos[1] - 1]
+    else:
+        tile2 = tile_mapping[to_pos]
+    return side1, side2, tile1, tile2
+
+
+def generate_bitstream(board_filename, netlist_filename, placement_filename,
+                       routing_filename):
+    connections, instances = read_netlist_json(netlist_filename)
+    dont_care, g, id_to_name, netlists = pack_netlists(connections, instances)
+    board_meta = arch.parse_cgra(board_filename)["CGRA"]
+    placement, _ = parse_placement(placement_filename)
+    route_result = parse_routing_result(routing_filename)
+    tile_mapping = board_meta[-1]
+
+    output_string = ""
+
+    # TODO: refactor this
+    name_to_id = {}
+    for blk_id in id_to_name:
+        name_to_id[id_to_name[blk_id]] = blk_id
+
+    # build PE tiles types
+    pe_tiles = {}
+    # keep track of whether it's 1-bit or 16-bit
+    # really stupid design in my opinion
+    track_mode = {}
+    type_str = "mpi"
+    for name in instances:
+        instance = instances[name]
+        blk_id = name_to_id[name]
+        if blk_id not in g.nodes():
+            continue    # we have packed these instances
+        blk_id = name_to_id[name]
+        # it has to be a PE tile
+        assert(blk_id[0] in type_str)
+        pos = placement[blk_id]
+        tile = tile_mapping[pos]
+
+        # print order
+        print_order = 0
+
+        # find out the PE type
+        # TODO: Fix reg only PE tiles
+        pe_type = instance["genref"]
+        if pe_type == "coreir.reg":
+            # reg tile, reg in and reg out
+            op = "nop"
+            pins = ("reg", "reg")
+            print_order = 10
+        elif pe_type == "cgralib.Mem":
+            op = "mem"
+            pins = int(instance["modargs"]["depth"][-1])
+            print_order = 2
+        elif pe_type == "cgralib.IO":
+            continue    # don't care yet
+        else:
+            op = instance["genargs"]["op_kind"][-1]
+            if op == "bit":
+                # 1-bit line
+                track_mode[pos] = 1
+                op = "lutFF"
+                pins = ("const0", "const0", "const0")
+                print_order = 3
+            elif op == "alu" or op == "combined":
+                track_mode[pos] = 1
+                op = instance["modargs"]["alu_op_debug"][-1]
+                print_order = 0
+
+                # TODO: fix this exhaustive search
+                # find all placements to see what else got placed on the same
+                # tile
+                pins = ["wire", "wire"]
+                pin_list = set()
+                for b_id in placement:
+                    if placement[b_id] == pos and b_id != blk_id:
+                        pin_list.add(id_to_name[b_id])
+                for pin in pin_list:
+                    # search for the entire connections to figure the pin
+                    # connection order
+                    for conn in connections:
+                        if pin in conn[0] and name in conn[1]:
+                            pin_type = name_to_id[pin][0]
+                            if pin_type == "r":
+                                pins[0] = "reg"
+                            elif pin_type == "c":
+                                pins[0] = pin
+                            else:
+                                raise Exception("Uknown pin type " + pin)
+                            break
+                        elif pin in conn[1] and name in conn[0]:
+                            pin_type = name_to_id[pin][0]
+                            if pin_type == "r":
+                                pins[1] = "reg"
+                            elif pin_type == "c":
+                                pins[1] = pin
+                            else:
+                                raise Exception("Uknown pin type " + pin)
+                            break
+
+            else:
+                raise Exception("Unknown PE op type " + op)
+
+        pe_tiles[blk_id] = (tile, op, pins, print_order)
+
+    tab = "\t" * 6
+    # generate tile mapping
+    # sort them for pretty printing
+    pe_keys = list(pe_tiles.keys())
+    pe_keys.sort(key=lambda x: pe_tiles[x][-1])
+    output_string += "# PLACEMENT\n"
+    for blk_id in pe_keys:
+        tile, op, pins, _ = pe_tiles[blk_id]
+        if op == "lutFF":
+            output_string += "T{}_{}({}){}# {}\n".format(tile, op,
+                                                         ",".join(pins),
+                                                         tab,
+                                                         id_to_name[blk_id])
+        elif op == "mem":
+            output_string += "T{}_{}_{}{}#{}\n".format(tile, op, pins,
+                                                       tab,
+                                                       id_to_name[blk_id])
+        else:
+            output_string += "T{}_{}({}){}# {}\n".format(tile, op,
+                                                         ",".join(pins),
+                                                         tab,
+                                                         id_to_name[blk_id])
+
+    # output routing
+    output_string += "\n#ROUTING\n"
+    for net_id in route_result:
+        track, path = route_result[net_id]
+        output_string += "\n# net id: {}\n".format(net_id)
+        for i in range(len(path) - 1):
+            from_pos = tuple(path[i])
+            to_pos = tuple(path[i + 1])
+            side1, side2, tile1, tile2 = mem_tile_fix(board_meta, from_pos,
+                                                      to_pos)
+            if i == 0:
+                output_string += "T{1}_pe_out -> T{2}_out_t{3}{0}\n".format(
+                    track, tile1, tile2, side2)
+            else:
+                output_string += \
+                    "T{1}_in_s{3}t{0} -> T{2}_out_t{4}{0}\n".format(track,
+                                                                    tile1,
+                                                                    tile2,
+                                                                    side1,
+                                                                    side2)
+
+
+    with open("test.bsb", "w+") as f:
+        f.write(output_string)
+
+
+
+
+
