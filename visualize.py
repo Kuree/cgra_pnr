@@ -16,6 +16,7 @@ color_palette = [(166, 206, 227),
                  (255, 255, 153),
                  (177, 89, 40)]
 
+
 def draw_board(width=60, height=60, scale=None):
     if scale is None:
         scale = SCALE_FACTOR
@@ -32,6 +33,7 @@ def draw_board(width=60, height=60, scale=None):
         draw.line((i * scale, 0, i * scale, img_height),
                   fill=(255, 255, 255), width=1)
     return im, draw
+
 
 def draw_cell(draw, pos, color, scale=None):
     if scale is None:

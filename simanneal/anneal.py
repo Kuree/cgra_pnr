@@ -158,8 +158,8 @@ class Annealer(object):
 
         elapsed = time.time() - self.start
         if step == 0:
-            print(' Temperature        Energy    Accept   Improve     Elapsed   Remaining',
-                  file=sys.stderr)
+           #  print(' Temperature        Energy    Accept   Improve     Elapsed   Remaining',
+           #       file=sys.stderr)
             print('\r%12.5f  %12.2f                      %s            ' %
                   (T, E, time_string(elapsed)), file=sys.stderr, end="\r")
             sys.stderr.flush()

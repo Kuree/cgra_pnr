@@ -136,7 +136,8 @@ def parse_vpr(filename):
             break
 
         # some other info that's useful for SA placer
-        info = {"margin": 1, "clb_type": 'c', "arch_type": "fpga"}
+        info = {"margin": 1, "clb_type": 'c', "arch_type": "fpga",
+                "height": height, "width": width}
         layouts[layout_name] = (layout_board, blk_height, blk_capacity,
                                 info)
     return layouts
@@ -202,7 +203,8 @@ def parse_cgra(filename):
         print("Failed to get PE margin, use default value 2", file=sys.stderr)
         pe_margin = 2
 
-    info = {"margin": pe_margin, "clb_type": "p", "arch_type": "cgra"}
+    info = {"margin": pe_margin, "clb_type": "p", "arch_type": "cgra",
+            "height": height, "width": width}
 
     # NOTE:
     # the CGRA file sets the height for each tiles implicitly

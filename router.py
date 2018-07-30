@@ -1,5 +1,6 @@
 from __future__ import print_function, division
-from parser import parse_connection, parse_placement
+from cgra import parse_connection, parse_placement
+from arch import parse_cgra
 import sys
 import numpy as np
 from visualize import draw_board, draw_cell
@@ -7,8 +8,9 @@ import matplotlib.pyplot as plt
 
 
 class Router:
-    def __init__(self, netlist_filename, placement_filename,
+    def __init__(self, board_meta, netlist_filename, placement_filename,
                  avoid_congestion=True):
+        self.board_meta = board_meta
         connections, id_to_name, netlists = parse_connection(netlist_filename)
         self.connections = connections
         self.id_to_name = id_to_name
@@ -17,9 +19,11 @@ class Router:
         placement, _ = parse_placement(placement_filename)
         self.placement = placement
 
-        # TODO: change this to support different size of boards
+        board_info = board_meta[-1]
+
         # NOTE: it's width x height
-        self.board_size = (20, 20)
+        self.board_size = (board_info["width"], board_info["height"])
+        # TODO: fix this after parsing routing info from the arch
         self.channel_width = 5
 
         # result
@@ -189,23 +193,27 @@ class Router:
                     [direction][min_chan] = False
 
     def vis_routing_resource(self):
-        im, draw = draw_board(20, 20)
+        scale = 30
+        im, draw = draw_board(self.board_size[0], self.board_size[1], scale)
         for i in range(self.board_size[0]):
             for j in range(self.board_size[1]):
                 route_r = self.routing_resource[i][j]
                 r = np.sum(route_r)
                 color = int(255 * r / 4 / self.channel_width)
-                draw_cell(draw, (j, i), color=(255 - color, 0, color))
+                draw_cell(draw, (j, i), color=(255 - color, 0, color),
+                          scale=scale)
         plt.imshow(im)
         plt.show()
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage:", sys.argv[0], "<netlist.json> <netlist.place",
-              file=sys.stderr)
+    if len(sys.argv) != 4:
+        print("Usage:", sys.argv[0], "<arch_file> <netlist.json>",
+              "<netlist.place>", file=sys.stderr)
 
         exit(1)
-    r = Router(sys.argv[1], sys.argv[2])
+    arch_file = sys.argv[1]
+    meta = parse_cgra(arch_file)["CGRA"]
+    r = Router(meta, sys.argv[2], sys.argv[3])
     r.route()
     r.vis_routing_resource()
