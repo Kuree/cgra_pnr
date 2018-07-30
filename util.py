@@ -23,15 +23,6 @@ def compute_hpwl(netlists, blk_pos):
     return netlist_wirelength
 
 
-def make_board(width=20, height=20):
-    board = []
-    for i in range(height):
-        board.append([])
-        for j in range(width):
-            board[i].append(None)
-    return board
-
-
 def manhattan_distance(p1, p2):
     return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
 
@@ -83,55 +74,42 @@ def reduce_cluster_graph(netlists, clusters, fixed_blocks,
     return new_netlist
 
 
-def compute_centroid(cluster_cells):
+def compute_centroids(cluster_cells):
     result = {}
     for cluster_id in cluster_cells:
         cells = cluster_cells[cluster_id]
-        cluster_size = len(cells)
+        pos = compute_centroid(cells)
+        result[cluster_id] = pos
+    return result
+
+
+def compute_centroid(cluster_cells):
+    if type(cluster_cells) == list or type(cluster_cells) == set:
         x_sum = 0
         y_sum = 0
-        for cell in cells:
+        cluster_size = len(cluster_cells)
+        for cell in cluster_cells:
             x_sum += cell[0]
             y_sum += cell[1]
         pos_x = int(x_sum / cluster_size)
         pos_y = int(y_sum / cluster_size)
-        result[cluster_id] = (pos_x, pos_y)
-    return result
-
-
-def save_placement(board_pos, id_to_name, dont_care, place_file):
-    blk_keys = list(board_pos.keys())
-    blk_keys.sort(key=lambda x:int(x[1:]))
-    with open(place_file, "w+") as f:
-        header = "{0}\t\t\t{1}\t{2}\t\t#{3}\n".format("Block Name",
-                                                      "X",
-                                                      "Y",
-                                                      "Block ID")
-        f.write(header)
-        f.write("-" * len(header) + "\n")
-        name_to_id = {}
-        for blk_id in blk_keys:
-            x, y = board_pos[blk_id]
-            f.write("{0}\t\t{1}\t{2}\t\t#{3}\n".format(id_to_name[blk_id],
-                                                          x,
-                                                          y,
-                                                          blk_id))
-        # reverse the index
-        for blk_id in id_to_name:
-            name_to_id[id_to_name[blk_id]] = blk_id
-
-        # write out absorbed components
-        for blk_name in dont_care:
-            connected_name = dont_care[blk_name]
-            assert(connected_name is not None)
-            connected_id = name_to_id[connected_name]
-            x, y = board_pos[connected_id]
-            blk_id = name_to_id[blk_name]
-            f.write("{0}\t\t{1}\t{2}\t\t#{3}\n".format(blk_name,
-                                                       x,
-                                                       y,
-                                                       blk_id))
+        return pos_x, pos_y
+    elif type(cluster_cells) == dict:
+        x_sum = 0
+        y_sum = 0
+        cluster_size = len(cluster_cells)
+        for cell_id in cluster_cells:
+            cell = cluster_cells[cell_id]
+            x_sum += cell[0]
+            y_sum += cell[0]
+        pos_x = int(x_sum / cluster_size)
+        pos_y = int(y_sum / cluster_size)
+        return pos_x, pos_y
+    else:
+        raise Exception("Unknown type: " + str(type(cluster_cells)))
 
 
 def save_routing():
     pass
+
+

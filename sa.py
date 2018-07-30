@@ -1,7 +1,7 @@
 from __future__ import division, print_function
 from simanneal import Annealer
-from util import compute_hpwl, manhattan_distance, euclidean_distance
-from util import reduce_cluster_graph, compute_centroid
+from util import compute_hpwl, manhattan_distance
+from util import reduce_cluster_graph, compute_centroids
 import numpy as np
 import random
 
@@ -66,10 +66,109 @@ class SADetailedPlacer(Annealer):
         return float(hpwl)
 
 
+# unused for CGRA
+class DeblockAnnealer(Annealer):
+    def __init__(self, block_pos, available_pos, netlists, board_pos,
+                 is_legal=None,
+                 multi_thread=False, exclude_list=("u", "m", "i")):
+        # by default IO will be excluded
+        # place note that in this case available_pos includes empty cells
+        # as well
+        # we need to reverse index the block pos since we are swapping spaces
+        state = {}
+        self.excluded_blocks = {}
+        for blk_id in block_pos:
+            b_type = blk_id[0]
+            pos = block_pos[blk_id]
+            # always exclude the cluster centroid
+            if b_type in exclude_list or b_type == "x":
+                self.excluded_blocks[blk_id] = pos
+            else:
+                state[pos] = blk_id
+        self.available_pos = available_pos
+        assert(len(self.available_pos) >= len(block_pos))
+        self.netlists = netlists
+        self.board_pos = board_pos
+
+        if is_legal is not None:
+            # this one does not check whether the board is occupied or not
+            self.is_legal = is_legal
+        else:
+            self.is_legal = self.__is_legal
+
+        self.exclude_list = exclude_list
+
+        rand = random.Random()
+        rand.seed(0)
+
+        Annealer.__init__(self, initial_state=state, multi_thread=multi_thread,
+                          rand=rand)
+
+        # reduce the schedule
+        self.Tmax = self.Tmin + 3
+        self.steps /= 10
+
+    def get_block_pos(self):
+        block_pos = {}
+        for pos in self.state:
+            blk_type = self.state[pos]
+            block_pos[blk_type] = pos
+        ex = self.excluded_blocks.copy()
+        block_pos.update(ex)
+        return block_pos
+
+    def __is_legal(self, pos, block_id):
+        # notice that the default is very limited and disallow any special block
+        # movements. so if you want to move the complex blocks as well, you
+        # also need to provide `is_legal` in the constructor
+        if block_id[0] != "c":
+            return False
+        x, y = pos
+        if x < 1 or y < 1 or x > 58 or y > 58:
+            return False
+        if x in [2 + j * 8 for j in range(7)] \
+                or x in [6 + j * 8 for j in range(7)]:
+            return False
+        return True
+
+    def move(self):
+        pos1, pos2 = self.random.sample(self.available_pos, 2)
+        if pos1 in self.state and pos2 in self.state:
+            # both of them are actual blocks
+            blk1, blk2 = self.state[pos1], self.state[pos2]
+            if self.is_legal(pos2, blk1) and self.is_legal(pos1, blk2):
+                # update the positions
+                self.state[pos1] = blk2
+                self.state[pos2] = blk1
+        elif pos1 in self.state and pos2 not in self.state:
+            blk1 = self.state[pos1]
+            if self.is_legal(pos2, blk1):
+                self.state.pop(pos1, None)
+                self.state[pos2] = blk1
+        elif pos1 not in self.state and pos2 in self.state:
+            blk2 = self.state[pos2]
+            if self.is_legal(pos1, blk2):
+                self.state.pop(pos2, None)
+                self.state[pos1] = blk2
+
+    def energy(self):
+        board_pos = self.board_pos.copy()
+        board_pos.update(self.excluded_blocks)
+
+        new_pos = self.get_block_pos()
+        board_pos.update(new_pos)
+
+        hpwl = 0
+        netlist_hpwl = compute_hpwl(self.netlists, board_pos)
+        for key in netlist_hpwl:
+            hpwl += netlist_hpwl[key]
+        return float(hpwl)
+
+
 # main class to perform simulated annealing on each cluster
 class SAClusterPlacer(Annealer):
-    def __init__(self, clusters, netlists, board, board_pos,
-                 is_legal=None, is_cell_legal=None):
+    def __init__(self, clusters, netlists, board, board_pos, board_info,
+                 is_legal=None, is_cell_legal=None, place_factor=6):
         """Notice that each clusters has to be a condensed node in a networkx graph
         whose edge denotes how many intra-cluster connections.
         """
@@ -87,10 +186,14 @@ class SAClusterPlacer(Annealer):
         else:
             self.is_cell_legal = is_cell_legal
 
+        self.clb_type = board_info["clb_type"]
+        self.clb_margin = board_info["margin"]
+
         rand = random.Random()
         rand.seed(0)
 
         self.squeeze_iter = 4
+        self.place_factor = place_factor
 
         self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)
 
@@ -104,16 +207,20 @@ class SAClusterPlacer(Annealer):
         #self.Tmax = 10
         #self.steps = 1000
 
-    def __is_legal(self, pos, cluster_id, state, factor=6):
+    def __is_legal(self, pos, cluster_id, state):
         """no more than 1/factor overlapping"""
-        if pos[0] < 2 or pos[1] < 2:
+        if pos[0] < self.clb_margin or pos[1] < self.clb_margin:
             return False
         square_size1 = self.square_sizes[cluster_id]
         bbox1 = self.compute_bbox(pos, square_size1)
+        if bbox1 is None:
+            return False
         xx = bbox1[0] + pos[0]
         yy = bbox1[1] + pos[1]
-        if xx > len(self.board[0]) - 2 or xx < 2 or \
-           yy > len(self.board) - 2 or yy < 2:
+        if xx >= len(self.board[0]) - self.clb_margin or \
+           xx < self.clb_margin or \
+           yy >= len(self.board) - self.clb_margin or \
+           yy < self.clb_margin:
             return False
         overlap_size = 0
         for c_id in state:
@@ -122,8 +229,10 @@ class SAClusterPlacer(Annealer):
             pos2 = state[c_id]
             square_size2 = self.square_sizes[c_id]
             bbox2 = self.compute_bbox(pos2, square_size2)
+            if bbox2 is None:
+                raise Exception("Unknown state")
             overlap_size += self.__compute_overlap(pos, bbox1, pos2, bbox2)
-        if overlap_size > len(self.clusters[cluster_id]) // factor:
+        if overlap_size > len(self.clusters[cluster_id]) // self.place_factor:
             return False
         else:
             return True
@@ -144,9 +253,8 @@ class SAClusterPlacer(Annealer):
 
     def __init_placement(self, rand):
         state = {}
-        initial_x = 2
-        initial_y = 2
-        x, y = initial_x, initial_y
+        initial_x = self.clb_margin
+        x, y = initial_x, self.clb_margin
         rows = []
         current_rows = []
         col = 0
@@ -156,10 +264,13 @@ class SAClusterPlacer(Annealer):
             square_size = int(np.ceil(cluster_size ** 0.5))
             self.square_sizes[cluster_id] = square_size
             # put it on the board. notice that most of the blocks will span
-            # the complex lanes. hence we need to be extra carefull
+            # the complex lanes. hence we need to be extra careful
 
             # aggressively packed them into the board
             # NOTE some of the info here are board specific
+            # this avoids infinite loop, as well as allow searching for the
+            # entire board
+            visited = set()
             while True:
                 if x >= len(self.board[0]):
                     x = initial_x
@@ -172,9 +283,13 @@ class SAClusterPlacer(Annealer):
                     else:
                         y = rows[-1]
                 else:
-                    y = initial_y
+                    y = self.clb_margin
 
                 pos = (x, y)
+                if pos in visited:
+                    raise ClusterException(cluster_id)
+                else:
+                    visited.add(pos)
                 if self.__is_legal(pos, cluster_id, state):
                     state[cluster_id] = pos
                     x += rand.randrange(square_size, square_size + 3)
@@ -192,7 +307,9 @@ class SAClusterPlacer(Annealer):
         y = pos[1]
         while width < square_size:
             x = search_index + xx
-            if not self.is_cell_legal((x, y), False):
+            if x >= len(self.board[0]):
+                return None
+            if not self.is_cell_legal(None, (x, y), self.clb_type):
                 search_index += 1
                 continue
             width += 1
@@ -201,14 +318,15 @@ class SAClusterPlacer(Annealer):
         return search_index, square_size
 
     def __is_cell_legal(self, pos, check_bound=True):
-        # this is injecting board specific knowledge here
+        # This is only valid for my custom VPR board. You should
+        # always use the cell legal function generated from the
+        # architecture file
         x, y = pos
-        repeat = len(self.board) // 4
-        if x in [5 + j * 4 for j in range(repeat)]:
+        if x in [2 + j * 8 for j in range(7)] \
+                or x in [6 + j * 8 for j in range(7)]:
             return False
         if check_bound:
-            if x < 2 or x > len(self.board[0]) - 3 or y < 2 or \
-               y > len(self.board) - 3:
+            if x < 1 or x > 59 - 1 or y < 1 or y > 59 - 1:
                 return False
         return True
 
@@ -217,6 +335,8 @@ class SAClusterPlacer(Annealer):
         for cluster_id in self.state:
             pos = self.state[cluster_id]
             bbox = self.compute_bbox(pos, self.square_sizes[cluster_id])
+            if bbox is None:
+                raise Exception("Unknown state")
             width = bbox[0]
             height = bbox[1]
             center = (pos[0] + width // 2, pos[1] + height // 2)
@@ -270,8 +390,8 @@ class SAClusterPlacer(Annealer):
         # TODO: be more careful about the boundraries
         result = set()
         if search_all:
-            x_min, x_max = 2, len(board[0]) - 2
-            y_min, y_max = 2, len(board) - 2
+            x_min, x_max = self.clb_margin, len(board[0]) - self.clb_margin
+            y_min, y_max = self.clb_margin, len(board) - self.clb_margin
         else:
             x_min, x_max = offset_x - 1, offset_x + bbox[0] + 1
             y_min, y_max = offset_y - 1, offset_y + bbox[1] + 1
@@ -287,11 +407,13 @@ class SAClusterPlacer(Annealer):
                     for j in range(-max_dist - 1, max_dist + 1):
                         if abs(i) + abs(j) > max_dist:
                             continue
-                        if not self.is_cell_legal((x + j, y + i)):
+                        if not self.is_cell_legal(None, (x + j, y + i),
+                                                  self.clb_type):
                             continue
                         if (not board[y + i][x + j]) and board[y][x]:
                             p = (x + j, y + i)
-                        if (p is not None) and self.is_cell_legal(p):
+                        if (p is not None) and self.is_cell_legal(None, p,
+                                                                  self.clb_type):
                             result.add(p)
         for p in result:
             if board[p[1]][p[0]]:
@@ -343,7 +465,7 @@ class SAClusterPlacer(Annealer):
             while count < cluster_size:
                 cell_pos = matrix[search_count]
                 cell_pos = (pos[0] + cell_pos[0], pos[1] + cell_pos[1])
-                if self.is_cell_legal(cell_pos):
+                if self.is_cell_legal(None, cell_pos, self.clb_type):
                     cells.add(cell_pos)
                     count += 1
                 search_count += 1
@@ -408,7 +530,7 @@ class SAClusterPlacer(Annealer):
                     break
 
         # return centroids as well
-        centroids = compute_centroid(cluster_cells)
+        centroids = compute_centroids(cluster_cells)
 
         return cluster_cells, centroids
 
@@ -467,12 +589,14 @@ class SAClusterPlacer(Annealer):
             for j in range(len(bboard[0]) - square_size - 1, -1, -1):
                 pos = (j, i)
                 bbox = self.compute_bbox(pos, square_size)
+                if bbox is None:
+                    continue
                 cells = []
                 for y in range(bbox[1]):
                     for x in range(bbox[0]):
                         new_cell = (x + j, y + i)
                         if (not bboard[new_cell[1]][new_cell[0]]) and \
-                                (self.is_cell_legal(new_cell)):
+                                (self.is_cell_legal(None, new_cell, self.clb_type)):
                             cells.append(new_cell)
                 if len(cells) > num_cells:
                     # we are good
@@ -483,7 +607,7 @@ class SAClusterPlacer(Annealer):
         for i in range(len(bboard)):
             for j in range(len(bboard[0])):
                 pos = (j, i)
-                if self.is_cell_legal(pos):
+                if self.is_cell_legal(None, pos, self.clb_type):
                     result.add(pos)
                 if len(result) == num_cells:
                     return result
@@ -514,4 +638,9 @@ class SAClusterPlacer(Annealer):
             old_overlap_set = len(overlap_set)
         assert (len(cluster_cells[cluster_id]) == len(
             self.clusters[cluster_id]))
+
+
+class ClusterException(Exception):
+    def __init__(self, num_clusters):
+        self.num_clusters = num_clusters
 
