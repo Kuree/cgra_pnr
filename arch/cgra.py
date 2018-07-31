@@ -156,9 +156,9 @@ def convert2netlist(connections):
         def sort_value(key):
             raw_splits = key.split(".")
             if "in" in raw_splits:
-                return 0
-            elif "out" in raw_splits:
                 return 2
+            elif "out" in raw_splits:
+                return 0
             else:
                 return 1
         # rearrange the net so that it's src -> sink
@@ -376,9 +376,6 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
         pos = placement[blk_id]
         tile = tile_mapping[pos]
 
-        # print order
-        print_order = 0
-
         # find out the PE type
         # TODO: Fix reg only PE tiles
         pe_type = instance["genref"]
@@ -422,22 +419,24 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                     # connection order
                     for conn in connections:
                         if pin in conn[0] and name in conn[1]:
+                            index = int(conn[1].split(".")[-1])
                             pin_type = name_to_id[pin][0]
                             if pin_type == "r":
-                                pins[0] = "reg"
+                                pins[index] = "reg"
                             elif pin_type == "c":
-                                pins[0] = pin
+                                pins[index] = pin
                             else:
-                                raise Exception("Uknown pin type " + pin)
+                                raise Exception("Unknown pin type " + pin)
                             break
                         elif pin in conn[1] and name in conn[0]:
+                            index = int(conn[0].split(".")[-1])
                             pin_type = name_to_id[pin][0]
                             if pin_type == "r":
-                                pins[1] = "reg"
+                                pins[index] = "reg"
                             elif pin_type == "c":
-                                pins[1] = pin
+                                pins[index] = pin
                             else:
-                                raise Exception("Uknown pin type " + pin)
+                                raise Exception("Unknown pin type " + pin)
                             break
 
             else:
@@ -468,26 +467,103 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                                                          tab,
                                                          id_to_name[blk_id])
 
-    # output routing
+    # write routing
     output_string += "\n#ROUTING\n"
     for net_id in route_result:
         track, path = route_result[net_id]
         output_string += "\n# net id: {}\n".format(net_id)
+        netlist = netlists[net_id]
+        pin_pos = {}
+        for blk_id, port, in netlist:
+            pos = placement[blk_id]
+            pin_pos[pos] = (blk_id, port)
+        # NOTE: in a netlist, a single src can drive multiple sinks
+        net_node_index = 0
+        # also because of the strict format that bsbuilder is assuming
+        # input IO will not be outputted.
+        i = 0
         for i in range(len(path) - 1):
-            from_pos = tuple(path[i])
+            # based on my understanding
+            # we don't care about IO's direction/routing in bsbuilder
+            # yet we care about where the data come from in the next node
+            # not a very good design decision in my opinion
+
+            # get operand
+            current_pos = tuple(path[i])
             to_pos = tuple(path[i + 1])
-            side1, side2, tile1, tile2 = mem_tile_fix(board_meta, from_pos,
+
+            if current_pos in pin_pos:
+                blk_id, port = pin_pos[current_pos]
+                if blk_id[0] == "i":
+                    # IO is a special case
+                    # merely passing through
+                    continue
+                if "out" in port:
+                    # we have a PE output
+                    side1, _, tile1, _ = mem_tile_fix(board_meta,
+                                                      current_pos,
                                                       to_pos)
-            if i == 0:
-                output_string += "T{1}_pe_out -> T{2}_out_s{3}t{0}\n".format(
-                    track, tile1, tile2, side2)
-            else:
-                output_string += \
-                    "T{1}_in_s{3}t{0} -> T{2}_out_s{4}t{0}\n".format(track,
+                    output_string +=\
+                        "T{1}_pe_out -> T{1}_out_s{2}t{0}\n".format(track,
                                                                     tile1,
-                                                                    tile2,
-                                                                    side1,
-                                                                    side2)
+                                                                    side1)
+                    continue    # we're done here
+                else:
+                    raise Exception("blk " + blk_id + " is not a src")
+            else:
+                # merely passing through
+                pre_pos = tuple(path[i - 1])
+
+                side1, _, tile1, _ = mem_tile_fix(board_meta,
+                                                  current_pos,
+                                                  pre_pos)
+                # still need to careful about the next tile though
+                # as it could be an operand
+                if to_pos in pin_pos:
+                    blk_id, port = pin_pos[to_pos]
+                    # it has to be sink
+                    if "in" in port:
+                        # figure out which operand to use
+                        if port == "data.in.0":
+                            operand = "op1"
+                        elif port == "data.in.1":
+                            operand = "op2"
+                        elif port == "in":
+                            # we have a IO end.
+                            # mem it's getting very very messy
+                            side2, _, _, _ = mem_tile_fix(board_meta,
+                                                          current_pos,
+                                                          to_pos)
+                            output_string += \
+                                "T{1}_in_s{2}t{0} -> T{1}_out_s{3}t{0}\n".format(
+                                    track,
+                                    tile1,
+                                    side1,
+                                    side2)
+                            continue
+                        else:
+                            raise Exception("Unknown port " + port)
+                        _, _, _, sink_tile = mem_tile_fix(board_meta,
+                                                      current_pos,
+                                                      to_pos)
+                        output_string += \
+                            "T{1}_in_s{2}{0} -> T{3}_{4}".format(track,
+                                                                 tile1,
+                                                                 side1,
+                                                                 sink_tile,
+                                                                 operand)
+                    else:
+                        raise Exception("blk " + blk_id + " is not a sink")
+                else:
+                    side2, _, _, _ = mem_tile_fix(board_meta,
+                                                  current_pos,
+                                                  to_pos)
+
+                    output_string += \
+                        "T{1}_in_s{2}t{0} -> T{1}_out_s{3}t{0}\n".format(track,
+                                                                         tile1,
+                                                                         side1,
+                                                                         side2)
 
 
     with open("test.bsb", "w+") as f:
