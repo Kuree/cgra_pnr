@@ -87,8 +87,10 @@ def main():
             else:
                 emb[blk_id] = raw_emb[blk_id]
     else:
-        from arch.cgra import place_special_blocks, save_placement, parse_netlist
-        netlists, g, dont_care, id_to_name = parse_netlist(netlist_filename)
+        from arch.cgra import place_special_blocks, save_placement,\
+            parse_netlist
+        netlists, g, dont_care, id_to_name, raw_netlist = \
+            parse_netlist(netlist_filename)
         special_blocks = set()
         for blk_id in raw_emb:
             if blk_id[0] != "p":
@@ -96,7 +98,7 @@ def main():
             else:
                 emb[blk_id] = raw_emb[blk_id]
         # place the spacial blocks first
-        place_special_blocks(board, special_blocks, fixed_blk_pos,
+        place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
                              place_on_board)
 
     data_x = np.zeros((len(emb), num_dim))

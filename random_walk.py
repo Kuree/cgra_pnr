@@ -158,7 +158,7 @@ def build_walks(netlist_filename):
     _, ext = os.path.splitext(netlist_filename)
     if ext == ".json":
         from arch.cgra import parse_netlist
-        _, nx_g, _, _ = parse_netlist(netlist_filename)
+        _, nx_g, _, _, _ = parse_netlist(netlist_filename)
     elif ext == ".packed":
         from arch.fpga import parse_packed
         nx_g, _ = parse_packed(netlist_filename)

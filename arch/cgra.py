@@ -58,48 +58,42 @@ def parse_placement(placement_file):
     return placement, id_to_name
 
 
-def place_special_blocks(board, blks, board_pos, place_on_board):
-    # place io in the middle of each sides
+def place_special_blocks(board, blks, board_pos, netlists, place_on_board):
+    # put IO in fixed blocks
+    # TODO: fix 1bit IO
     io_count = 0
     mem_count = 0
-    io_start = len(board[0]) // 2 - 1
+
+    # find ports
+    io_mapping = {}
+    for net_id in netlists:
+        for blk_id, port in netlists[net_id]:
+            if blk_id[0] == "i":
+                if port == "in":     # this is an output port
+                    io_mapping[blk_id] = False
+                elif port == "out":
+                    io_mapping[blk_id] = True
+                else:
+                    raise Exception("Unknown port: " + port + " for IO: " +
+                                    blk_id)
+
+    input_io_locations = [(1, 2), (2, 1)]
+    output_io_locations = [(18, 2), (2, 18)]
+
     for blk_id in blks:
         if blk_id[0] == "i":
-            if io_count % 4 == 0:
-                if io_count % 8 == 0:
-                    x = io_start - io_count // 8
-                else:
-                    x = io_start + io_count // 8 + 1
-                y = 0
-            elif io_count % 4 == 1:
-                tap = io_count - 1
-                if tap % 8 == 0:
-                    x = io_start - tap // 8
-                else:
-                    x = io_start + tap // 8 + 1
-                y = len(board) - 1
-            elif io_count % 4 == 2:
-                tap = io_count - 2
-                if tap % 8 == 0:
-                    y = io_start - tap // 8
-                else:
-                    y = io_start + tap // 8 + 1
-                x = 0
+            is_input = io_mapping[blk_id]
+            if is_input:
+                pos = input_io_locations.pop(0)
             else:
-                tap = io_count - 3
-                if tap % 8 == 0:
-                    y = io_start - tap // 8
-                else:
-                    y = io_start + tap // 8 + 1
-                x = len(board[0]) - 1
-            pos = (x, y)
+                pos = output_io_locations.pop(0)
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
             io_count += 1
         elif blk_id[0] == "m":
             # just evenly distributed
             x = 5 + (mem_count % 4) * 4
-            y = 4 + (mem_count // 4) * 4
+            y = 4 + (mem_count // 4) * 2
             pos = (x, y)
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
@@ -127,7 +121,7 @@ def parse_netlist(netlist_filename):
     for net_id in raw_netlists:
         hyper_edge = raw_netlists[net_id]
         netlists[net_id] = [e[0] for e in hyper_edge]
-    return netlists, g, dont_care, id_to_name
+    return netlists, g, dont_care, id_to_name, raw_netlists
 
 
 def convert2netlist(connections):
@@ -310,14 +304,14 @@ def compute_direction(src, dst):
 
     if x1 == x2:
         if y2 > y1:
-            return 2
+            return 3
         else:
-            return 0
+            return 1
     if y1 == y2:
         if x2 > x1:
-            return 1
+            return 0
         else:
-            return 3
+            return 2
     raise Exception("direction error " + "{}->{}".format(src, dst))
 
 
@@ -363,7 +357,7 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
     pe_tiles = {}
     # keep track of whether it's 1-bit or 16-bit
     # really stupid design in my opinion
-    track_mode = {}
+    pos_track_mode = {}
     type_str = "mpi"
     for name in instances:
         instance = instances[name]
@@ -394,12 +388,12 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
             op = instance["genargs"]["op_kind"][-1]
             if op == "bit":
                 # 1-bit line
-                track_mode[pos] = 1
+                pos_track_mode[pos] = 1
                 op = "lutFF"
                 pins = ("const0", "const0", "const0")
                 print_order = 3
             elif op == "alu" or op == "combined":
-                track_mode[pos] = 1
+                pos_track_mode[pos] = 16
                 if "alu_op" in instance["modargs"]:
                     op = instance["modargs"]["alu_op"][-1]
                 else:
@@ -467,6 +461,16 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                                                          tab,
                                                          id_to_name[blk_id])
 
+
+    # one pass to convert from pos_track_mode -> net_track_mode
+    net_track_mode = {}
+    for net_id in netlists:
+        for blk_id, _ in netlists[net_id]:
+            pos = placement[blk_id]
+            if pos in pos_track_mode:
+                net_track_mode[pos] = pos_track_mode[pos]
+                break
+
     # write routing
     output_string += "\n#ROUTING\n"
     for net_id in route_result:
@@ -517,53 +521,57 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                 side1, _, tile1, _ = mem_tile_fix(board_meta,
                                                   current_pos,
                                                   pre_pos)
-                # still need to careful about the next tile though
-                # as it could be an operand
-                if to_pos in pin_pos:
-                    blk_id, port = pin_pos[to_pos]
-                    # it has to be sink
-                    if "in" in port:
-                        # figure out which operand to use
-                        if port == "data.in.0":
-                            operand = "op1"
-                        elif port == "data.in.1":
-                            operand = "op2"
-                        elif port == "in":
-                            # we have a IO end.
-                            # mem it's getting very very messy
-                            side2, _, _, _ = mem_tile_fix(board_meta,
-                                                          current_pos,
-                                                          to_pos)
-                            output_string += \
-                                "T{1}_in_s{2}t{0} -> T{1}_out_s{3}t{0}\n".format(
-                                    track,
-                                    tile1,
-                                    side1,
-                                    side2)
-                            continue
-                        else:
-                            raise Exception("Unknown port " + port)
-                        _, _, _, sink_tile = mem_tile_fix(board_meta,
-                                                      current_pos,
-                                                      to_pos)
-                        output_string += \
-                            "T{1}_in_s{2}{0} -> T{3}_{4}".format(track,
-                                                                 tile1,
-                                                                 side1,
-                                                                 sink_tile,
-                                                                 operand)
-                    else:
-                        raise Exception("blk " + blk_id + " is not a sink")
-                else:
-                    side2, _, _, _ = mem_tile_fix(board_meta,
-                                                  current_pos,
-                                                  to_pos)
 
-                    output_string += \
-                        "T{1}_in_s{2}t{0} -> T{1}_out_s{3}t{0}\n".format(track,
-                                                                         tile1,
-                                                                         side1,
-                                                                         side2)
+                side2, _, _, _ = mem_tile_fix(board_meta,
+                                              current_pos,
+                                              to_pos)
+
+                output_string += \
+                    "T{1}_in_s{2}t{0} -> T{1}_out_s{3}t{0}\n".format(track,
+                                                                     tile1,
+                                                                     side1,
+                                                                     side2)
+
+        # last position
+        # still need to careful about the next tile though
+        # as it could be an operand
+        current_pos = tuple(path[-1])
+        pre_pos = tuple(path[-2])
+        assert(current_pos in pin_pos)
+        blk_id, port = pin_pos[current_pos]
+        side1, _, tile1, _ = mem_tile_fix(board_meta,
+                                          current_pos,
+                                          pre_pos)
+        # it has to be sink
+        if "in" in port:
+            # figure out which operand to use
+            if port == "data.in.0":
+                operand = "op1"
+                side = 2
+            elif port == "data.in.1":
+                operand = "op2"
+                side = 1
+            elif port == "in":
+                # we have a IO end.
+
+                #side2, _, _, _ = mem_tile_fix(board_meta, pre_pos, current_pos)
+                #output_string += \
+                #    "T{1}_in_s{2}t{0} -> T{1}_out_s{3}t{0}\n".format(
+                #        track,
+                #        tile1,
+                #        side1,
+                #        side2)
+                continue
+            else:
+                raise Exception("Unknown port " + port)
+            output_string += \
+                "T{1}_in_s{2}t{0} -> T{1}_{3}".format(track,
+                                                      tile1,
+                                                      side,
+                                                      operand)
+        else:
+            raise Exception("blk " + blk_id + " is not a sink")
+
 
 
     with open("test.bsb", "w+") as f:
