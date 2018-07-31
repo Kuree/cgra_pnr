@@ -215,10 +215,10 @@ def parse_cgra(filename, use_tile_addr=False):
     # no need to worry about the height
     layouts = {}
     if use_tile_addr:
-        layouts[layout_name] = (layout_board, blk_height, blk_capacity, info)
-    else:
         layouts[layout_name] = (layout_board, blk_height, blk_capacity, info,
                                 tile_mapping)
+    else:
+        layouts[layout_name] = (layout_board, blk_height, blk_capacity, info)
     return layouts
 
 

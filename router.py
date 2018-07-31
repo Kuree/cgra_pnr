@@ -29,7 +29,7 @@ class Router:
         # result
         self.route_result = {}
 
-        margin = 0
+        margin = board_info["margin"]
         # 4 directions
         self.routing_resource = np.zeros((self.board_size[1],
                                           self.board_size[0],
@@ -41,13 +41,27 @@ class Router:
                     for l in range(self.channel_width):
                         self.routing_resource[i][j][k][l] = True
 
+        # disable routing resource among IO files
+        height = board_info["height"]
+        width = board_info["width"]
+        layout_board = board_meta[0]
+        for i in range(height):
+            for j in range(width):
+                if layout_board[i][j] == "i":
+                    self.routing_resource[i][j][:, :] = True
+
         self.avoid_congestion = avoid_congestion
 
     def heuristic_dist(self, depth, pos, dst):
         x, y = pos
         dist = abs(x - dst[0]) + abs(y - dst[1]) + depth[(x, y)]
         if self.avoid_congestion:
-            dist += 10 / np.sum(self.routing_resource[y, x])
+            route_resource = np.sum(self.routing_resource[y, x])
+            if route_resource == 0:
+                extra = 100 # a large number
+            else:
+                extra = 10 / route_resource
+            dist += extra
         return dist
 
     @staticmethod
@@ -194,12 +208,21 @@ class Router:
 
     def vis_routing_resource(self):
         scale = 30
+        margin = self.board_meta[-1]["margin"]
+        height = self.board_meta[-1]["height"]
+        width = self.board_meta[-1]["width"]
         im, draw = draw_board(self.board_size[0], self.board_size[1], scale)
         for i in range(self.board_size[0]):
             for j in range(self.board_size[1]):
-                route_r = self.routing_resource[i][j]
-                r = np.sum(route_r)
-                color = int(255 * r / 4 / self.channel_width)
+                if self.board_meta[0][i][j] is None and \
+                        (i in range(0, margin) or j in range(0, margin) or
+                         i in range(height - margin, height) or\
+                         j in range(width - margin, width)):     # IO is special:
+                    color = 255
+                else:
+                    route_r = self.routing_resource[i][j]
+                    r = np.sum(route_r)
+                    color = int(255 * r / 4 / self.channel_width)
                 draw_cell(draw, (j, i), color=(255 - color, 0, color),
                           scale=scale)
         plt.imshow(im)

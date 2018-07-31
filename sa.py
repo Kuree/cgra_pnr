@@ -359,6 +359,8 @@ class SAClusterPlacer(Annealer):
             else:
                 direct_move = True
         if direct_move:
+            id1 = self.random.sample(ids, 1)[0]
+            pos1 = self.state[id1]
             # try to move cluster a little bit
             dx, dy = self.random.randrange(-2, 3), self.random.randrange(-2, 3)
             # only compute for cluster1

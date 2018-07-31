@@ -347,7 +347,7 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                        routing_filename):
     connections, instances = read_netlist_json(netlist_filename)
     dont_care, g, id_to_name, netlists = pack_netlists(connections, instances)
-    board_meta = arch.parse_cgra(board_filename)["CGRA"]
+    board_meta = arch.parse_cgra(board_filename, True)["CGRA"]
     placement, _ = parse_placement(placement_filename)
     route_result = parse_routing_result(routing_filename)
     tile_mapping = board_meta[-1]
@@ -403,7 +403,10 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                 print_order = 3
             elif op == "alu" or op == "combined":
                 track_mode[pos] = 1
-                op = instance["modargs"]["alu_op_debug"][-1]
+                if "alu_op" in instance["modargs"]:
+                    op = instance["modargs"]["alu_op"][-1]
+                else:
+                    op = instance["modargs"]["alu_op_debug"][-1]
                 print_order = 0
 
                 # TODO: fix this exhaustive search
@@ -476,11 +479,11 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
             side1, side2, tile1, tile2 = mem_tile_fix(board_meta, from_pos,
                                                       to_pos)
             if i == 0:
-                output_string += "T{1}_pe_out -> T{2}_out_t{3}{0}\n".format(
+                output_string += "T{1}_pe_out -> T{2}_out_s{3}t{0}\n".format(
                     track, tile1, tile2, side2)
             else:
                 output_string += \
-                    "T{1}_in_s{3}t{0} -> T{2}_out_t{4}{0}\n".format(track,
+                    "T{1}_in_s{3}t{0} -> T{2}_out_s{4}t{0}\n".format(track,
                                                                     tile1,
                                                                     tile2,
                                                                     side1,
