@@ -241,6 +241,7 @@ def pack_netlists(connections, instances):
                     name_to_id[blk_name] = new_id
                     # then remove them from don't care
                     dont_care.pop(blk_name, None)
+                    care_set.add(blk_name)
                     # add to the hyper edge
                     hyper_edge.append((new_id, port))
                     g.add_edge(edge_id, new_id)
@@ -461,14 +462,13 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                                                          tab,
                                                          id_to_name[blk_id])
 
-
     # one pass to convert from pos_track_mode -> net_track_mode
     net_track_mode = {}
     for net_id in netlists:
         for blk_id, _ in netlists[net_id]:
             pos = placement[blk_id]
             if pos in pos_track_mode:
-                net_track_mode[pos] = pos_track_mode[pos]
+                net_track_mode[net_id] = pos_track_mode[pos]
                 break
 
     # write routing
@@ -482,10 +482,11 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
             pos = placement[blk_id]
             pin_pos[pos] = (blk_id, port)
         # NOTE: in a netlist, a single src can drive multiple sinks
-        net_node_index = 0
         # also because of the strict format that bsbuilder is assuming
         # input IO will not be outputted.
-        i = 0
+        track_mode = net_track_mode[net_id]
+        assert(track_mode in [1, 16])
+        track_str = "" if track_mode == 16 else "b"
         for i in range(len(path) - 1):
             # based on my understanding
             # we don't care about IO's direction/routing in bsbuilder
@@ -502,18 +503,27 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                     # IO is a special case
                     # merely passing through
                     continue
+                side1, _, tile1, _ = mem_tile_fix(board_meta,
+                                                  current_pos,
+                                                  to_pos)
                 if "out" in port:
                     # we have a PE output
-                    side1, _, tile1, _ = mem_tile_fix(board_meta,
-                                                      current_pos,
-                                                      to_pos)
                     output_string +=\
-                        "T{1}_pe_out -> T{1}_out_s{2}t{0}\n".format(track,
-                                                                    tile1,
-                                                                    side1)
+                        "T{1}_pe_out{3} -> T{1}_out_s{2}t{0}{3}\n".format(
+                            track, tile1, side1, track_str)
                     continue    # we're done here
+                elif "rdata" == port:
+                    # memory out
+                    output_string += \
+                        "T{1}_mem_out{3} -> T{1}_out_s{2}t{0}{3}\n".format(
+                            track, tile1, side1, track_str)
                 else:
-                    raise Exception("blk " + blk_id + " is not a src")
+                    # it's a sink
+                    assert(i != 0)
+                    pre_pos = tuple(path[i - 1])
+                    output_string = process_sink(board_meta, track, pin_pos,
+                                                 current_pos,
+                                                 pre_pos, output_string)
             else:
                 # merely passing through
                 pre_pos = tuple(path[i - 1])
@@ -527,10 +537,8 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                                               to_pos)
 
                 output_string += \
-                    "T{1}_in_s{2}t{0} -> T{1}_out_s{3}t{0}\n".format(track,
-                                                                     tile1,
-                                                                     side1,
-                                                                     side2)
+                    "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{4}\n".format(
+                        track, tile1, side1, side2, track_str)
 
         # last position
         # still need to careful about the next tile though
@@ -538,44 +546,60 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
         current_pos = tuple(path[-1])
         pre_pos = tuple(path[-2])
         assert(current_pos in pin_pos)
-        blk_id, port = pin_pos[current_pos]
-        side1, _, tile1, _ = mem_tile_fix(board_meta,
-                                          current_pos,
-                                          pre_pos)
-        # it has to be sink
-        if "in" in port:
-            # figure out which operand to use
-            if port == "data.in.0":
-                operand = "op1"
-                side = 2
-            elif port == "data.in.1":
-                operand = "op2"
-                side = 1
-            elif port == "in":
-                # we have a IO end.
-
-                #side2, _, _, _ = mem_tile_fix(board_meta, pre_pos, current_pos)
-                #output_string += \
-                #    "T{1}_in_s{2}t{0} -> T{1}_out_s{3}t{0}\n".format(
-                #        track,
-                #        tile1,
-                #        side1,
-                #        side2)
-                continue
-            else:
-                raise Exception("Unknown port " + port)
-            output_string += \
-                "T{1}_in_s{2}t{0} -> T{1}_{3}".format(track,
-                                                      tile1,
-                                                      side,
-                                                      operand)
-        else:
-            raise Exception("blk " + blk_id + " is not a sink")
-
-
+        output_string = process_sink(board_meta, track, pin_pos, current_pos,
+                                     pre_pos, output_string)
 
     with open("test.bsb", "w+") as f:
         f.write(output_string)
+
+
+def process_sink(board_meta, track, pin_pos, current_pos, pre_pos,
+                 output_string):
+    blk_id, port = pin_pos[current_pos]
+    side1, _, tile1, _ = mem_tile_fix(board_meta,
+                                      current_pos,
+                                      pre_pos)
+    # it has to be sink
+    # TODO: change this to be architecture specific
+    if "in" in port or "wdata":
+        # figure out which operand to use
+        if port == "data.in.0":
+            operand = "op1"
+            side = 2
+        elif port == "data.in.1":
+            operand = "op2"
+            side = 1
+        elif port == "in":
+            # we have a IO end.
+            return output_string
+        elif port == "bit.in.0":
+            operand = "bit0"
+            side = 2
+        elif port == "bit.in.1":
+            operand = "bit1"
+            side = 1
+        elif port == "wdata":
+            operand = "mem_in"
+            side = 2
+        elif port == "ren":
+            operand = "ren"
+            side = 1
+        elif port == "wen":
+            operand = "wen"
+            side = 2
+        elif port == "cg_en":
+            operand = "cg_en"
+            side = 1
+        else:
+            raise Exception("Unknown port " + port)
+        output_string += \
+            "T{1}_in_s{2}t{0} -> T{1}_{3}\n".format(track,
+                                                    tile1,
+                                                    side,
+                                                    operand)
+    else:
+        raise Exception("blk " + blk_id + " is not a sink")
+    return output_string
 
 
 
