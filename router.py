@@ -52,6 +52,10 @@ class Router:
 
         self.avoid_congestion = avoid_congestion
 
+    @staticmethod
+    def manhattan_dist(p1, p2):
+        return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
+
     def heuristic_dist(self, depth, pos, dst):
         x, y = pos
         dist = abs(x - dst[0]) + abs(y - dst[1]) + depth[(x, y)]
@@ -114,10 +118,14 @@ class Router:
             net = self.netlists[net_id]
 
             src = net[0][0]
+            # avoid going back
+            net.sort(key=lambda pos:self.manhattan_dist(self.placement[src],
+                                                        self.placement[pos[0]]))
+
             dst_set_cpy = net[1:]
             route_path = {}
             # TODO: change how to present failure
-            failed_route = [None] * 100
+            failed_route = [None] * 200
             for chan in range(self.channel_width):
                 final_path = []
                 dst_set = dst_set_cpy[:]
@@ -147,9 +155,12 @@ class Router:
                         finished_set.add(point)
                         points = self.get_neighbors(chan, point)
                         for p in points:
-                            if p in finished_set or p in working_set:
+                            if p in finished_set or p in working_set or \
+                                    p in final_path:
                                 # we have already explored this position
                                 continue
+                            if p in final_path:
+                                pass
                             link[p] = point  # point backwards
                             depth[p] = depth[point] + 1
                             if p == dst_pos:
@@ -216,8 +227,8 @@ class Router:
             for j in range(self.board_size[1]):
                 if self.board_meta[0][i][j] is None and \
                         (i in range(0, margin) or j in range(0, margin) or
-                         i in range(height - margin, height) or\
-                         j in range(width - margin, width)):     # IO is special:
+                         i in range(height - margin, height) or
+                         j in range(width - margin, width)):    # IO is special:
                     color = 255
                 else:
                     route_r = self.routing_resource[i][j]

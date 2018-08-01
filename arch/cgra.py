@@ -92,8 +92,8 @@ def place_special_blocks(board, blks, board_pos, netlists, place_on_board):
             io_count += 1
         elif blk_id[0] == "m":
             # just evenly distributed
-            x = 5 + (mem_count % 4) * 4
-            y = 4 + (mem_count // 4) * 4
+            x = 5 + (mem_count % 3) * 4
+            y = 2 + (mem_count // 3) * 4
             pos = (x, y)
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
@@ -213,6 +213,9 @@ def pack_netlists(connections, instances):
             raw_names = v.split(".")
             blk_name = raw_names[0]
             port = ".".join(raw_names[1:])
+            # FIXME
+            if port == "ren" or port == "cg_en":
+                continue
             if blk_name not in name_to_id:
                 raise Exception("cannot find", blk_name, "in instances")
             if blk_name in care_set:
@@ -294,9 +297,9 @@ def compute_direction(src, dst):
 
     if x1 == x2:
         if y2 > y1:
-            return 3
-        else:
             return 1
+        else:
+            return 3
     if y1 == y2:
         if x2 > x1:
             return 0
@@ -362,72 +365,15 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
 
         # find out the PE type
         # TODO: Fix reg only PE tiles
-        pe_type = instance["genref"]
-        if pe_type == "coreir.reg":
-            # reg tile, reg in and reg out
-            op = "nop"
-            pins = ("reg", "reg")
-            print_order = 10
-            pos_track_mode[pos] = 16
-        elif pe_type == "cgralib.Mem":
-            op = "mem"
-            pins = int(instance["modargs"]["depth"][-1])
-            print_order = 2
-        elif pe_type == "cgralib.IO":
-            continue    # don't care yet
+        tile_sig = get_tile_signature(blk_id, connections,
+                                      id_to_name, instance, name,
+                                      name_to_id, placement, pos,
+                                      pos_track_mode)
+        if tile_sig is None:
+            continue
         else:
-            op = instance["genargs"]["op_kind"][-1]
-            if op == "bit":
-                # 1-bit line
-                pos_track_mode[pos] = 1
-                op = "lutFF"
-                pins = ("const0", "const0", "const0")
-                print_order = 3
-            elif op == "alu" or op == "combined":
-                pos_track_mode[pos] = 16
-                if "alu_op_debug" in instance["modargs"]:
-                    op = instance["modargs"]["alu_op_debug"][-1]
-                else:
-                    op = instance["modargs"]["alu_op"][-1]
-                print_order = 0
-
-                # TODO: fix this exhaustive search
-                # find all placements to see what else got placed on the same
-                # tile
-                pins = ["wire", "wire"]
-                pin_list = set()
-                for b_id in placement:
-                    if placement[b_id] == pos and b_id != blk_id:
-                        pin_list.add(id_to_name[b_id])
-                for pin in pin_list:
-                    # search for the entire connections to figure the pin
-                    # connection order
-                    for conn in connections:
-                        if pin in conn[0] and name in conn[1]:
-                            index = int(conn[1].split(".")[-1])
-                            pin_type = name_to_id[pin][0]
-                            if pin_type == "r":
-                                pins[index] = "reg"
-                            elif pin_type == "c":
-                                pins[index] = pin
-                            else:
-                                raise Exception("Unknown pin type " + pin)
-                            break
-                        elif pin in conn[1] and name in conn[0]:
-                            index = int(conn[0].split(".")[-1])
-                            pin_type = name_to_id[pin][0]
-                            if pin_type == "r":
-                                pins[index] = "reg"
-                            elif pin_type == "c":
-                                pins[index] = pin
-                            else:
-                                raise Exception("Unknown pin type " + pin)
-                            break
-
-            else:
-                raise Exception("Unknown PE op type " + op)
-
-        pe_tiles[blk_id] = (tile, op, pins, print_order)
+            op, pins, print_order = tile_sig
+            pe_tiles[blk_id] = (tile, op, pins, print_order)
 
     tab = "\t" * 6
     # generate tile mapping
@@ -437,12 +383,7 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
     output_string += "# PLACEMENT\n"
     for blk_id in pe_keys:
         tile, op, pins, _ = pe_tiles[blk_id]
-        if op == "lutFF":
-            output_string += "T{}_{}({}){}# {}\n".format(tile, op,
-                                                         ",".join(pins),
-                                                         tab,
-                                                         id_to_name[blk_id])
-        elif op == "mem":
+        if op == "mem":
             output_string += "T{}_{}_{}{}#{}\n".format(tile, op, pins,
                                                        tab,
                                                        id_to_name[blk_id])
@@ -456,13 +397,7 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                                                          id_to_name[blk_id])
 
     # one pass to convert from pos_track_mode -> net_track_mode
-    net_track_mode = {}
-    for net_id in netlists:
-        for blk_id, _ in netlists[net_id]:
-            pos = placement[blk_id]
-            if pos in pos_track_mode:
-                net_track_mode[net_id] = pos_track_mode[pos]
-                break
+    net_track_mode = get_net_track_mode(netlists, placement, pos_track_mode)
 
     # write routing
     output_string += "\n#ROUTING\n"
@@ -494,11 +429,16 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                 side1, _, tile1, _ = mem_tile_fix(board_meta,
                                                   current_pos,
                                                   to_pos)
-                if "reg" in id_to_name[blk_id]:
-                    # passing through
-                    #output_string = connect_tiles(board_meta, i, path, track,
-                    #                              track_str, track_str,
-                    #                              output_string)
+                if "reg" in id_to_name[blk_id] and i != 0:
+                    pre_pos = tuple(path[i - 1])
+                    side2, _, _, _ = mem_tile_fix(board_meta, current_pos,
+                                                  pre_pos)
+                    output_string +=\
+                        "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{4} (r)\n".format(track,
+                                                                                   tile1,
+                                                                                   side2,
+                                                                                   side1,
+                                                                                   track_str)
                     continue
                 elif "out" in port:
                     # we have a PE output
@@ -538,6 +478,118 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
 
     with open("test.bsb", "w+") as f:
         f.write(output_string)
+
+
+def get_net_track_mode(netlists, placement, pos_track_mode):
+    net_track_mode = {}
+    for net_id in netlists:
+        for blk_id, _ in netlists[net_id]:
+            pos = placement[blk_id]
+            # if any pin in the net is a bit mode, everything in in bit mode
+            if pos in pos_track_mode:
+                if net_id not in net_track_mode:
+                    net_track_mode[net_id] = pos_track_mode[pos]
+                else:
+                    if pos_track_mode[pos] == 1:
+                        net_track_mode[net_id] = pos_track_mode[pos]
+    return net_track_mode
+
+
+def get_tile_signature(blk_id, connections, id_to_name, instance, name,
+                       name_to_id, placement, pos, pos_track_mode):
+    pe_type = instance["genref"]
+    if pe_type == "coreir.reg":
+        # reg tile, reg in and reg out
+        op = "nop"
+        pins = ("reg", "reg")
+        print_order = 10
+        pos_track_mode[pos] = 16
+    elif pe_type == "cgralib.Mem":
+        op = "mem"
+        pins = int(instance["modargs"]["depth"][-1])
+        print_order = 2
+    elif pe_type == "cgralib.IO":
+        return None    # don't care yet
+    else:
+        op = instance["genargs"]["op_kind"][-1]
+        if op == "bit":
+            # 1-bit line
+            pos_track_mode[pos] = 1
+            # and we have something called lut55 and lut88...
+            lut_type = instance["modargs"]["lut_value"][-1][3:]
+            if lut_type == "55":
+                op = "lut55"
+                print_order = 0
+                pins = ["wire", "wire", "wire"]
+                get_tile_pin_list(blk_id, connections, id_to_name, name,
+                                  name_to_id,
+                                  pins, placement, pos)
+                pass
+            elif lut_type == "88":
+                op = "lut88"
+                print_order = 0
+                pins = ["wire", "wire", "wire"]
+                get_tile_pin_list(blk_id, connections, id_to_name, name,
+                                  name_to_id,
+                                  pins, placement, pos)
+            else:
+                op = "lutFF"
+                pins = ("const0", "const0", "const0")
+                print_order = 3
+        elif op == "alu" or op == "combined":
+            pos_track_mode[pos] = 16
+            if "alu_op_debug" in instance["modargs"]:
+                op = instance["modargs"]["alu_op_debug"][-1]
+            else:
+                op = instance["modargs"]["alu_op"][-1]
+            print_order = 0
+
+            # TODO: fix this exhaustive search
+            # find all placements to see what else got placed on the same
+            # tile
+            pins = ["wire", "wire"]
+            get_tile_pin_list(blk_id, connections, id_to_name, name, name_to_id,
+                              pins, placement, pos)
+
+        else:
+            raise Exception("Unknown PE op type " + op)
+    return op, pins, print_order
+
+
+def get_tile_pin_list(blk_id, connections, id_to_name, name, name_to_id, pins,
+                      placement, pos):
+    """update the pins you give"""
+    pin_list = set()
+    for b_id in placement:
+        if placement[b_id] == pos and b_id != blk_id:
+            pin_list.add(id_to_name[b_id])
+    for pin in pin_list:
+        # search for the entire connections to figure the pin
+        # connection order
+        for conn in connections:
+            if pin in conn[0] and name in conn[1]:
+                index = int(conn[1].split(".")[-1])
+                pin_type = name_to_id[pin][0]
+                if pin_type == "r":
+                    pins[index] = "reg"
+                elif pin_type == "c":
+                    pins[index] = pin
+                elif pin_type == "b":
+                    # FIXME
+                    pins[index] = "const0_0"
+                else:
+                    raise Exception("Unknown pin type " + pin)
+                break
+            elif pin in conn[1] and name in conn[0]:
+                index = int(conn[0].split(".")[-1])
+                pin_type = name_to_id[pin][0]
+                if pin_type == "r":
+                    pins[index] = "reg"
+                elif pin_type == "c":
+                    pins[index] = pin
+                else:
+                    raise Exception("Unknown pin type " + pin)
+                break
 
 
 def connect_tiles(board_meta, i, path, track, track_str1,
@@ -588,9 +640,9 @@ def process_sink(board_meta, id_to_name, track, pin_pos, current_pos, pre_pos,
                 track_str1 = track_str
                 track_str2 = track_str + " (r)"
                 # FIXME:
-                # for now always put register on s1
+                # for now always put register on s1 or s0
                 # once we have a packer, we need to change this
-                side2 = 1
+                side2 = 1 if side1 != 1 else 0
                 output_string += \
                     "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{5}\n".format(
                         track, tile1, side1, side2, track_str1, track_str2)
