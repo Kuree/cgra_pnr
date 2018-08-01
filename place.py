@@ -229,7 +229,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                              is_cell_legal, board_info):
     # simple heuristics to calculate the clusters
     if board_info["arch_type"] == "cgra":
-        num_clusters = int(np.ceil(len(emb) / 30)) + 1
+        num_clusters = int(np.ceil(len(emb) / 40)) + 1
     else:
         num_clusters = int(np.ceil(len(emb) / 120)) + 1
     factor = 6

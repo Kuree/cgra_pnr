@@ -93,7 +93,7 @@ def place_special_blocks(board, blks, board_pos, netlists, place_on_board):
         elif blk_id[0] == "m":
             # just evenly distributed
             x = 5 + (mem_count % 4) * 4
-            y = 4 + (mem_count // 4) * 2
+            y = 4 + (mem_count // 4) * 4
             pos = (x, y)
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
@@ -191,8 +191,8 @@ def pack_netlists(connections, instances):
                 dont_care[name] = None
                 blk_type = "c"
             elif instance_type == "coreir.reg":
-                dont_care[name] = None
-                blk_type = "r"
+                blk_type = "p"
+                print("INFO: change", name, "to a PE tile")
             else:
                 raise Exception("Unknown instance type", instance_type)
         blk_id = blk_type + str(id_count)
@@ -234,18 +234,7 @@ def pack_netlists(connections, instances):
                     dont_care[blk_name] = name2
                     print("Absorb", blk_name, "into", dont_care[blk_name])
                 else:
-                    # make them into a PE tile
-                    # first unregister its real id
-                    old_id = name_to_id.pop(blk_name, None)
-                    new_id = "p" + old_id[1:]
-                    name_to_id[blk_name] = new_id
-                    # then remove them from don't care
-                    dont_care.pop(blk_name, None)
-                    care_set.add(blk_name)
-                    # add to the hyper edge
-                    hyper_edge.append((new_id, port))
-                    g.add_edge(edge_id, new_id)
-                    print("INFO: change", blk_name, "to a PE tile")
+                    raise Exception("Unknown state for blk " + blk_name)
         if len(hyper_edge) > 1:
             netlists[edge_id] = hyper_edge
     # remove the ones that doesn't have connections
@@ -327,7 +316,7 @@ def mem_tile_fix(board_meta, from_pos, to_pos):
     if from_pos not in tile_mapping:
         # MEM tile?
         side1 += 4
-        tile1 = tile_mapping[from_pos[0], from_pos[0] - 1]
+        tile1 = tile_mapping[from_pos[0], from_pos[1] - 1]
     else:
         tile1 = tile_mapping[from_pos]
     if to_pos not in tile_mapping:
@@ -379,6 +368,7 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
             op = "nop"
             pins = ("reg", "reg")
             print_order = 10
+            pos_track_mode[pos] = 16
         elif pe_type == "cgralib.Mem":
             op = "mem"
             pins = int(instance["modargs"]["depth"][-1])
@@ -395,10 +385,10 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                 print_order = 3
             elif op == "alu" or op == "combined":
                 pos_track_mode[pos] = 16
-                if "alu_op" in instance["modargs"]:
-                    op = instance["modargs"]["alu_op"][-1]
-                else:
+                if "alu_op_debug" in instance["modargs"]:
                     op = instance["modargs"]["alu_op_debug"][-1]
+                else:
+                    op = instance["modargs"]["alu_op"][-1]
                 print_order = 0
 
                 # TODO: fix this exhaustive search
@@ -456,6 +446,9 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
             output_string += "T{}_{}_{}{}#{}\n".format(tile, op, pins,
                                                        tab,
                                                        id_to_name[blk_id])
+        elif op == "nop":
+            # reg tiles, no output
+            continue
         else:
             output_string += "T{}_{}({}){}# {}\n".format(tile, op,
                                                          ",".join(pins),
@@ -488,11 +481,6 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
         assert(track_mode in [1, 16])
         track_str = "" if track_mode == 16 else "b"
         for i in range(len(path) - 1):
-            # based on my understanding
-            # we don't care about IO's direction/routing in bsbuilder
-            # yet we care about where the data come from in the next node
-            # not a very good design decision in my opinion
-
             # get operand
             current_pos = tuple(path[i])
             to_pos = tuple(path[i + 1])
@@ -506,7 +494,13 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                 side1, _, tile1, _ = mem_tile_fix(board_meta,
                                                   current_pos,
                                                   to_pos)
-                if "out" in port:
+                if "reg" in id_to_name[blk_id]:
+                    # passing through
+                    #output_string = connect_tiles(board_meta, i, path, track,
+                    #                              track_str, track_str,
+                    #                              output_string)
+                    continue
+                elif "out" in port:
                     # we have a PE output
                     output_string +=\
                         "T{1}_pe_out{3} -> T{1}_out_s{2}t{0}{3}\n".format(
@@ -521,24 +515,16 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                     # it's a sink
                     assert(i != 0)
                     pre_pos = tuple(path[i - 1])
-                    output_string = process_sink(board_meta, track, pin_pos,
+                    output_string = process_sink(board_meta, id_to_name, track,
+                                                 pin_pos,
                                                  current_pos,
-                                                 pre_pos, output_string)
+                                                 pre_pos, track_str,
+                                                 output_string)
             else:
                 # merely passing through
-                pre_pos = tuple(path[i - 1])
-
-                side1, _, tile1, _ = mem_tile_fix(board_meta,
-                                                  current_pos,
-                                                  pre_pos)
-
-                side2, _, _, _ = mem_tile_fix(board_meta,
-                                              current_pos,
-                                              to_pos)
-
-                output_string += \
-                    "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{4}\n".format(
-                        track, tile1, side1, side2, track_str)
+                output_string = connect_tiles(board_meta, i, path, track,
+                                              track_str, track_str,
+                                              output_string)
 
         # last position
         # still need to careful about the next tile though
@@ -546,19 +532,44 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
         current_pos = tuple(path[-1])
         pre_pos = tuple(path[-2])
         assert(current_pos in pin_pos)
-        output_string = process_sink(board_meta, track, pin_pos, current_pos,
-                                     pre_pos, output_string)
+        output_string = process_sink(board_meta, id_to_name, track, pin_pos,
+                                     current_pos, pre_pos, track_str,
+                                     output_string)
 
     with open("test.bsb", "w+") as f:
         f.write(output_string)
 
 
-def process_sink(board_meta, track, pin_pos, current_pos, pre_pos,
-                 output_string):
+def connect_tiles(board_meta, i, path, track, track_str1,
+                  track_str2, output_string):
+    current_pos = tuple(path[i])
+    if i == 0:  # might be a reg
+        next_pos = tuple(path[i + 1])
+        _, side1, _, tile1 = mem_tile_fix(board_meta,
+                                          next_pos,
+                                          current_pos)
+    else:
+        pre_pos = tuple(path[i - 1])
+        side1, _, tile1, _ = mem_tile_fix(board_meta,
+                                          current_pos,
+                                          pre_pos)
+    to_pos = tuple(path[i + 1])
+    side2, _, _, _ = mem_tile_fix(board_meta,
+                                  current_pos,
+                                  to_pos)
+    output_string += \
+        "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{5}\n".format(
+            track, tile1, side1, side2, track_str1, track_str2)
+    return output_string
+
+
+def process_sink(board_meta, id_to_name, track, pin_pos, current_pos, pre_pos,
+                 track_str, output_string):
     blk_id, port = pin_pos[current_pos]
     side1, _, tile1, _ = mem_tile_fix(board_meta,
                                       current_pos,
                                       pre_pos)
+
     # it has to be sink
     # TODO: change this to be architecture specific
     if "in" in port or "wdata":
@@ -570,8 +581,22 @@ def process_sink(board_meta, track, pin_pos, current_pos, pre_pos,
             operand = "op2"
             side = 1
         elif port == "in":
-            # we have a IO end.
-            return output_string
+            # we have a IO, or a reg
+            name = id_to_name[blk_id]
+            if "reg" in name:
+                # it's a reg
+                track_str1 = track_str
+                track_str2 = track_str + " (r)"
+                # FIXME:
+                # for now always put register on s1
+                # once we have a packer, we need to change this
+                side2 = 1
+                output_string += \
+                    "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{5}\n".format(
+                        track, tile1, side1, side2, track_str1, track_str2)
+                return output_string
+            else:
+                return output_string
         elif port == "bit.in.0":
             operand = "bit0"
             side = 2
@@ -593,10 +618,11 @@ def process_sink(board_meta, track, pin_pos, current_pos, pre_pos,
         else:
             raise Exception("Unknown port " + port)
         output_string += \
-            "T{1}_in_s{2}t{0} -> T{1}_{3}\n".format(track,
-                                                    tile1,
-                                                    side,
-                                                    operand)
+            "T{1}_in_s{2}t{0}{4} -> T{1}_{3}\n".format(track,
+                                                       tile1,
+                                                       side,
+                                                       operand,
+                                                       track_str)
     else:
         raise Exception("blk " + blk_id + " is not a sink")
     return output_string
