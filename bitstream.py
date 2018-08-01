@@ -1,5 +1,6 @@
 from __future__ import print_function
 import sys
+import os
 from arch.cgra import generate_bitstream
 
 
@@ -16,7 +17,11 @@ def main():
     print("INFO:", "netlist:", netlist_file)
     print("INFO:", "placement:", placement_file)
     print("INFO:", "route:", routing_file)
-    generate_bitstream(arch_file, netlist_file, placement_file, routing_file)
+
+    output_filename = netlist_file.replace(".json", ".bsb")
+
+    generate_bitstream(arch_file, netlist_file, placement_file, routing_file,
+                       output_filename)
 
 
 if __name__ == "__main__":

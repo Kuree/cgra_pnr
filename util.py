@@ -109,7 +109,15 @@ def compute_centroid(cluster_cells):
         raise Exception("Unknown type: " + str(type(cluster_cells)))
 
 
-def save_routing():
-    pass
+def parse_args(sys_argv):
+    options = set()
+    args = []
+    for i, value in enumerate(sys_argv):
+        if value[0] == "-":
+            options.add(value[1:])
+        else:
+            args.append(value)
+    return options, args
+
 
 

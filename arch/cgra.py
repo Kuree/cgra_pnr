@@ -331,7 +331,7 @@ def mem_tile_fix(board_meta, from_pos, to_pos):
 
 
 def generate_bitstream(board_filename, netlist_filename, placement_filename,
-                       routing_filename):
+                       routing_filename, output_filename):
     connections, instances = read_netlist_json(netlist_filename)
     dont_care, g, id_to_name, netlists = pack_netlists(connections, instances)
     board_meta = arch.parse_cgra(board_filename, True)["CGRA"]
@@ -476,7 +476,7 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                                      current_pos, pre_pos, track_str,
                                      output_string)
 
-    with open("test.bsb", "w+") as f:
+    with open(output_filename, "w+") as f:
         f.write(output_string)
 
 
@@ -642,7 +642,7 @@ def process_sink(board_meta, id_to_name, track, pin_pos, current_pos, pre_pos,
                 # FIXME:
                 # for now always put register on s1 or s0
                 # once we have a packer, we need to change this
-                side2 = 1 if side1 != 1 else 0
+                side2 = 2 if side1 != 2 else 1
                 output_string += \
                     "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{5}\n".format(
                         track, tile1, side1, side2, track_str1, track_str2)

@@ -1,6 +1,5 @@
 from __future__ import print_function
-from util import reduce_cluster_graph
-from util import compute_centroid
+from util import reduce_cluster_graph, compute_centroid, parse_args
 from parser import parse_emb
 from sa import SAClusterPlacer, SADetailedPlacer, DeblockAnnealer
 from sa import ClusterException
@@ -35,16 +34,21 @@ def deblock_placement(args):
 
 
 def main():
-    if len(sys.argv) < 4:
-        print("Usage:", sys.argv[0], "<arch_file> <netlist>",
+    options, argv = parse_args(sys.argv)
+    if len(argv) < 4:
+        print("Usage:", sys.argv[0], "[options] <arch_file> <netlist>",
               "<embedding>", file=sys.stderr)
+        print("[options]: -no-vis", file=sys.stderr)
         exit(1)
     # force some internal library random sate
     random.seed(0)
     np.random.seed(0)
-    arch_filename = sys.argv[1]
-    netlist_filename = sys.argv[2]
-    netlist_embedding = sys.argv[3]
+
+    arch_filename = argv[1]
+    netlist_filename = argv[2]
+    netlist_embedding = argv[3]
+
+    vis_opt = "no-vis" not in options
 
     _, ext = os.path.splitext(netlist_filename)
     arch_type = ""
@@ -129,13 +133,13 @@ def main():
         new_placement_filename = os.path.basename(reference_placement)
         save_placement(reference_placement, new_placement_filename, board,
                        board_pos)
-
-        visualize_placement_fpga(board_pos, clusters)
+        if vis_opt:
+            visualize_placement_fpga(board_pos, clusters)
     else:
         placement_filename = netlist_filename.replace(".json", ".place")
         save_placement(board_pos, id_to_name, dont_care, placement_filename)
-
-        visualize_placement_cgra(board_pos)
+        if vis_opt:
+            visualize_placement_cgra(board_pos)
 
 
 def visualize_placement_fpga(board_pos, clusters):

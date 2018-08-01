@@ -196,4 +196,5 @@ if __name__ == "__main__":
         exit(0)
     print("processing", filename)
     random.seed(0)
+    np.random.seed(42)
     build_walks(filename)

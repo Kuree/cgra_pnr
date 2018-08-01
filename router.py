@@ -5,6 +5,7 @@ import sys
 import numpy as np
 from visualize import draw_board, draw_cell
 import matplotlib.pyplot as plt
+from util import parse_args
 
 
 class Router:
@@ -241,16 +242,19 @@ class Router:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage:", sys.argv[0], "<arch_file> <netlist.json>",
+    options, argv = parse_args(sys.argv)
+    if len(argv) != 4:
+        print("Usage:", sys.argv[0], "[options] <arch_file> <netlist.json>",
               "<netlist.place>", file=sys.stderr)
-
+        print("[options]: -no-vis", file=sys.stderr)
         exit(1)
-    arch_file = sys.argv[1]
+    vis_opt = "no-vis" not in options
+    arch_file = argv[1]
     meta = parse_cgra(arch_file)["CGRA"]
-    r = Router(meta, sys.argv[2], sys.argv[3])
+    r = Router(meta, argv[2], argv[3])
     r.route()
-    r.vis_routing_resource()
+    if vis_opt:
+        r.vis_routing_resource()
 
     route_file = sys.argv[3].replace(".place", ".route")
     save_routing_result(r.route_result, route_file)

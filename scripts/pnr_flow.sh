@@ -6,6 +6,13 @@ if [ "$#" -ne 2 ] || ! [ -f "$1" ] || ! [ -f "$2" ]; then
 fi
 
 # assume user already have the env activated
-python random_walk.py $2
-emb="$(basename "$2" .json).emb"
-python place.py $1 $2 $emb
+# place
+./place.sh $1 $2
+# route
+./route.sh $1 $2
+
+# produce bitstream
+./bitstream.sh $1 $2
+
+result="$(basename "$2" .json).bsb"
+echo "save result to $result"
