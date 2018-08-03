@@ -207,8 +207,12 @@ def parse_cgra(filename, use_tile_addr=False):
         print("Failed to get PE margin, use default value 2", file=sys.stderr)
         pe_margin = 2
 
+    # id_remap
+    # used for legal placements
+    id_remap = {"r": "p"}
+
     info = {"margin": pe_margin, "clb_type": "p", "arch_type": "cgra",
-            "height": height, "width": width}
+            "height": height, "width": width, "id_remap": id_remap}
 
     # NOTE:
     # the CGRA file sets the height for each tiles implicitly
@@ -244,14 +248,21 @@ def make_board(board_meta):
 
 
 def generate_is_cell_legal(board_meta):
-    layout_board, blk_height, blk_capacity, _ = board_meta
+    layout_board, blk_height, blk_capacity, board_info = board_meta
     height = len(layout_board)
     width = len(layout_board[0])
+
+    if "id_remap" in board_info:
+        id_remap = board_info["id_remap"]
+    else:
+        id_remap = {}
 
     def is_legal(board, pos, blk):
         # if board is not defined, we only check the legitimacy
         x, y = pos
         blk_type = blk[0]
+        if blk_type in id_remap:
+            blk_type = id_remap[blk_type]
         if x < 0 or y < 0 or x >= width or y >= height:
             return False
         if layout_board[y][x] != blk_type:

@@ -4,8 +4,10 @@ import sys
 import random
 import subprocess
 import os
+from util import parse_args
 
-NETLIST2VEC = "./metapath2vec"
+FILE_PATH = os.path.dirname(__file__)
+NETLIST2VEC = os.path.join(FILE_PATH, "./metapath2vec")
 
 # copied from node2vec
 class Graph():
@@ -154,18 +156,19 @@ def alias_draw(J, q):
         return J[kk]
 
 
-def build_walks(netlist_filename):
-    _, ext = os.path.splitext(netlist_filename)
-    if ext == ".json":
-        from arch.cgra import parse_netlist
-        _, nx_g, _, _, _ = parse_netlist(netlist_filename)
-    elif ext == ".packed":
+def build_walks(netlist_filename, mode):
+    if mode == "cgra":
+        from arch.cgra_packer import load_packed_file
+        from arch.cgra import build_graph
+        netlists, _, _ = load_packed_file(netlist_filename)
+        nx_g = build_graph(netlists)
+    elif mode == ".fpga":
         from arch.fpga import parse_packed
         nx_g, _ = parse_packed(netlist_filename)
     else:
         raise Exception("Unrecognized netlist file: " + netlist_filename)
-    p = 1
-    q = 0.5
+    p = 0.5
+    q = 1
     num_walks = 10
     walk_length = 120
     num_dim = 12
@@ -174,27 +177,38 @@ def build_walks(netlist_filename):
     # generate random walks
     walks = G.simulate_walks(num_walks, walk_length)
     # output to a file that netlist2vec can read
-    output_name = netlist_filename.replace(".json", ".n2v")
+    output_name = netlist_filename.replace(".packed", ".n2v")
     with open(output_name, "w+") as f:
         for walk in walks:
             for node_id in walk:
                 f.write("{} ".format(node_id))
             f.write("\n")
-    emb_name = netlist_filename.replace(".json", ".emb")
-    cmd = [NETLIST2VEC, "-train", output_name, "-output", emb_name, "-size", str(num_dim)]
+    emb_name = netlist_filename.replace(".packed", ".emb")
+    print("Using", NETLIST2VEC)
+    cmd = [NETLIST2VEC, "-train", output_name, "-output", emb_name, "-size",
+           str(num_dim)]
     subprocess.call(cmd)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage:", sys.argv[0], "<netlist_filename>", file=sys.stderr)
+    options, argv = parse_args(sys.argv)
+    if len(argv) != 2:
+        print("Usage:", argv[0], "<netlist_filename>", file=sys.stderr)
         exit(1)
-    filename = sys.argv[1]
-    emb_file = filename.replace(".json", ".emb")
+    if "cgra" in options:
+        mode = "cgra"
+    elif "fpga" in options:
+        mode = "fpga"
+    else:
+        print("Please indicate either -cgra or -fpga", file=sys.stderr)
+        exit(1)
+    filename = argv[1]
+    emb_file = filename.replace(".packed", ".emb")
     if os.path.isfile(emb_file):
-        print("skipping", emb_file)
+        print("found", emb_file, "skipping", emb_file)
         exit(0)
     print("processing", filename)
-    random.seed(0)
-    np.random.seed(42)
-    build_walks(filename)
+    seed = 42
+    random.seed(seed)
+    np.random.seed(seed)
+    build_walks(filename, mode)

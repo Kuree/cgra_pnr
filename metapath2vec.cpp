@@ -61,7 +61,8 @@ char train_file[MAX_STRING], output_file[MAX_STRING];
 char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING];
 struct vocab_word *vocab;
 int binary = 0, cbow = 0, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
-int pp = 1;
+//int pp = 1;
+int pp = 0;
 int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
@@ -78,7 +79,7 @@ int *table;
 
 //added
 // Keyi: change to netlist2vec
-std::vector<long long> e_table(0), i_table(0), m_table(0), p_table(0);
+std::vector<long long> e_table(0), i_table(0), m_table(0), p_table(0), r_table(0);
 
 void NodeType() {
 
@@ -96,6 +97,8 @@ void NodeType() {
             m_table.push_back(target);
         } else if (vocab[target].word[0] == 'p') {
             p_table.push_back(target);
+        } else if (vocab[target].word[0] == 'r') {
+            r_table.push_back(target);
         }
     }
     std::cout << "table_size     " << table_size << std::endl;
@@ -510,6 +513,8 @@ void *TrainModelThread(void *id) {
                             target = m_table[(next_random >> 16) % m_table.size()];
                         } else if (vocab[last_word].word[0] == 'p') {
                             target = p_table[(next_random >> 16) % p_table.size()];
+                        } else if (vocab[last_word].word[0] == 'r') {
+                            target = r_table[(next_random >> 16) % p_table.size()];
                         }
                         if (target == 0) target = next_random % (vocab_size - 1) + 1;
                         if (vocab[last_word].word[0] != vocab[target].word[0]) continue;   

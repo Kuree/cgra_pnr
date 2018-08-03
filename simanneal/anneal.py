@@ -228,6 +228,10 @@ class Annealer(object):
                         step, T, E, accepts / trials, improves / trials)
                     trials, accepts, improves = 0, 0, 0
 
+            # early termination
+            if T < 0.005 * E / len(self.state):
+                break
+
         self.state = self.copy_state(self.best_state)
         if self.save_state_on_exit:
             self.save_state()

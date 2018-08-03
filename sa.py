@@ -66,6 +66,55 @@ class SADetailedPlacer(Annealer):
         return float(hpwl)
 
 
+# main class to perform simulated annealing within each cluster
+class SAMacroPlacer(Annealer):
+    def __init__(self, available_pos, netlists, board,
+                 board_pos, current_state, is_legal, multi_thread=False):
+        self.available_pos = available_pos
+        self.netlists = netlists
+        self.board = board
+        self.blk_pos = board_pos
+        assert (len(current_state) <= len(available_pos))
+        self.is_legal = is_legal
+
+        rand = random.Random()
+        rand.seed(0)
+        state = current_state
+
+        Annealer.__init__(self, initial_state=state, multi_thread=multi_thread,
+                          rand=rand)
+
+    def move(self):
+        target = self.random.sample(self.state.keys(), 1)[0]
+        target_pos = self.state[target]
+        dst_pos = self.random.sample(self.available_pos, 1)[0]
+
+        pos_to_block = {}
+        for blk_id in self.state:
+            pos_to_block[self.state[blk_id]] = blk_id
+
+        if dst_pos in pos_to_block:
+            # both of them are actual blocks
+            dst_blk = pos_to_block[dst_pos]
+
+            self.state[dst_blk] = target_pos
+            self.state[target] = dst_pos
+        else:
+            # just swap them
+            self.state[target] = dst_pos
+
+    def energy(self):
+        """we use HPWL as the cost function"""
+        # merge with state + prefixed positions
+        board_pos = self.blk_pos.copy()
+        board_pos.update(self.state)
+        hpwl = 0
+        netlist_hpwl = compute_hpwl(self.netlists, board_pos)
+        for key in netlist_hpwl:
+            hpwl += netlist_hpwl[key]
+        return float(hpwl)
+
+
 # unused for CGRA
 class DeblockAnnealer(Annealer):
     def __init__(self, block_pos, available_pos, netlists, board_pos,
@@ -105,8 +154,8 @@ class DeblockAnnealer(Annealer):
                           rand=rand)
 
         # reduce the schedule
-        self.Tmax = self.Tmin + 3
-        self.steps /= 10
+        #self.Tmax = self.Tmin + 3
+        #self.steps /= 10
 
     def get_block_pos(self):
         block_pos = {}
@@ -192,7 +241,7 @@ class SAClusterPlacer(Annealer):
         rand = random.Random()
         rand.seed(0)
 
-        self.squeeze_iter = 4
+        self.squeeze_iter = 5
         self.place_factor = place_factor
 
         self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)

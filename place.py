@@ -2,7 +2,7 @@ from __future__ import print_function
 from util import reduce_cluster_graph, compute_centroid, parse_args
 from parser import parse_emb
 from sa import SAClusterPlacer, SADetailedPlacer, DeblockAnnealer
-from sa import ClusterException
+from sa import ClusterException, SAMacroPlacer
 from arch import make_board, parse_cgra, parse_vpr, generate_place_on_board
 from arch import generate_is_cell_legal
 import numpy as np
@@ -33,31 +33,53 @@ def deblock_placement(args):
     return deblock.get_block_pos()
 
 
+def macro_placement(board, board_pos, fixed_blk_pos, netlists, is_legal,
+                    board_meta):
+    layout_board = board_meta[0]
+    available_pos = set()
+    for y in range(len(layout_board)):
+        for x in range(len(layout_board[0])):
+            if layout_board[y][x] == "m" or layout_board == "u":
+                available_pos.add((x, y))
+    current_placement = {}
+    for blk_id in fixed_blk_pos:
+        if blk_id[0] == "m" or blk_id[0] == "u":
+            current_placement[blk_id] = fixed_blk_pos[blk_id]
+
+    macro = SAMacroPlacer(available_pos, netlists, board, board_pos,
+                          current_placement, is_legal)
+    macro.steps = 30
+    macro.anneal()
+
+    return macro.state
+
+
 def main():
     options, argv = parse_args(sys.argv)
     if len(argv) < 4:
-        print("Usage:", sys.argv[0], "[options] <arch_file> <netlist>",
+        print("Usage:", sys.argv[0], "[options] <arch_file> <packed_list>",
               "<embedding>", file=sys.stderr)
-        print("[options]: -no-vis", file=sys.stderr)
+        print("[options]: -no-vis -cgra -fpga", file=sys.stderr)
         exit(1)
     # force some internal library random sate
     random.seed(0)
     np.random.seed(0)
 
     arch_filename = argv[1]
-    netlist_filename = argv[2]
+    packed_filename = argv[2]
     netlist_embedding = argv[3]
 
     vis_opt = "no-vis" not in options
 
-    _, ext = os.path.splitext(netlist_filename)
+    _, ext = os.path.splitext(packed_filename)
     arch_type = ""
-    if ext == ".json":
+    if "cgra" in options:
         arch_type = "cgra"
-    elif ext == ".packed":
+    elif "fpga" in options:
         arch_type = "fpga"
     if len(arch_type) == 0:
-        print("Unrecognized netlist file", netlist_filename, file=sys.stderr)
+        print("Please indicate either -fpga or -cgra", packed_filename,
+              file=sys.stderr)
         exit(1)
 
     if arch_type == "fpga":
@@ -76,13 +98,13 @@ def main():
     # import board specific functions as well as macro placement
     if arch_type == "fpga":
         from arch.fpga import parse_placement, parse_packed, save_placement
-        reference_placement = netlist_filename.replace(".packed", ".place")
+        reference_placement = packed_filename.replace(".packed", ".place")
         if not os.path.isfile(reference_placement):
             print("Cannot find reference placement file",
                   reference_placement, file=sys.stderr)
             exit(1)
         _, reference_blk_pos = parse_placement(reference_placement)
-        netlists, _ = parse_packed(netlist_filename)
+        netlists, _ = parse_packed(packed_filename)
 
         for blk_id in raw_emb:
             if blk_id[0] != "c":
@@ -91,13 +113,15 @@ def main():
             else:
                 emb[blk_id] = raw_emb[blk_id]
     else:
-        from arch.cgra import place_special_blocks, save_placement,\
-            parse_netlist
-        netlists, g, dont_care, id_to_name, raw_netlist = \
-            parse_netlist(netlist_filename)
+        from arch.cgra import place_special_blocks, save_placement, \
+            prune_netlist
+        from arch.cgra_packer import load_packed_file
+        raw_netlist, folded_blocks, id_to_name = \
+            load_packed_file(packed_filename)
+        netlists = prune_netlist(raw_netlist)
         special_blocks = set()
         for blk_id in raw_emb:
-            if blk_id[0] != "p":
+            if blk_id[0] != "p" and blk_id[0] != "r":
                 special_blocks.add(blk_id)
             else:
                 emb[blk_id] = raw_emb[blk_id]
@@ -119,8 +143,13 @@ def main():
                                            cluster_cells, clusters,
                                            fixed_blk_pos, netlists)
 
+    # do a macro placement
+    #macro_result = macro_placement(board, board_pos, fixed_blk_pos, netlists,
+    #                               is_cell_legal, board_meta)
+    #board_pos.update(macro_result)
+
     # only use deblock when we have lots of clusters
-    if len(clusters) > 8:
+    if len(clusters) > 4:
         board_pos = perform_deblock_placement(board, board_pos, fixed_blk_pos,
                                               netlists)
 
@@ -136,8 +165,8 @@ def main():
         if vis_opt:
             visualize_placement_fpga(board_pos, clusters)
     else:
-        placement_filename = netlist_filename.replace(".json", ".place")
-        save_placement(board_pos, id_to_name, dont_care, placement_filename)
+        placement_filename = packed_filename.replace(".packed", ".place")
+        save_placement(board_pos, id_to_name, folded_blocks, placement_filename)
         if vis_opt:
             visualize_placement_cgra(board_pos)
 
@@ -156,7 +185,7 @@ def visualize_placement_fpga(board_pos, clusters):
 
 
 def visualize_placement_cgra(board_pos):
-    color_index = "imop"
+    color_index = "imopr"
     scale = 30
     im, draw = draw_board(20, 20, scale)
     for blk_id in board_pos:
@@ -168,10 +197,11 @@ def visualize_placement_cgra(board_pos):
     plt.show()
 
 
+
 def perform_deblock_placement(board, board_pos, fixed_blk_pos, netlists):
     # apply deblock "filter" to further improve the quality
-    num_x = 4
-    num_y = 4  # these values are determined by the board size
+    num_x = 2
+    num_y = 2  # these values are determined by the board size
     box_x = len(board[0]) // num_x
     box_y = len(board) // num_y
     boxes = []
@@ -263,6 +293,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
             num_clusters -= 1
             factor = 4
 
+    #cluster_placer.steps = 10
     cluster_placer.anneal()
     cluster_cells, centroids = cluster_placer.squeeze()
     return centroids, cluster_cells, clusters
@@ -284,7 +315,7 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
             pos = centroids[i]
             blk_pos[node_id] = pos
         map_args.append((clusters[c_id], cells, new_netlist, board, blk_pos))
-    pool = Pool(3)
+    pool = Pool(4)
     results = pool.map(detailed_placement, map_args)
     pool.close()
     pool.join()

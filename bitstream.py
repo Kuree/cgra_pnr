@@ -18,7 +18,7 @@ def main():
     print("INFO:", "placement:", placement_file)
     print("INFO:", "route:", routing_file)
 
-    output_filename = netlist_file.replace(".json", ".bsb")
+    output_filename = netlist_file.replace(".packed", ".bsb")
 
     generate_bitstream(arch_file, netlist_file, placement_file, routing_file,
                        output_filename)

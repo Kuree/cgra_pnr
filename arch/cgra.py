@@ -1,12 +1,14 @@
 from __future__ import print_function
-import os
 import json
-import networkx as nx
-import sys
 import arch
+from cgra_packer import read_netlist_json, load_packed_file
+import networkx as nx
+import random
+from copy import copy
+import pickle
 
 
-def save_placement(board_pos, id_to_name, dont_care, place_file):
+def save_placement(board_pos, id_to_name, folded_blocks, place_file):
     blk_keys = list(board_pos.keys())
     blk_keys.sort(key=lambda b: int(b[1:]))
     with open(place_file, "w+") as f:
@@ -27,14 +29,10 @@ def save_placement(board_pos, id_to_name, dont_care, place_file):
         for blk_id in id_to_name:
             name_to_id[id_to_name[blk_id]] = blk_id
 
-        # write out absorbed components
-        for blk_name in dont_care:
-            connected_name = dont_care[blk_name]
-            assert(connected_name is not None)
-            connected_id = name_to_id[connected_name]
-            x, y = board_pos[connected_id]
-            blk_id = name_to_id[blk_name]
-            f.write("{0}\t\t{1}\t{2}\t\t#{3}\n".format(blk_name,
+        for blk_id, port in folded_blocks:
+            new_block = folded_blocks[(blk_id, port)][0]
+            x, y = board_pos[new_block]
+            f.write("{0}\t\t{1}\t{2}\t\t#{3}\n".format(id_to_name[blk_id],
                                                        x,
                                                        y,
                                                        blk_id))
@@ -80,6 +78,10 @@ def place_special_blocks(board, blks, board_pos, netlists, place_on_board):
     input_io_locations = [(1, 2), (2, 1)]
     output_io_locations = [(18, 2), (2, 18)]
 
+    random.seed(0)
+    blks = list(blks)
+    random.shuffle(blks)
+
     for blk_id in blks:
         if blk_id[0] == "i":
             is_input = io_mapping[blk_id]
@@ -102,210 +104,16 @@ def place_special_blocks(board, blks, board_pos, netlists, place_on_board):
             raise Exception("Unknown block type", blk_id)
 
 
-def parse_connection(netlist_filename):
-    # just parse the connection without verifying
-    connections, instances = read_netlist_json(netlist_filename)
-    _, g, id_to_name, netlists = pack_netlists(connections,
-                                               instances)
-    return g, id_to_name, netlists
-
-
-def parse_netlist(netlist_filename):
-    """parse the netlist. also perform simple "packing" while reading out
-       connections.
-    """
-    connections, instances = read_netlist_json(netlist_filename)
-    dont_care, g, id_to_name, raw_netlists = pack_netlists(connections,
-                                                           instances)
-    netlists = {}
-    for net_id in raw_netlists:
-        hyper_edge = raw_netlists[net_id]
-        netlists[net_id] = [e[0] for e in hyper_edge]
-    return netlists, g, dont_care, id_to_name, raw_netlists
-
-
-def convert2netlist(connections):
-    netlists = []
-    skip_index = set()
-    for i in range(len(connections)):
-        if i in skip_index:
-            continue
-        conn = connections[i]
-        assert(len(conn) == 2)
-        # brute force search
-        net = [conn[0], conn[1]]
-        for j in range(len(connections)):
-            if i == j:
-                continue
-            conn0 = connections[j][0]
-            conn1 = connections[j][1]
-
-            if conn0 in net and conn1 not in net:
-                net.append(conn1)
-                skip_index.add(j)
-            if conn1 in net and conn0 not in net:
-                skip_index.add(j)
-                net.append(conn0)
-
-        def sort_value(key):
-            raw_splits = key.split(".")
-            if "in" in raw_splits:
-                return 2
-            elif "out" in raw_splits:
-                return 0
-            else:
-                return 1
-        # rearrange the net so that it's src -> sink
-        net.sort(key=lambda p: sort_value(p))
-        netlists.append(net)
-    print("INFO: before conversion connections", len(connections),
-          "after conversion netlists:", len(netlists))
-    return netlists
-
-
-def pack_netlists(connections, instances):
-    name_to_id = {}
-    id_count = 0
-    # don't care list
-    dont_care = {}
-    # things we actually care in creating connection graph
-    care_set = set()
-    care_types = "pim"
-    for name in instances:
-        attrs = instances[name]
-        if "genref" not in attrs:
-            assert ("modref" in attrs)
-            assert (attrs["modref"] == u"corebit.const")
-            dont_care[name] = None
-            blk_type = "b"
-        else:
-            # TODO: stupid 1 bit IO thing need to take care of
-            instance_type = attrs["genref"]
-            if instance_type == "cgralib.PE":
-                blk_type = "p"
-            elif instance_type == "cgralib.IO":
-                blk_type = "i"
-            elif instance_type == "cgralib.Mem":
-                blk_type = "m"
-            elif instance_type == "coreir.const":
-                dont_care[name] = None
-                blk_type = "c"
-            elif instance_type == "coreir.reg":
-                blk_type = "p"
-                print("INFO: change", name, "to a PE tile")
-            else:
-                raise Exception("Unknown instance type", instance_type)
-        blk_id = blk_type + str(id_count)
-        id_count += 1
-        name_to_id[name] = blk_id
-        if blk_type in care_types:
-            care_set.add(name)
-    # read the connections and pack them
-    g = nx.Graph()
-    netlists = {}
-    # hyper edge count
-    h_edge_count = 0
-    for conn in connections:
-        edge_id = "e" + str(h_edge_count)
-        h_edge_count += 1
-        hyper_edge = []
-        for idx, v in enumerate(conn):
-            raw_names = v.split(".")
-            blk_name = raw_names[0]
-            port = ".".join(raw_names[1:])
-            # FIXME
-            if port == "ren" or port == "cg_en":
-                continue
-            if blk_name not in name_to_id:
-                raise Exception("cannot find", blk_name, "in instances")
-            if blk_name in care_set:
-                blk_id = name_to_id[blk_name]
-                g.add_edge(edge_id, blk_id)
-                hyper_edge.append((blk_id, port))
-            elif blk_name in dont_care and dont_care[blk_name] is None:
-                # absorb consts and registers
-                if idx != 0:
-                    v2 = conn[idx - 1]
-                elif idx != len(conn) - 1:
-                    v2 = conn[idx + 1]
-                else:
-                    raise Exception("conn only has", conn)
-                name2 = v2.split(".")[0]
-                id2 = name_to_id[name2]
-                if name2 not in dont_care and id2[0] != "m":
-                    # reg cannot be put into memory
-                    dont_care[blk_name] = name2
-                    print("Absorb", blk_name, "into", dont_care[blk_name])
-                else:
-                    raise Exception("Unknown state for blk " + blk_name)
-        if len(hyper_edge) > 1:
-            netlists[edge_id] = hyper_edge
-    # remove the ones that doesn't have connections
-    remove_set = set()
-    for blk_name in dont_care:
-        if dont_care[blk_name] is None:
-            print("WARNING: Failed to absorb", blk_name,
-                  "\n         Caused by:",
-                  "No connection", file=sys.stderr)
-            remove_set.add(blk_name)
-    for blk_name in remove_set:
-        dont_care.pop(blk_name, None)
-    for edge in g.edges():
-        g[edge[0]][edge[1]]['weight'] = 1
-    g = g.to_undirected()
-    # reverse it since we need the actual name for placement
-    id_to_name = {}
-    for b_id in name_to_id:
-        id_to_name[name_to_id[b_id]] = b_id
-
-    print("INFO: before packing netlists:", len(connections),
-          "after packing netlists:", len(netlists))
-    return dont_care, g, id_to_name, netlists
-
-
-def read_netlist_json(netlist_filename):
-    assert (os.path.isfile(netlist_filename))
-    with open(netlist_filename) as f:
-        raw_data = json.load(f)
-    namespace = raw_data["namespaces"]
-    design = namespace["global"]["modules"]["DesignTop"]
-    instances = design["instances"]
-    connections = design["connections"]
-    # the standard json input is not a netlist
-    connections = convert2netlist(connections)
-    return connections, instances
-
-
-def save_routing_result(routing_result, output_file):
+def save_routing_result(route_result, route_ports, output_file):
+    result = {"route": route_result, "ports": route_ports}
     with open(output_file, "w+") as f:
-        json.dump(routing_result, f)
+        pickle.dump(result, f)
 
 
 def parse_routing_result(routing_file):
     with open(routing_file) as f:
-        return json.load(f)
-
-
-def compute_direction(src, dst):
-    """ right -> 0 bottom -> 1 left -> 2 top -> 3 """
-    assert (src != dst)
-    x1, y1 = src
-    x2, y2 = dst
-    assert ((abs(x1 - x2) == 0 and abs(y1 - y2) == 1) or (abs(x1 - x2) == 1
-                                                          and abs(y1 - y2)
-                                                          == 0))
-
-    if x1 == x2:
-        if y2 > y1:
-            return 1
-        else:
-            return 3
-    if y1 == y2:
-        if x2 > x1:
-            return 0
-        else:
-            return 2
-    raise Exception("direction error " + "{}->{}".format(src, dst))
+        data = pickle.load(f)
+    return data["route"], data["ports"]
 
 
 def mem_tile_fix(board_meta, from_pos, to_pos):
@@ -330,14 +138,17 @@ def mem_tile_fix(board_meta, from_pos, to_pos):
     return side1, side2, tile1, tile2
 
 
-def generate_bitstream(board_filename, netlist_filename, placement_filename,
+def generate_bitstream(board_filename, packed_filename, placement_filename,
                        routing_filename, output_filename):
-    connections, instances = read_netlist_json(netlist_filename)
-    dont_care, g, id_to_name, netlists = pack_netlists(connections, instances)
+    netlists, folded_blocks, id_to_name, = load_packed_file(packed_filename)
+    g = build_graph(netlists)
     board_meta = arch.parse_cgra(board_filename, True)["CGRA"]
     placement, _ = parse_placement(placement_filename)
-    route_result = parse_routing_result(routing_filename)
+    route_result, route_ports = parse_routing_result(routing_filename)
     tile_mapping = board_meta[-1]
+    # FIXME
+    netlist_filename = packed_filename.replace(".packed", ".json")
+    connections, instances = read_netlist_json(netlist_filename)
 
     output_string = ""
 
@@ -351,13 +162,16 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
     # keep track of whether it's 1-bit or 16-bit
     # really stupid design in my opinion
     pos_track_mode = {}
-    type_str = "mpi"
+    type_str = "mpir"
     for name in instances:
         instance = instances[name]
         blk_id = name_to_id[name]
-        if blk_id not in g.nodes():
-            continue    # we have packed these instances
+        if blk_id in folded_blocks:
+            continue
         blk_id = name_to_id[name]
+        # it might be absorbed already
+        if blk_id not in g.nodes():
+            continue
         # it has to be a PE tile
         assert(blk_id[0] in type_str)
         pos = placement[blk_id]
@@ -389,7 +203,7 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
                                                        id_to_name[blk_id])
         elif op == "nop":
             # reg tiles, no output
-            continue
+            raise Exception("TODO")
         else:
             output_string += "T{}_{}({}){}# {}\n".format(tile, op,
                                                          ",".join(pins),
@@ -403,12 +217,21 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
     output_string += "\n#ROUTING\n"
     for net_id in route_result:
         track, path = route_result[net_id]
+        if len(path) == 0:
+            continue
         output_string += "\n# net id: {}\n".format(net_id)
         netlist = netlists[net_id]
-        pin_pos = {}
-        for blk_id, port, in netlist:
-            pos = placement[blk_id]
-            pin_pos[pos] = (blk_id, port)
+        if len(netlist) == 1:
+            continue
+        for p in netlist:
+            output_string += "# {}: {}::{}\n".format(p[0], id_to_name[p[0]],
+                                                     p[1])
+        route_port = copy(route_ports[net_id])
+        # notice that it may overlap
+        port_positions = set()
+        for (p, _, _) in route_port:
+            port_positions.add(p)
+
         # NOTE: in a netlist, a single src can drive multiple sinks
         # also because of the strict format that bsbuilder is assuming
         # input IO will not be outputted.
@@ -417,49 +240,52 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
         track_str = "" if track_mode == 16 else "b"
         for i in range(len(path) - 1):
             # get operand
-            current_pos = tuple(path[i])
-            to_pos = tuple(path[i + 1])
+            current_pos = path[i]
+            to_pos = path[i + 1]
 
-            if current_pos in pin_pos:
-                blk_id, port = pin_pos[current_pos]
+            if current_pos in port_positions:
+                pp, blk_id, port = route_port[0]
+                assert(pp == current_pos)
                 if blk_id[0] == "i":
                     # IO is a special case
                     # merely passing through
+                    route_port.pop(0)
                     continue
                 side1, _, tile1, _ = mem_tile_fix(board_meta,
                                                   current_pos,
                                                   to_pos)
-                if "reg" in id_to_name[blk_id] and i != 0:
-                    pre_pos = tuple(path[i - 1])
-                    side2, _, _, _ = mem_tile_fix(board_meta, current_pos,
-                                                  pre_pos)
-                    output_string +=\
-                        "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{4} (r)\n".format(track,
-                                                                                   tile1,
-                                                                                   side2,
-                                                                                   side1,
-                                                                                   track_str)
-                    continue
-                elif "out" in port:
+                if "out" == port:
+                    assert(i == 0)
                     # we have a PE output
                     output_string +=\
                         "T{1}_pe_out{3} -> T{1}_out_s{2}t{0}{3}\n".format(
                             track, tile1, side1, track_str)
-                    continue    # we're done here
-                elif "rdata" == port:
+                    route_port.pop(0)
+                    # we're done here
+                elif "mem_out" == port:
                     # memory out
                     output_string += \
                         "T{1}_mem_out{3} -> T{1}_out_s{2}t{0}{3}\n".format(
                             track, tile1, side1, track_str)
+                    route_port.pop(0)
                 else:
                     # it's a sink
-                    assert(i != 0)
-                    pre_pos = tuple(path[i - 1])
-                    output_string = process_sink(board_meta, id_to_name, track,
-                                                 pin_pos,
-                                                 current_pos,
-                                                 pre_pos, track_str,
-                                                 output_string)
+                    if i == 0 and "reg" in port:
+                        output_string = connect_tiles(board_meta, i, path,
+                                                      track,
+                                                      track_str, track_str,
+                                                      output_string)
+                        route_port.pop(0)
+                        continue
+                    else:
+                        assert (i != 0)
+                        pre_pos = path[i - 1]
+                        output_string = process_sink(board_meta, track,
+                                                     route_port,
+                                                     current_pos,
+                                                     pre_pos, track_str,
+                                                     output_string)
+                        route_port.pop(0)
             else:
                 # merely passing through
                 output_string = connect_tiles(board_meta, i, path, track,
@@ -469,15 +295,36 @@ def generate_bitstream(board_filename, netlist_filename, placement_filename,
         # last position
         # still need to careful about the next tile though
         # as it could be an operand
-        current_pos = tuple(path[-1])
-        pre_pos = tuple(path[-2])
-        assert(current_pos in pin_pos)
-        output_string = process_sink(board_meta, id_to_name, track, pin_pos,
-                                     current_pos, pre_pos, track_str,
-                                     output_string)
+        # be aware of the self-connection!
+        if len(path) > 1 and len(route_port) == 1:
+            current_pos = path[-1]
+            pre_pos = path[-2]
+            assert(current_pos in port_positions)
+            output_string = process_sink(board_meta, track, route_port,
+                                         current_pos, pre_pos, track_str,
+                                         output_string)
+        elif len(route_port) == 2:
+            # handle self_loop
+            current_pos = path[-1]
+            output_string = bitstream_handle_self_loop(board_meta,
+                                                       current_pos,
+                                                       route_port,
+                                                       track_str,
+                                                       output_string)
+        else:
+            raise Exception("Unexpected State")
 
     with open(output_filename, "w+") as f:
         f.write(output_string)
+
+
+def bitstream_handle_self_loop(board_meta, current_pos, route_port, track_str,
+                               output_string):
+    tile_mapping = board_meta[-1]
+    pos, blk_id, port = route_port[0]
+    tile = tile_mapping[pos]
+    fixed_direction1 = get_pin_fixed_direction(blk_id, port)
+    return output_string
 
 
 def get_net_track_mode(netlists, placement, pos_track_mode):
@@ -500,8 +347,8 @@ def get_tile_signature(blk_id, connections, id_to_name, instance, name,
     pe_type = instance["genref"]
     if pe_type == "coreir.reg":
         # reg tile, reg in and reg out
-        op = "nop"
-        pins = ("reg", "reg")
+        op = "add"
+        pins = ("reg", "const0_0")
         print_order = 10
         pos_track_mode[pos] = 16
     elif pe_type == "cgralib.Mem":
@@ -592,20 +439,72 @@ def get_tile_pin_list(blk_id, connections, id_to_name, name, name_to_id, pins,
                 break
 
 
+def compute_direction(src, dst):
+    """ right -> 0 bottom -> 1 left -> 2 top -> 3 """
+    assert (src != dst)
+    x1, y1 = src
+    x2, y2 = dst
+    assert ((abs(x1 - x2) == 0 and abs(y1 - y2) == 1) or (abs(x1 - x2) == 1
+                                                          and abs(y1 - y2)
+                                                          == 0))
+
+    if x1 == x2:
+        if y2 > y1:
+            return 1
+        else:
+            return 3
+    if y1 == y2:
+        if x2 > x1:
+            return 0
+        else:
+            return 2
+    raise Exception("direction error " + "{}->{}".format(src, dst))
+
+
+def get_opposite_direction(direction):
+    if direction == 0:
+        return 2
+    elif direction == 1:
+        return 3
+    elif direction == 2:
+        return 0
+    elif direction == 3:
+        return 0
+    else:
+        raise Exception("Unknown direction " + str(direction))
+
+
+def determine_pin_direction(net, placement):
+    pin_directions = {}
+    allowed_initial_ports = {"data0", "data1", "reg1", "reg2"}
+    for index, (blk_id, port) in enumerate(net):
+        if index == 0 and port not in allowed_initial_ports:
+            # it's a a source
+            continue
+        pos = placement[blk_id]
+        # reg is always put on data0 (op1)
+        fixed_direction = get_pin_fixed_direction(blk_id, port)
+        if fixed_direction > 0:
+            pin_directions[(pos, port)] = fixed_direction
+
+
+    return pin_directions
+
+
 def connect_tiles(board_meta, i, path, track, track_str1,
                   track_str2, output_string):
-    current_pos = tuple(path[i])
+    current_pos = path[i]
     if i == 0:  # might be a reg
-        next_pos = tuple(path[i + 1])
+        next_pos = path[i + 1]
         _, side1, _, tile1 = mem_tile_fix(board_meta,
                                           next_pos,
                                           current_pos)
     else:
-        pre_pos = tuple(path[i - 1])
+        pre_pos = path[i - 1]
         side1, _, tile1, _ = mem_tile_fix(board_meta,
                                           current_pos,
                                           pre_pos)
-    to_pos = tuple(path[i + 1])
+    to_pos = path[i + 1]
     side2, _, _, _ = mem_tile_fix(board_meta,
                                   current_pos,
                                   to_pos)
@@ -615,71 +514,114 @@ def connect_tiles(board_meta, i, path, track, track_str1,
     return output_string
 
 
-def process_sink(board_meta, id_to_name, track, pin_pos, current_pos, pre_pos,
+def get_pin_fixed_direction(blk_id, port):
+    if ("data0" in port) or ("reg0" in port) or (port == "mem_in") or \
+            (port == "wen") or (port == "bit0"):
+        # this is an operand 0
+        # it has to come from the left side
+        return 2
+    elif "data1" in port or ("reg1" in port) or (port == "bit1"):
+        # this is an operand 1
+        # it has to come from the bottom side
+        return 1
+    elif blk_id[0] == "i":
+        # IO sink. should be handled already by routing resource
+        return -1
+    elif blk_id[0] == "r":
+        assert port == "reg"
+        # in unfolded scheme, reg is always put on the data0/op1
+        # use id as a way to reduce routing load
+        #num_id = int(blk_id[1:])
+        #if num_id % 2 == 0:
+        #    return 1
+        #else:
+        #    return 2
+        return 2
+    else:
+        raise Exception(port)
+
+
+def process_sink(board_meta, track, route_port, current_pos, pre_pos,
                  track_str, output_string):
-    blk_id, port = pin_pos[current_pos]
-    side1, _, tile1, _ = mem_tile_fix(board_meta,
-                                      current_pos,
-                                      pre_pos)
+    _, blk_id, port = route_port[0]
+    _, direction, _, tile = mem_tile_fix(board_meta,
+                                         pre_pos,
+                                         current_pos)
 
     # it has to be sink
     # TODO: change this to be architecture specific
-    if "in" in port or "wdata":
-        # figure out which operand to use
-        if port == "data.in.0":
-            operand = "op1"
-            side = 2
-        elif port == "data.in.1":
-            operand = "op2"
-            side = 1
-        elif port == "in":
-            # we have a IO, or a reg
-            name = id_to_name[blk_id]
-            if "reg" in name:
-                # it's a reg
-                track_str1 = track_str
-                track_str2 = track_str + " (r)"
-                # FIXME:
-                # for now always put register on s1 or s0
-                # once we have a packer, we need to change this
-                side2 = 2 if side1 != 2 else 1
-                output_string += \
-                    "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{5}\n".format(
-                        track, tile1, side1, side2, track_str1, track_str2)
-                return output_string
-            else:
-                return output_string
-        elif port == "bit.in.0":
-            operand = "bit0"
-            side = 2
-        elif port == "bit.in.1":
-            operand = "bit1"
-            side = 1
-        elif port == "wdata":
-            operand = "mem_in"
-            side = 2
-        elif port == "ren":
-            operand = "ren"
-            side = 1
-        elif port == "wen":
-            operand = "wen"
-            side = 2
-        elif port == "cg_en":
-            operand = "cg_en"
-            side = 1
+    if blk_id[0] == "i":
+        # because IO only allows certain flow. we need to be extra careful
+        if current_pos == (18, 2):
+            if direction != 2:
+                path = ((2, 16), (2, 17))
+                #output_string = connect_tiles(board_meta, 1, path, track, "",
+                #                              "", output_string)
+                pass
+            # don't care?
         else:
-            raise Exception("Unknown port " + port)
-        output_string += \
-            "T{1}_in_s{2}t{0}{4} -> T{1}_{3}\n".format(track,
-                                                       tile1,
-                                                       side,
-                                                       operand,
-                                                       track_str)
+            raise Exception("Not implemented")
+
+        return output_string
+    if "reg" in port:
+        # it's a reg
+        track_str1 = track_str
+        track_str2 = track_str + " (r)"
+        # maybe a PE tile?
+        if port == "reg":
+            port = "data0"
+        else:
+            reg_op = int(port[-1])
+            if reg_op == 0:
+                port = "data0"
+            else:
+                port = "data1"
     else:
-        raise Exception("blk " + blk_id + " is not a sink")
-    return output_string
+        track_str1, track_str2 = track_str, track_str
+
+    # compute the fixed positions
+    fixed_position = get_pin_fixed_direction(blk_id, port)
+
+    if fixed_position == direction:
+        # we're good
+
+        output_string += \
+            "T{1}_in_s{2}t{0}{4} -> T{1}_{3}{5}\n".format(
+                track, tile, direction, port, track_str1, track_str2)
+        return output_string
+    else:
+        # lots of tweaks
+        # this has to be consistent with the router behavior
+
+        output_string += \
+            "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{5}\n".format(
+                track, tile, direction, fixed_position, track_str, track_str)
+        output_string += \
+            "T{1}_in_s{2}t{0}{4} -> T{1}_{3}{5}\n".format(track,
+                                                       tile,
+                                                       fixed_position,
+                                                       port,
+                                                       track_str1,
+                                                       track_str2)
+        return output_string
 
 
+def build_graph(netlists):
+    g = nx.Graph()
+    for net_id in netlists:
+        for blk_id, _ in netlists[net_id]:
+            g.add_edge(net_id, blk_id)
+    for edge in g.edges():
+        g[edge[0]][edge[1]]['weight'] = 1
+    return g.to_undirected()
 
 
+def prune_netlist(raw_netlist):
+    new_netlist = {}
+    for net_id in raw_netlist:
+        new_net = []
+        for entry in raw_netlist[net_id]:
+            new_net.append(entry[0])
+        new_netlist[net_id] = new_net
+    return new_netlist
 
