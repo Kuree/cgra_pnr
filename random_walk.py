@@ -167,10 +167,10 @@ def build_walks(netlist_filename, mode):
         nx_g, _ = parse_packed(netlist_filename)
     else:
         raise Exception("Unrecognized netlist file: " + netlist_filename)
-    p = 0.5
+    p = 0.8
     q = 1
     num_walks = 10
-    walk_length = 80
+    walk_length = 40
     num_dim = 12
     G = Graph(nx_g, False, p, q)
     G.preprocess_transition_probs()
@@ -208,7 +208,7 @@ if __name__ == "__main__":
         print("found", emb_file, "skipping", emb_file)
         #exit(0)
     print("processing", filename)
-    seed = 4
+    seed = 0
     random.seed(seed)
     np.random.seed(seed)
     build_walks(filename, mode)
