@@ -224,8 +224,7 @@ class Router:
                             final_path = failed_route
                             break
                         # just that it won't blow up the later logic
-                        if dst_pos not in final_path:
-                            final_path.append(dst_pos)
+                        final_path.append(dst_pos)
                         pin_ports.append((dst_pos, dst_id, dst_port))
                         continue
                     else:
@@ -359,6 +358,8 @@ class Router:
         for index in range(0, len(path) - 1):
             path_src = path[index]
             path_dst = path[index + 1]
+            if path_src == path_dst:
+                continue    # self loop
             direction = compute_direction(path_src, path_dst)
             path_src_x, path_src_y = path_src
             path_dst_x, path_dst_y = path_dst

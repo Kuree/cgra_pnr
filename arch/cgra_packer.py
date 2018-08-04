@@ -148,6 +148,7 @@ def pack_netlists(raw_netlists, name_to_id):
     print("Absorbing constants and registers")
     changed_pe = set()
     dont_absorb = set()
+    nets_to_remove = set()
 
     # first pass to figure out the reg's net connections
     connected_pe_tiles = {}
@@ -189,6 +190,12 @@ def pack_netlists(raw_netlists, name_to_id):
                 net[index] = folded_blocks[blk_id]
                 continue
             if blk_id[0] == "c" or blk_id[0] == "b":
+                # FIXME:
+                # it happens when a const connected to something
+                # we don't care about yet
+                if next_blk is None:
+                    nets_to_remove.add(net_id)
+                    break
                 assert (next_blk is not None and
                         next_blk[0] != "c" and next_blk[0] != "r"
                         and next_blk[0] != "b")
@@ -226,6 +233,12 @@ def pack_netlists(raw_netlists, name_to_id):
         #    netlists_to_remove.add(net_id)
     for blk_id in changed_pe:
         print("Change", id_to_name[blk_id], "to a PE tile")
+
+    for net_id in nets_to_remove:
+        print("Remove net_id:", net_id, "->".join(
+            ["{}::{}".format(id_to_name[blk], port)
+             for blk, port in raw_netlists[net_id]]))
+        raw_netlists.pop(net_id, None)
 
     # second pass to reconnect nets
     for net_id in raw_netlists:

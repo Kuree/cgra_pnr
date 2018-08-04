@@ -170,7 +170,7 @@ def build_walks(netlist_filename, mode):
     p = 0.5
     q = 1
     num_walks = 10
-    walk_length = 120
+    walk_length = 80
     num_dim = 12
     G = Graph(nx_g, False, p, q)
     G.preprocess_transition_probs()
@@ -186,7 +186,7 @@ def build_walks(netlist_filename, mode):
     emb_name = netlist_filename.replace(".packed", ".emb")
     print("Using", NETLIST2VEC)
     cmd = [NETLIST2VEC, "-train", output_name, "-output", emb_name, "-size",
-           str(num_dim)]
+           str(num_dim), "-threads", str(1)]
     subprocess.call(cmd)
 
 
@@ -206,9 +206,9 @@ if __name__ == "__main__":
     emb_file = filename.replace(".packed", ".emb")
     if os.path.isfile(emb_file):
         print("found", emb_file, "skipping", emb_file)
-        exit(0)
+        #exit(0)
     print("processing", filename)
-    seed = 42
+    seed = 4
     random.seed(seed)
     np.random.seed(seed)
     build_walks(filename, mode)

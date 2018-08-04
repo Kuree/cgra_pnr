@@ -251,6 +251,18 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
                     # merely passing through
                     route_port.pop(0)
                     continue
+                if current_pos == to_pos:
+                    # self-connection
+                    pre_path_pos = path[i - 1]
+                    if pre_path_pos == current_pos:
+                        pre_path_pos = path[ i - 2]
+                    output_string =\
+                        bitstream_handle_self_loop(board_meta, route_port,
+                                                   pre_path_pos,
+                                                   track, track_str,
+                                                   output_string)
+                    route_port.pop(0)
+                    continue
                 side1, _, tile1, _ = mem_tile_fix(board_meta,
                                                   current_pos,
                                                   to_pos)
@@ -280,6 +292,11 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
                     else:
                         assert (i != 0)
                         pre_pos = path[i - 1]
+
+                        # FIXME
+                        if pre_pos == current_pos:
+                            pre_pos = path[i - 2]
+
                         output_string = process_sink(board_meta, track,
                                                      route_port,
                                                      current_pos,
@@ -296,34 +313,68 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
         # still need to careful about the next tile though
         # as it could be an operand
         # be aware of the self-connection!
-        if len(path) > 1 and len(route_port) == 1:
+        if len(path) > 1 and len(route_port) == 1 and path[-1] != path[-2]:
             current_pos = path[-1]
             pre_pos = path[-2]
             assert(current_pos in port_positions)
             output_string = process_sink(board_meta, track, route_port,
                                          current_pos, pre_pos, track_str,
                                          output_string)
-        elif len(route_port) == 2:
+        else:
             # handle self_loop
-            current_pos = path[-1]
+            pre_path_pos = path[-3]
             output_string = bitstream_handle_self_loop(board_meta,
-                                                       current_pos,
                                                        route_port,
+                                                       pre_path_pos,
+                                                       track,
                                                        track_str,
                                                        output_string)
-        else:
-            raise Exception("Unexpected State")
 
     with open(output_filename, "w+") as f:
         f.write(output_string)
 
 
-def bitstream_handle_self_loop(board_meta, current_pos, route_port, track_str,
+def bitstream_handle_self_loop(board_meta,
+                               route_port,
+                               pre_pos,
+                               track,
+                               track_str,
                                output_string):
     tile_mapping = board_meta[-1]
     pos, blk_id, port = route_port[0]
     tile = tile_mapping[pos]
-    fixed_direction1 = get_pin_fixed_direction(blk_id, port)
+    fixed_direction = get_pin_fixed_direction(blk_id, port)
+    pre_direction = compute_direction(pos, pre_pos)
+    # compute the previous wire coming in (not counting the pin direction fix)
+
+    if "reg" in port:
+        track_str2 = track_str + " (r)"
+    else:
+        track_str2 = track_str
+    if pre_direction == fixed_direction:
+        output_string += \
+            "T{1}_in_s{2}t{0}{4} -> T{1}_{3}{5}\n".format(track,
+                                                          tile,
+                                                          fixed_direction,
+                                                          port,
+                                                          track_str,
+                                                          track_str2)
+    else:
+        output_string += \
+            "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{5}\n".format(
+                track,
+                tile,
+                pre_direction,
+                fixed_direction,
+                track_str,
+                track_str2)
+        output_string += \
+            "T{1}_out_s{2}t{0}{4} -> T{1}_{3}{5}\n".format(track,
+                                                       tile,
+                                                        fixed_direction,
+                                                       port,
+                                                       track_str,
+                                                       track_str2)
     return output_string
 
 
@@ -580,9 +631,9 @@ def process_sink(board_meta, track, route_port, current_pos, pre_pos,
         track_str1, track_str2 = track_str, track_str
 
     # compute the fixed positions
-    fixed_position = get_pin_fixed_direction(blk_id, port)
+    fixed_direction = get_pin_fixed_direction(blk_id, port)
 
-    if fixed_position == direction:
+    if fixed_direction == direction:
         # we're good
 
         output_string += \
@@ -595,11 +646,11 @@ def process_sink(board_meta, track, route_port, current_pos, pre_pos,
 
         output_string += \
             "T{1}_in_s{2}t{0}{4} -> T{1}_out_s{3}t{0}{5}\n".format(
-                track, tile, direction, fixed_position, track_str, track_str)
+                track, tile, direction, fixed_direction, track_str, track_str)
         output_string += \
-            "T{1}_in_s{2}t{0}{4} -> T{1}_{3}{5}\n".format(track,
+            "T{1}_out_s{2}t{0}{4} -> T{1}_{3}{5}\n".format(track,
                                                        tile,
-                                                       fixed_position,
+                                                       fixed_direction,
                                                        port,
                                                        track_str1,
                                                        track_str2)
