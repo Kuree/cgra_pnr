@@ -160,6 +160,7 @@ def convert_cgra_type(tile_type):
         raise Exception("Unknown tile type " + tile_type)
 
 
+# TODO: need to merge it with routng resource when rewritten
 def parse_cgra(filename, use_tile_addr=False):
     root = etree.parse(filename)
     layout_name = "CGRA"

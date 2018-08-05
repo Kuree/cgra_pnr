@@ -121,3 +121,4 @@ serpent.log*
 *.bsb
 *.route
 dataset
+*.xml
