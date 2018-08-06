@@ -121,14 +121,13 @@ def generate_netlists(connections, instances):
                 port = "bit1"
             elif port == "bit.in.2":
                 port = "bit2"
-            elif port == "wdata":
-                port = "mem_in"
+            # need to be change to mem_in/mem_out in bitstream writer
             elif port == "wen":
                 port = "wen"
             elif port == "rdata":
-                port = "mem_out"
+                port = "rdata"
             elif port == "wdata":
-                port = "mem_in"
+                port = "wdata"
             elif "out" in port:
                 port = "out"
             else:
@@ -207,17 +206,14 @@ def pack_netlists(raw_netlists, name_to_id):
             # NOTE:
             # disable reg folding to the same block that i's connected to
             elif blk_id[0] == "r":
-                #if next_blk is not None and \
-                #        next_blk[0] == "p" and next_port[:3] != "reg":
-                if blk_id not in dont_absorb and next_blk is not None and \
-                        next_blk[0] != "r":
+                if blk_id not in dont_absorb and next_blk is not None:
                     # only PE blocks can absorb registers
-                    new_port = "reg" + next_port[-1]
+                    new_port = next_port
                     remove_blks.add((blk_id, id_to_name[next_blk], port))
                     folded_blocks[(blk_id, port)] = (next_blk, new_port)
                     # override the port to reg
                     net[next_index] = (next_blk, new_port)
-                else:
+                elif blk_id in dont_absorb:
                     changed_pe.add(blk_id)
 
         for entry in remove_blks:
@@ -226,13 +222,12 @@ def pack_netlists(raw_netlists, name_to_id):
             item = (entry[0], entry[2])
             net.remove(item)
             if blk_id in changed_pe:
+                # this is actually can be folded
                 changed_pe.remove(blk_id)
         assert(len(net) > 0)
         #if len(net) == 1:
         #    # a net got removed
         #    netlists_to_remove.add(net_id)
-    for blk_id in changed_pe:
-        print("Change", id_to_name[blk_id], "to a PE tile")
 
     for net_id in nets_to_remove:
         print("Remove net_id:", net_id, "->".join(
@@ -247,6 +242,23 @@ def pack_netlists(raw_netlists, name_to_id):
             if port == "reg" and (blk_id, "out") in folded_blocks:
                 # replace with new folded blocks
                 net[index] = folded_blocks[(blk_id, "out")]
+
+    for blk_id in changed_pe:
+        print("Change", id_to_name[blk_id], "to a PE tile")
+        # rewrite the nets
+        for net_id in raw_netlists:
+            net = raw_netlists[net_id]
+            for index, (b_id, port) in enumerate(net):
+                if b_id == blk_id and port == "reg":
+                    # always fold at data0 port
+                    net[index] = (blk_id, "data0")
+
+    # sanity check. shouldn't be any reg left
+    assert(len(changed_pe) == len(dont_absorb))
+    for net_id in raw_netlists:
+        net = raw_netlists[net_id]
+        for blk_id, port in net:
+            assert (port != "reg")
 
     return raw_netlists, folded_blocks
 

@@ -1,8 +1,8 @@
 from __future__ import print_function, division
 from arch.cgra import parse_placement, save_routing_result
 from arch.cgra_packer import load_packed_file
-from arch.cgra import compute_direction, determine_pin_direction
-from arch.cgra import get_opposite_direction
+from arch.cgra import determine_pin_direction
+from arch.cgra_route import parse_routing_resource, build_routing_resource
 from arch import parse_cgra
 import sys
 import numpy as np
@@ -12,9 +12,11 @@ from util import parse_args
 
 
 class Router:
-    def __init__(self, board_meta, packed_filename, placement_filename,
+    def __init__(self, cgra_filename,
+                 board_meta, packed_filename, placement_filename,
                  avoid_congestion=True):
         self.board_meta = board_meta
+        self.layout_board = board_meta[0]
         netlists, _, id_to_name, = load_packed_file(packed_filename)
         self.id_to_name = id_to_name
         self.netlists = netlists
@@ -25,6 +27,7 @@ class Router:
         board_info = board_meta[-1]
         width = board_info["width"]
         height = board_info["height"]
+        self.margin = board_info["margin"]
 
         # NOTE: it's width x height
         self.board_size = (width, height)
@@ -33,28 +36,10 @@ class Router:
 
         # result
         self.route_result = {}
-        self.route_ports = {}
 
-        margin = board_info["margin"]
-        # 4 directions
-        self.routing_resource = np.zeros((height,               # height
-                                          width,                # width
-                                          4,                    # four sides
-                                          self.channel_width,   # channel width
-                                          2),                   # in/out
-                                         dtype=np.bool)
-        for i in range(margin, self.board_size[0] - margin):
-            for j in range(margin, self.board_size[1] - margin):
-                for k in range(4):
-                    for l in range(self.channel_width):
-                        self.routing_resource[i][j][k][l][0] = True
-                        self.routing_resource[i][j][k][l][1] = True
-
-        # only allow certain IO tiles to have routing resources
-        self.routing_resource[2][1][0][:, :] = True
-        self.routing_resource[1][2][1][:, :] = True
-        self.routing_resource[18][2][3][:, :] = True
-        self.routing_resource[2][18][2][:, :] = True
+        print("Building routing resurce")
+        r = parse_routing_resource(cgra_filename)
+        self.routing_resource = build_routing_resource(r)
 
         self.avoid_congestion = avoid_congestion
 
@@ -62,20 +47,55 @@ class Router:
     def manhattan_dist(p1, p2):
         return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
 
-    def heuristic_dist(self, depth, pos, dst):
+    def compute_direction(self, src, dst):
+        """ right -> 0 bottom -> 1 left -> 2 top -> 3 and mem is a special
+            case"""
+        assert (src != dst)
+        x1, y1 = src
+        x2, y2 = dst
+        assert ((abs(x1 - x2) == 0 and abs(y1 - y2) == 1) or (
+                    abs(x1 - x2) == 1
+                    and abs(y1 - y2)
+                    == 0))
+        direction = -1
+        if x1 == x2:
+            if y2 > y1:
+                direction = 1
+            else:
+                direction = 3
+        if y1 == y2:
+            if x2 > x1:
+                direction = 0
+            else:
+                direction = 2
+        else:
+            Exception("direction error " + "{}->{}".format(src, dst))
+
+        # if the current position is in the middle of a special
+        # FIXME: use the height to compute
+        if self.layout_board[y1][x1] is None and y1 > self.margin and \
+                self.layout_board[y1 - 1][x1] == "m":
+            direction += 4
+
+        return direction
+
+    def heuristic_dist(self, depth, pos, dst, bus):
         x, y = pos
         dist = abs(x - dst[0]) + abs(y - dst[1]) + depth[(x, y)]
-        if self.avoid_congestion:
-            route_resource = np.sum(self.routing_resource[y, x])
-            if route_resource == 0:
+        if self.avoid_congestion and (y, x) in self.routing_resource:
+            route_resource = self.routing_resource[(y, x)]["route_resource"]
+            available_res_bus = len([x for x in route_resource if x[0][0] ==
+                                     bus])
+            if available_res_bus == 0:
                 extra = 100 # a large number
             else:
-                extra = 40 / route_resource
+                extra = 40 / available_res_bus
             extra = 0
             dist += extra
         return dist
 
-    def get_neighbors(self, routing_resource, chan, pos):
+    def get_port_neighbors(self, routing_resource, bus, chan, pos, port):
+        port_chan = routing_resource[pos]["port"][port]
         x, y = pos
         results = []
         working_set = set()
@@ -92,74 +112,127 @@ class Router:
         if pos in working_set:
             working_set.remove(pos)
         for new_pos in working_set:
-            direction = compute_direction(pos, new_pos)
+            out_direction = self.compute_direction(pos, new_pos)
             # check if out is okay
-            if not routing_resource[y][x][direction][chan][1]:
+            dir_out = (bus, 1, out_direction, chan)
+            if dir_out in port_chan:
+                results.append((new_pos, dir_out))
+        return results
+
+    @staticmethod
+    def get_route_resource(board_meta, routing_resource, pos):
+        # FIXME: use height for searching
+        if pos not in routing_resource:
+            # FIXME: use height for searching
+            pos_fixed = (pos[0], pos[1] - 1)
+            assert(board_meta[0][pos_fixed[1]][pos_fixed[0]] == "m")
+            return routing_resource[pos_fixed]["route_resource"]
+        else:
+            return routing_resource[pos]["route_resource"]
+
+    def get_neighbors(self, routing_resource, bus, chan, pos):
+        # tricky in the current CGRA design:
+        # if pos is in the bottom of a MEM tile, it won't have an entry
+        route_resource_current_pos = self.get_route_resource(self.board_meta,
+                                                             routing_resource,
+                                                             pos)
+        x, y = pos
+        results = []
+        working_set = set()
+        # hard coded the pos for now
+        x_max = min(self.board_size[0] - 1, x + 1)
+        x_min = max(0, x - 1)
+        y_max = min(self.board_size[1] - 1, y + 1)
+        y_min = max(0, y - 1)
+        working_set.add((x, y_max))
+        working_set.add((x, y_min))
+        working_set.add((x_min, y))
+        working_set.add((x_max, y))
+        # remove itself, if there is any
+        if pos in working_set:
+            working_set.remove(pos)
+        for new_pos in working_set:
+            out_direction = self.compute_direction(pos, new_pos)
+            # check if out is okay
+            dir_out = (bus, 1, out_direction, chan)
+            in_direction = self.compute_direction(new_pos, pos)
+            dir_in = (bus, 0, in_direction, chan)
+            if (dir_out, dir_in) not in route_resource_current_pos:
                 continue
-            direction = compute_direction(new_pos, pos)
-            new_x, new_y = new_pos
-            if not routing_resource[new_y][new_x][direction][chan][0]:
-                continue
-            results.append(new_pos)
+            results.append((new_pos, dir_out, dir_in))
         return results
 
     def is_pin_available(self, routing_resource,
-                         pre_point, current_point, fixed_direction, chan):
-        direction = compute_direction(current_point, pre_point)
-        x, y = current_point
-        # if direction is the fixed direction, we are good
-        if direction == fixed_direction:
-            return True, None
-        else:
-            # we need to determine if either dir-in or dir-out is available
-            # current direction_in -> fixed_direction_out
-            # for now it's fixed order, that is
-            # direction_in -> fixed_direction_out
-            # fixed_direction_out -> op <- this is done by bitstream builder
-            # NOTE: we still need to mark that channel as unavailable
-            if fixed_direction == 1:
-                r1 = routing_resource[y][x][fixed_direction][chan][1]
-                r2 = routing_resource[y][x][fixed_direction][chan][0]
-                return r1 and r2, (current_point, fixed_direction, fixed_direction)
-            elif fixed_direction == 2:
-                r1 = routing_resource[y][x][fixed_direction][chan][1]
-                r2 = routing_resource[y][x][fixed_direction][chan][0]
-                return r1 and r2, (current_point, fixed_direction, fixed_direction)
-            else:
-                raise Exception("unknown fixed direction " +
-                                str(fixed_direction))
+                         pre_point, current_point, port, bus, chan,
+                         is_self_connection=False):
+        """returns True/False, [connection list + port]"""
+        direction = self.compute_direction(current_point, pre_point)
+        route_resource = routing_resource[current_point]["route_resource"]
+        sink_resource = routing_resource[current_point]["port"]
+        operand_channels = sink_resource[port]
 
-    def update_pin_resource(self, routing_resource, pin_info, chan):
-        if pin_info is None:
-            # easy job
-            return
-        (x, y), direction, fixed_direction = pin_info
-        routing_resource[y][x][direction][chan][1] = False
-        routing_resource[y][x][fixed_direction][chan][0] = False
+        # test if we have direct connection to the operand
+        # that is, in -> op
+        dir_in = (bus, 0, direction, chan)
+        if dir_in in operand_channels:
+            return True, [dir_in, current_point, port]
 
+        # need to determine if we can connect to a out bus
+        # that is, in_sxtx -> out_sxtx
+        #          out_sxts -> op
+        for conn in operand_channels:
+            # the format in operand_channels is out -> in
+            conn_chann = (conn, dir_in)
+            if conn_chann in route_resource:
+                return True, [dir_in, conn, current_point, port]
+        if is_self_connection:
+            # because we already remove the routing resource from the
+            # routing resource, it won't be able to handle that
+            # brute forcing to see if we can make the connection
+            for i in range(4):
+                dir_out = (bus, 1, i, chan)
+                if dir_out in operand_channels:
+                    return True, [dir_in, dir_out, current_point, port]
+        return False, None
 
-    def handle_self_loop(self, routing_resource, point, pre_direction,
-                         fixed_direction_dst, chan):
-        (x, y) = point
-        # in and out should be open
-        # we go out from that direction and come in
-        r1 = routing_resource[y][x][fixed_direction_dst][chan][0]
-        r2 = routing_resource[y][x][fixed_direction_dst][chan][1]
-        if not r1 or not r2:
-            return False
-        # because we fixed the channel in the pin set up already
-        # no need to do it again
-        if pre_direction != fixed_direction_dst:
-            routing_resource[y][x][fixed_direction_dst][chan][0] = False
-            routing_resource[y][x][fixed_direction_dst][chan][1] = False
-        return True
+    @staticmethod
+    def get_bus_type(net):
+        for pos, port in net:
+            # FIXME
+            if "bit" in port or "en" in port:
+                return 1
+        return 16
+
+    def copy_resource(self):
+        res = {}
+        for tile in self.routing_resource:
+            entry = {}
+            entry["route_resource"] = self.routing_resource[tile] \
+                                                ["route_resource"].copy()
+            entry["port"] = self.routing_resource[tile]["port"].copy()
+            res[tile] = entry
+
+        return res
+
+    @staticmethod
+    def sort_netlist_id_for_io(netlist):
+        netlist_ids = list(netlist.keys())
+        def sort(nets):
+            for blk_id, _ in nets:
+                if blk_id[0] == "i":
+                    return 0
+            return 1
+        netlist_ids.sort(key=lambda net_id: sort(netlist[net_id]))
+        return netlist_ids
 
     def route(self):
         print("INFO: Performing greedy BFS/A* routing")
-        for net_id in self.netlists:
+        net_list_ids = self.sort_netlist_id_for_io(self.netlists)
+        for net_id in net_list_ids:
             net = self.netlists[net_id]
             if len(net) == 1:
                 continue    # no need to route
+            bus = Router.get_bus_type(net)
             src_id, src_port = net[0]
             # avoid going back
             net.sort(key=lambda pos:
@@ -172,15 +245,18 @@ class Router:
             # TODO: change how to present failure
             failed_route = [None] * 100
             chan_resources = {}
-            chan_pin_ports = {}
             for chan in range(self.channel_width):
                 final_path = []
+                # this is used for rough route (no port control)
+                # usefully when we have a net connected to two pins in a same
+                # tile
+                pos_list = []
                 dst_set = dst_set_cpy[:]
                 src_pos = self.placement[src_id]
                 # local routing resource
-                routing_resource = np.copy(self.routing_resource)
+                routing_resource = self.copy_resource()
                 # used for bitstream
-                pin_ports = [(src_pos, src_id, src_port)]
+                is_src = True
                 while len(dst_set) > 0:
                     dst_point = dst_set.pop(0)
                     dst_id, dst_port = dst_point
@@ -190,53 +266,31 @@ class Router:
                     # this will happen if two operands share the same input
                     # in a single block
                     if dst_pos == src_pos:
-                        # skip over the loop
-                        #src_pos = dst_pos
-                        # we have two options here
-                        # either to reroute the pre->new one
-                        # or do tricks on the same tile
+                        # FIXME use path instead
+                        pre_pos = pos_list[-2]   # we didn't do reverse
+                        available, pin_info = \
+                            self.is_pin_available(routing_resource,
+                                                  pre_pos, dst_pos, dst_port,
+                                                  bus, chan,
+                                                  is_self_connection=True)
 
-                        # go for doing tricks on the same tile
-                        # to avoid using routing resource too much
-                        # also notice that if the previous route is coming
-                        # to the "other" operand, we only need to update
-                        # one side of the channel
-
-                        if len(net) == 2 and "reg" in src_port:
-                            # we already absorbed them
-                            pin_ports.append((dst_pos, dst_id, dst_port))
-                            break
-
-                        pre_pos = final_path[-2]
-                        pre_port = pin_ports[-1][-1]
-                        pre_direction = compute_direction(dst_pos, pre_pos)
-                        fixed_direction_dst = \
-                            pin_directions[(dst_pos, dst_port)]
-                        #fixed_direction_dst()
-                        result = self.handle_self_loop(routing_resource,
-                                                       src_pos,
-                                                       pre_direction,
-                                                       fixed_direction_dst,
-                                                       chan)
-
-                        if not result:
+                        if not available:
                             # failed to connect
                             final_path = failed_route
                             break
                         # just that it won't blow up the later logic
-                        final_path.append(dst_pos)
-                        pin_ports.append((dst_pos, dst_id, dst_port))
-                        continue
+                        link = {(dst_pos, dst_port): pin_info}
                     else:
-                        link = self.connect_two_points(src_pos,
+                        link = self.connect_two_points((src_pos, src_port),
                                                        (dst_id,
                                                         dst_pos, dst_port),
+                                                       bus,
                                                        chan,
                                                        pin_directions,
+                                                       is_src,
                                                        final_path,
-                                                       pin_ports,
                                                        routing_resource)
-                    if dst_pos not in link:
+                    if (dst_pos, dst_port) not in link:
                         # failed to route in this channel
                         final_path = failed_route
                         dst_set = []
@@ -245,45 +299,51 @@ class Router:
                     # merge the search path to channel path
                     pp = dst_pos
                     path = []
+                    pos_path = [dst_pos]
                     while pp != src_pos:
-                        path.append(pp)
-                        pp = link[pp]
-                    path.append(pp)
+                        path.append(link[pp])
+                        pp = link[pp][0][0]
+                        assert(pp not in pos_path)
+                        pos_path.append(pp)
+
+                    # FIXME see pre_pos above
+                    pos_path.reverse()
+                    for pp in pos_path:
+                        if pp not in pos_list:
+                            pos_list.append(pp)
                     path.reverse()
+
+                    entry = (dst_pos, dst_port)
+                    if entry not in link:
+                        # routing failed
+                        assert(final_path[0] is None)
+                        break
+                    path.append(link[entry])
+
+
                     # append this to the final path
                     if len(final_path) == 0:
                         final_path = path
                     else:
                         # skip the first one since src and dst overlap
-                        final_path = final_path + path[1:]
+                        final_path = final_path + path
+
+                    # update routing resource
+                    self.update_routing_resource(routing_resource,
+                                                 path)
 
                     # move along the hyper edge
                     src_pos = dst_pos
+                    # disable the src since we're moving along the net
+                    is_src = False
 
                 route_path[chan] = final_path
 
                 # update the routing info
                 if len(final_path) > 1 and final_path[0] is not None:
-                    # I'm a little scared
-                    self.update_routing_resource(routing_resource, chan,
-                                                 final_path)
                     chan_resources[chan] = routing_resource
-                    assert(len(net) == len(pin_ports))
-                    chan_pin_ports[chan] = pin_ports
-                elif len(final_path) == 1:
-                    # self connection
-                    # happens when you have a source drives to the same
-                    # sinks
-                    # already been take care off
-                    chan_resources[chan] = routing_resource
-                    assert (len(net) == len(pin_ports))
-                    chan_pin_ports[chan] = pin_ports
                 elif len(final_path) == 0:
-                    # only okay if it's a absorbed register
-                    if pin_ports[0][-1][0] != "r":
-                        raise Exception("no path found. unexpected error")
-                    chan_resources[chan] = routing_resource
-                    chan_pin_ports[chan] = pin_ports
+                    raise Exception("no path found. unexpected error")
 
             # find the minimum route path
             min_chan = 0
@@ -293,15 +353,16 @@ class Router:
             if len(route_path[min_chan]) == len(failed_route):
                 raise Exception("Failed to route for net " + net_id)
             # add the final path to the design
-            self.route_result[net_id] = (min_chan, route_path[min_chan])
-            self.route_ports[net_id] = chan_pin_ports[min_chan]
+            self.route_result[net_id] = route_path[min_chan]
 
             # update the actual routing resource
             # self-loop is fixed up
             self.routing_resource = chan_resources[min_chan]
 
-    def connect_two_points(self, src_pos, dst, chan, pin_directions,
-                           final_path, pin_ports, routing_resource):
+    def connect_two_points(self, src, dst, bus, chan, pin_directions,
+                           is_src,
+                           final_path, routing_resource):
+        src_pos, src_port = src
         (dst_id, dst_pos, dst_port) = dst
         working_set = []
         finished_set = set()
@@ -313,28 +374,41 @@ class Router:
             # using manhattan distance as heuristics
             working_set.sort(
                 key=lambda pos: self.heuristic_dist(depth, pos,
-                                                    dst_pos))
+                                                    dst_pos, bus))
             point = working_set.pop(0)
             finished_set.add(point)
-            points = self.get_neighbors(routing_resource,
-                                        chan, point)
-            for p in points:
+            if is_src:
+                points = self.get_port_neighbors(routing_resource, bus, chan,
+                                                 point, src_port)
+            else:
+                points = self.get_neighbors(routing_resource,
+                                            bus, chan, point)
+            for entry in points:
+                if is_src:
+                    p, dir_out = entry
+                else:
+                    p, dir_out, dir_in = entry
                 if p in finished_set or p in working_set or \
                         p in final_path:
                     # we have already explored this position
                     continue
-                link[p] = point  # point backwards
+                # point backwards
+                if is_src:
+                    assert(point == src_pos)
+                    link[p] = [(point, src_port, dir_out)]
+                else:
+                    link[p] = ((point, dir_out), (p, dir_in))
                 depth[p] = depth[point] + 1
                 if p == dst_pos:
                     # we have found it!
                     # but hang on as we need to make sure the
                     # pin resource is available
                     if (dst_pos, dst_port) in pin_directions:
-                        fixed_direction = pin_directions[(dst_pos, dst_port)]
                         available, pin_info = \
                             self.is_pin_available(routing_resource,
                                                   point, p,
-                                                  fixed_direction,
+                                                  dst_port,
+                                                  bus,
                                                   chan)
                         if not available:
                             # we're doomed for this chan
@@ -342,34 +416,72 @@ class Router:
                             link.pop(p, None)
                             depth.pop(p, None)
                         else:
-                            self.update_pin_resource(
-                                routing_resource, pin_info, chan)
-                            # put it to the pin_ports so that we know
-                            # what's going on in the bitstream stage
+                            link[(p, dst_port)] = pin_info
                     terminate = True
-                    pin_ports.append((p, dst_id, dst_port))
                     break
                 else:
                     working_set.append(p)
+
+            # we're done with the src
+            is_src = False
         return link
 
-    def update_routing_resource(self, routing_resource,
-                                chan, path):
-        for index in range(0, len(path) - 1):
-            path_src = path[index]
-            path_dst = path[index + 1]
-            if path_src == path_dst:
-                continue    # self loop
-            direction = compute_direction(path_src, path_dst)
-            path_src_x, path_src_y = path_src
-            path_dst_x, path_dst_y = path_dst
-            # out
-            assert(routing_resource[path_src_y][path_src_x][direction][chan][1])
-            routing_resource[path_src_y][path_src_x][direction][chan][1] = False
-            # in
-            direction = compute_direction(path_dst, path_src)
-            assert(routing_resource[path_dst_y][path_dst_x][direction][chan][0])
-            routing_resource[path_dst_y][path_dst_x][direction][chan][0] = False
+    def update_routing_resource(self, routing_resource, path):
+        for pin_info in path:
+            if len(pin_info) == 1:
+                # this is src
+                p, port, dir_out = pin_info[0]
+                ports = routing_resource[p]["port"][port]
+                ports.remove(dir_out)
+            if len(pin_info) == 2:
+                p1, dir_out = pin_info[0]
+                p2, dir_in = pin_info[1]
+                res1 = self.get_route_resource(self.board_meta,
+                                               routing_resource,
+                                               p1)
+                res2 = self.get_route_resource(self.board_meta,
+                                               routing_resource,
+                                               p2)
+
+                # out is the first one and in is the second one
+                conn_remove = set()
+                for conn1, conn2 in res1:
+                    if conn1 == dir_out:
+                        conn_remove.add((conn1, conn2))
+                for entry in conn_remove:
+                    res1.remove(entry)
+                conn_remove = set()
+                for conn1, conn2 in res2:
+                    if conn2 == dir_in:
+                        conn_remove.add((conn1, conn2))
+                for entry in conn_remove:
+                    res2.remove(entry)
+            elif len(pin_info) == 3:
+                if not(isinstance(pin_info[-1], str)) and \
+                       not(isinstance(pin_info[-1], unicode)):
+                    raise Exception("Unknown pin_info " + str(pin_info))
+                # need to delete the port path
+                # it might be redundant for PE tiles, but for IO ports
+                # it's critical?
+                conn, pos, port = pin_info
+                ports = routing_resource[pos]["port"][port]
+                ports.remove(conn)
+                continue
+
+            elif len(pin_info) == 4:
+                # need to take care of the extra out
+                # [dir_in, conn, current_point, port]
+                conn = pin_info[1]  # conn is out
+                pos = pin_info[2]
+                res = routing_resource[pos]["route_resource"]
+                conn_remove = set()
+                for conn1, conn2 in res:
+                    if conn1 == conn:
+                        conn_remove.add((conn1, conn2))
+                for entry in conn_remove:
+                    res.remove(entry)
+                ports = routing_resource[pos]["port"][pin_info[-1]]
+                ports.remove(conn)
 
     def vis_routing_resource(self):
         scale = 30
@@ -385,9 +497,15 @@ class Router:
                          j in range(width - margin, width)):    # IO is special:
                     color = 255
                 else:
-                    route_r = self.routing_resource[i][j]
-                    r = np.sum(route_r)
-                    color = int(255 * r / 4 / self.channel_width / 2)
+                    route_r = self.get_route_resource(self.board_meta,
+                                                      self.routing_resource,
+                                                      (i, j))
+                    un_used_16 = set()
+                    for conn1, conn2 in route_r:
+                        if conn1[0] == 16:
+                            un_used_16.add(conn1)
+                    r = np.sum(len(un_used_16))
+                    color = int(255 * r / 4 / self.channel_width)
                 draw_cell(draw, (j, i), color=(255 - color, 0, color),
                           scale=scale)
         plt.imshow(im)
@@ -404,12 +522,12 @@ if __name__ == "__main__":
     vis_opt = "no-vis" not in options
     arch_file = argv[1]
     meta = parse_cgra(arch_file)["CGRA"]
-    r = Router(meta, argv[2], argv[3])
+    r = Router(arch_file, meta, argv[2], argv[3])
     r.route()
     if vis_opt:
         r.vis_routing_resource()
 
     route_file = sys.argv[3].replace(".place", ".route")
 
-    save_routing_result(r.route_result, r.route_ports, route_file)
+    save_routing_result(r.route_result, route_file)
 

@@ -113,8 +113,10 @@ def convert_bus_to_tuple(wire):
         return None
     else:
         raise Exception("Unknown wire " + wire)
-    assert(raw_data[1][:3] == "BUS")
-    bus = int(raw_data[1][3:])
+    if raw_data[1][:3] == "BUS":
+        bus = int(raw_data[1][3:])
+    elif raw_data[1][-3:] == "BIT":
+        bus = int(raw_data[1][0:len(raw_data[1]) - 3])
     assert(raw_data[2][0] == "S")
     assert(len(raw_data[2]) == 2)
     side = int(raw_data[2][1]) + side_offset
@@ -136,10 +138,22 @@ def build_routing_resource(parsed_resource):
     for x, y in parsed_resource:
         entry = parsed_resource[(x, y)]
         if "cb" not in entry:
-            # not dealing with IO yet
+            # io entry
+            input_channel = entry["input"]
+            output_channels = entry["output"]
+            sink = "in"
+            operands = {sink: [convert_bus_to_tuple(input_channel)]}
+            sink = "out"
+            operands[sink] = []
+            for wire_info in output_channels:
+                wire = convert_bus_to_tuple(wire_info)
+                if wire is not None:
+                    operands[sink].append(wire)
+            result[(x, y)] = {"route_resource": set(),
+                              "port": operands}
             continue
         # build operand connection
-        operands = {}
+        operands = {"out": set(), "rdata": set()}
         connections = {}
         for bus in entry["cb"]:
             for sink in entry["cb"][bus]:
@@ -154,12 +168,22 @@ def build_routing_resource(parsed_resource):
         for bus in entry["sb"]:
             muxes = entry["sb"][bus]["mux"]
             for sink in muxes:
+                sink_wire = convert_bus_to_tuple(sink)
                 if sink not in connections:
                     connections[sink] = set()
                 for wire in muxes[sink]:
                     sink_info = convert_bus_to_tuple(wire)
                     if sink_info is not None:
                         connections[sink].add(sink_info)
+                    elif wire[:2] == "pe":
+                        operands["out"].add(sink_wire)
+                    elif wire == "rdata":
+                        operands["rdata"].add(sink_wire)
+
+        if len(operands["out"]) == 0:
+            operands.pop("out", None)
+        if len(operands["rdata"]) == 0:
+            operands.pop("rdata", None)
 
         # build real routing resources on the chip
         route_resource = set()
@@ -167,9 +191,8 @@ def build_routing_resource(parsed_resource):
             w1_info = convert_bus_to_tuple(w1)
             for w2 in connections[w1]:
                 route_resource.add((w1_info, w2))
-                route_resource.add((w2, w1_info))
         result[(x, y)] = {"route_resource": route_resource,
-                          "operand": operands}
+                          "port": operands}
 
     return result
 
@@ -211,6 +234,7 @@ def main():
     r = parse_routing_resource(sys.argv[1])
     simple_route_stats(r)
     r = build_routing_resource(r)
+
 
 if __name__ == "__main__":
     main()

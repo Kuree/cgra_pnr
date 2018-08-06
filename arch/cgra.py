@@ -104,10 +104,54 @@ def place_special_blocks(board, blks, board_pos, netlists, place_on_board):
             raise Exception("Unknown block type", blk_id)
 
 
-def save_routing_result(route_result, route_ports, output_file):
-    result = {"route": route_result, "ports": route_ports}
+def save_routing_result(route_result, output_file):
     with open(output_file, "w+") as f:
-        pickle.dump(result, f)
+        # write header
+        f.write("# Path format:\n\n")
+        f.write("# (BUS, IN (0) | OUT(1), SIDE, TRACK)\n")
+        for net_id in route_result:
+            f.write("Net ID: {}\n".format(net_id))
+            path = route_result[net_id]
+            for index, conn in enumerate(path):
+                if len(conn) == 1:
+                    # src
+                    p, port, dir_out = conn[0]
+                    f.write("Node {}: SOURCE {}::{} -> {}\n".format(index,
+                                                                   p,
+                                                                   port,
+                                                                   dir_out))
+                elif len(conn) == 2:
+                    # passing through
+                    p1, dir_out = conn[0]
+                    p2, dir_in = conn[1]
+                    f.write("Node {}: {} -> {}\t{} -> {}\n".format(index,
+                                                                   p1,
+                                                                   p2,
+                                                                   dir_out,
+                                                                   dir_in))
+                elif len(conn) == 3:
+                    # direct sink
+                    conn, pos, port = conn
+                    f.write("Node {}: SINK {}::{} <- {}\n".format(index,
+                                                                  pos,
+                                                                  port,
+                                                                  conn))
+                elif len(conn) == 4:
+                    # self-connection sink
+                    # [dir_in, conn, current_point, port]
+                    dir_in, conn, pos, port = conn
+                    f.write("Node {}: {} -> {}\t{} -> {}\n".format(index,
+                                                                   pos,
+                                                                   pos,
+                                                                   dir_in,
+                                                                   conn))
+                    f.write("Node {}: SINK {}::{} <- {}\n".format(index,
+                                                                  pos,
+                                                                  port,
+                                                                  conn))
+
+            f.write("\n")
+
 
 
 def parse_routing_result(routing_file):
@@ -526,18 +570,16 @@ def get_opposite_direction(direction):
 
 
 def determine_pin_direction(net, placement):
-    pin_directions = {}
-    allowed_initial_ports = {"data0", "data1", "reg1", "reg2"}
+    pin_directions = set()
+    # FIXME use the naming in the CGRA description file
+    allowed_initial_ports = {"data0", "data1", "bit0", "bit1", "bit2", "wen",
+                             }
     for index, (blk_id, port) in enumerate(net):
         if index == 0 and port not in allowed_initial_ports:
             # it's a a source
             continue
         pos = placement[blk_id]
-        # reg is always put on data0 (op1)
-        fixed_direction = get_pin_fixed_direction(blk_id, port)
-        if fixed_direction > 0:
-            pin_directions[(pos, port)] = fixed_direction
-
+        pin_directions.add((pos, port))
 
     return pin_directions
 
