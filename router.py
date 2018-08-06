@@ -483,6 +483,37 @@ class Router:
                 ports = routing_resource[pos]["port"][pin_info[-1]]
                 ports.remove(conn)
 
+    def compute_stats(self):
+        top_10 = []
+        margin = self.board_meta[-1]["margin"]
+        height = self.board_meta[-1]["height"]
+        width = self.board_meta[-1]["width"]
+        for i in range(self.board_size[0]):
+            for j in range(self.board_size[1]):
+                if \
+                        (i in range(0, margin) or j in range(0, margin) or
+                                i in range(height - margin, height) or
+                                j in range(width - margin,
+                                           width)):  # IO is special:
+                    continue
+                else:
+                    route_r = self.get_route_resource(self.board_meta,
+                                                      self.routing_resource,
+                                                      (i, j))
+                    un_used_16 = set()
+                    for conn1, conn2 in route_r:
+                        if conn1[0] == 16:
+                            un_used_16.add(conn1)
+                    res = np.sum(len(un_used_16))
+                    top_10.append(((i, j), res))
+                    if len(top_10) > 10:
+                        top_10.sort(key=lambda x: x[1])
+                        top_10.pop(len(top_10) - 1)
+        print("Top 10 most used tiles:")
+        for pos, res in top_10:
+            print(pos, "\tchannels left:", res)
+
+
     def vis_routing_resource(self):
         scale = 30
         margin = self.board_meta[-1]["margin"]
@@ -504,9 +535,9 @@ class Router:
                     for conn1, conn2 in route_r:
                         if conn1[0] == 16:
                             un_used_16.add(conn1)
-                    r = np.sum(len(un_used_16))
-                    color = int(255 * r / 4 / self.channel_width)
-                draw_cell(draw, (j, i), color=(255 - color, 0, color),
+                    res = np.sum(len(un_used_16))
+                    color = int(255 * res / 4 / self.channel_width)
+                draw_cell(draw, (i, j), color=(255 - color, 0, color),
                           scale=scale)
         plt.imshow(im)
         plt.show()
@@ -526,6 +557,7 @@ if __name__ == "__main__":
     r.route()
     if vis_opt:
         r.vis_routing_resource()
+    r.compute_stats()
 
     route_file = sys.argv[3].replace(".place", ".route")
 

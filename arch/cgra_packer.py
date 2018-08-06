@@ -6,12 +6,9 @@ Because the current CGRA flow does not have packing tools. This might be the
 very first packing tools for AHA group
 """
 from __future__ import print_function
-import pickle
+import sys
 import json
 import os
-import sys
-
-import networkx as nx
 
 
 def convert2netlist(connections):
@@ -56,18 +53,120 @@ def convert2netlist(connections):
 def save_packing_result(netlist_filename, pack_filename):
     netlists, folded_blocks, id_to_name = \
         parse_and_pack_netlist(netlist_filename)
-    data = {"netlists": netlists,
-            "folded_blocks": folded_blocks,
-            "id_to_name": id_to_name}
 
     with open(pack_filename, "w+") as f:
-        pickle.dump(data, f)
+        def tuple_to_str(t_val):
+            return "(" + ", ".join([str(val) for val in t_val]) + ")"
+
+        f.write("# It has three sections: netlists, folded_blocks, " +
+                "and id_to_name\n\n")
+        # netlists
+        f.write("Netlists:\n")
+        net_ids = list(netlists.keys())
+        net_ids.sort(key=lambda x: int(x[1:]))
+        for net_id in net_ids:
+            f.write("{}: ".format(net_id))
+            f.write("\t".join([tuple_to_str(entry) for entry in netlists[net_id]]))
+
+            f.write("\n")
+        f.write("\n")
+
+        # folded blocks
+        f.write("Folded Blocks:\n")
+        for entry in folded_blocks:
+            folded = folded_blocks[entry]
+            f.write(tuple_to_str(entry) + " -> " + tuple_to_str(folded) + "\n")
+
+        f.write("\n")
+        # ID to names
+        f.write("ID to Names:\n")
+        ids = list(id_to_name.keys())
+        ids.sort(key=lambda x: int(x[1:]))
+        for blk_id in ids:
+            f.write(str(blk_id) + ": " + id_to_name[blk_id] + "\n")
 
 
 def load_packed_file(pack_filename):
     with open(pack_filename) as f:
-        data = pickle.load(f)
-    return data["netlists"], data["folded_blocks"], data["id_to_name"]
+        lines = f.readlines()
+
+    def remove_comment(str_val):
+        if "#" in str_val:
+            return str_val[:str_val.index("#")]
+        return str_val.strip()
+
+    def convert_net(net):
+        result = []
+        raw_net = net.split("\t")
+        for entry in raw_net:
+            entry = entry.strip()
+            assert (entry[0] == "(" and entry[-1] == ")")
+            entry = entry[1:-1]
+            entries = [x.strip() for x in entry.split(",")]
+            result.append(tuple(entries))
+        return result
+
+    def find_next_block(ln):
+        while True:
+            line_info = lines[ln]
+            line_info = remove_comment(line_info)
+            if len(line_info) == 0:
+                ln += 1
+            else:
+                break
+        return ln
+
+    line_num = find_next_block(0)
+
+    line = remove_comment(lines[line_num])
+    assert(line == "Netlists:")
+    line_num += 1
+
+    netlists = {}
+    while True:
+        line = remove_comment(lines[line_num])
+        if len(line) == 0:
+            break
+        net_id, net = line.split(":")
+        assert ("\t" in net)
+        net = convert_net(net)
+        netlists[net_id] = net
+
+        line_num += 1
+
+    line_num = find_next_block(line_num)
+    line = remove_comment(lines[line_num])
+    assert (line == "Folded Blocks:")
+    line_num += 1
+    folded_blocks = {}
+    while True:
+        line = remove_comment(lines[line_num])
+        if len(line) == 0:
+            break
+
+        entry1, entry2 = line.split("->")
+        entry1, entry2 = convert_net(entry1)[0], convert_net(entry2)[0]
+        folded_blocks[entry1] = entry2
+
+        line_num += 1
+
+    line_num = find_next_block(line_num)
+    line = remove_comment(lines[line_num])
+    assert (line == "ID to Names:")
+    line_num += 1
+    folded_blocks = {}
+    id_to_name = {}
+    while line_num < len(lines):
+        line = remove_comment(lines[line_num])
+        if len(line) == 0:
+            break
+        blk_id, name = line.split(":")
+        blk_id, name = blk_id.strip(), name.strip()
+        id_to_name[blk_id] = name
+
+        line_num += 1
+
+    return netlists, folded_blocks, id_to_name
 
 
 def parse_and_pack_netlist(netlist_filename):
@@ -79,9 +178,29 @@ def parse_and_pack_netlist(netlist_filename):
     print("Before packing: num of netlists:", before_packing,
           "After packing: num of netlists:", after_packing)
 
+    pes = set()
+    ios = set()
+    mems = set()
+    regs = set()
+
     id_to_name = {}
     for name in name_to_id:
-        id_to_name[name_to_id[name]] = name
+        blk_id = name_to_id[name]
+        id_to_name[blk_id] = name
+
+    for net_id in netlists:
+        net = netlists[net_id]
+        for blk_id, _ in net:
+            if blk_id[0] == "p":
+                pes.add(blk_id)
+            elif blk_id[0] == "i":
+                ios.add(blk_id)
+            elif blk_id[0] == "m":
+                mems.add(blk_id)
+            elif blk_id[0] == "r":
+                regs.add(blk_id)
+    print("PE:", len(pes), "IO:", len(ios), "MEM:", len(mems), "REG:",
+          len(regs))
     return netlists, folded_blocks, id_to_name
 
 
@@ -200,7 +319,8 @@ def pack_netlists(raw_netlists, name_to_id):
                         and next_blk[0] != "b")
                 # absorb blk to the next one
                 remove_blks.add((blk_id, id_to_name[next_blk], port))
-                folded_blocks[(blk_id, port)] = (next_blk, id_to_name[blk_id])
+                folded_blocks[(blk_id, port)] = (next_blk, id_to_name[blk_id],
+                                                 next_port)
                 # override the port to its name with index
                 net[next_index] = (next_blk, id_to_name[blk_id])
             # NOTE:
@@ -225,14 +345,16 @@ def pack_netlists(raw_netlists, name_to_id):
                 # this is actually can be folded
                 changed_pe.remove(blk_id)
         assert(len(net) > 0)
-        #if len(net) == 1:
-        #    # a net got removed
-        #    netlists_to_remove.add(net_id)
+
+        # remove netlists
+        if len(net) == 1:
+            # a net got removed
+            nets_to_remove.add(net_id)
 
     for net_id in nets_to_remove:
         print("Remove net_id:", net_id, "->".join(
             ["{}::{}".format(id_to_name[blk], port)
-             for blk, port in raw_netlists[net_id]]))
+             for blk, port in raw_netlists[net_id]]), file=sys.stderr)
         raw_netlists.pop(net_id, None)
 
     # second pass to reconnect nets

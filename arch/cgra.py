@@ -107,24 +107,25 @@ def place_special_blocks(board, blks, board_pos, netlists, place_on_board):
 def save_routing_result(route_result, output_file):
     with open(output_file, "w+") as f:
         # write header
-        f.write("# Path format:\n\n")
-        f.write("# (BUS, IN (0) | OUT(1), SIDE, TRACK)\n")
+        f.write("# Path format:\n")
+        f.write("# (BUS, IN (0) | OUT(1), SIDE, TRACK)\n\n")
         for net_id in route_result:
             f.write("Net ID: {}\n".format(net_id))
             path = route_result[net_id]
+            node_index = 0
             for index, conn in enumerate(path):
                 if len(conn) == 1:
                     # src
                     p, port, dir_out = conn[0]
-                    f.write("Node {}: SOURCE {}::{} -> {}\n".format(index,
-                                                                   p,
-                                                                   port,
-                                                                   dir_out))
+                    f.write("Node {}: SOURCE {}::{} -> {}\n".format(node_index,
+                                                                    p,
+                                                                    port,
+                                                                    dir_out))
                 elif len(conn) == 2:
                     # passing through
                     p1, dir_out = conn[0]
                     p2, dir_in = conn[1]
-                    f.write("Node {}: {} -> {}\t{} -> {}\n".format(index,
+                    f.write("Node {}: {} -> {}\t{} -> {}\n".format(node_index,
                                                                    p1,
                                                                    p2,
                                                                    dir_out,
@@ -132,7 +133,7 @@ def save_routing_result(route_result, output_file):
                 elif len(conn) == 3:
                     # direct sink
                     conn, pos, port = conn
-                    f.write("Node {}: SINK {}::{} <- {}\n".format(index,
+                    f.write("Node {}: SINK {}::{} <- {}\n".format(node_index,
                                                                   pos,
                                                                   port,
                                                                   conn))
@@ -140,24 +141,104 @@ def save_routing_result(route_result, output_file):
                     # self-connection sink
                     # [dir_in, conn, current_point, port]
                     dir_in, conn, pos, port = conn
-                    f.write("Node {}: {} -> {}\t{} -> {}\n".format(index,
+                    f.write("Node {}: {} -> {}\t{} -> {}\n".format(node_index,
                                                                    pos,
                                                                    pos,
                                                                    dir_in,
                                                                    conn))
-                    f.write("Node {}: SINK {}::{} <- {}\n".format(index,
+                    node_index += 1
+                    f.write("Node {}: SINK {}::{} <- {}\n".format(node_index,
                                                                   pos,
                                                                   port,
                                                                   conn))
+                node_index += 1
 
             f.write("\n")
 
 
-
 def parse_routing_result(routing_file):
     with open(routing_file) as f:
-        data = pickle.load(f)
-    return data["route"], data["ports"]
+        lines = f.readlines()
+    result = {}
+    net_id = -1
+    total_lines = len(lines)
+    line_num = 0
+
+    def remove_comment(str_val):
+        if "#" in str_val:
+            return str_val[:str_val.index("#")]
+        return str_val
+
+    def parse_conn(str_val):
+        str_val = str_val.strip()
+        assert str_val[0] == "("
+        assert str_val[-1] == ")"
+        str_val = str_val[1:len(str_val) - 1]
+        return tuple([int(x) for x in str_val.split(",") if x])
+
+    while line_num < total_lines:
+        line = lines[line_num].strip()
+        line_num += 1
+        line = remove_comment(line)
+        if len(line) < 7:
+            # don't care
+            continue
+        if line[:7] == "Net ID:":
+            net_id = line[8:]
+            assert net_id[1:].isdigit()
+            # read through the net
+            conns = []
+            # sanity check
+            has_src = False
+            has_sink = False
+            node_index = 0
+            while True:
+                line = lines[line_num].strip()
+                if len(line) == 0:
+                    break
+                line = remove_comment(line)
+                line_num += 1
+                if len(line) == 0:
+                    continue    # don't care about comments
+                node_id = "Node {}:".format(node_index)
+                # make sure it exists
+                start_index = line.index(node_id)
+                node_index += 1
+                line = line[start_index + len(node_id):].strip()
+
+                if line[:6] == "SOURCE":
+                    # source
+                    has_src = True
+                    line = line[6:].strip()
+                    assert ("->" in line)
+                    src, conn = line.split("->")
+                    src_pos, src_port = src.split("::")
+                    conn = parse_conn(conn)
+                    conns.append(((src_pos, src_port), conn))
+                elif line[:4] == "SINK":
+                    # sink
+                    has_sink = True
+                    line = line[4:].strip()
+                    assert ("<-" in line)
+                    dst, conn = line.split("<-")
+                    dst_pos, dst_port = dst.split("::")
+                    conn = parse_conn(conn)
+                    conns.append((conn, (dst_pos, dst_port)))
+                else:
+                    # links
+                    assert ("\t" in line)
+                    positions, chan_connection = line.split("\t")
+                    src_pos, dst_pos = positions.split("->")
+                    src_pos, dst_pos = parse_conn(src_pos), parse_conn(dst_pos)
+                    conn1, conn2 = chan_connection.split("->")
+                    conn1, conn2 = parse_conn(conn1), parse_conn(conn2)
+                    conns.append(((src_pos, dst_pos), (conn1, conn2)))
+
+            # make sure it's an actual net
+            assert (has_src and has_sink)
+            result[net_id] = conns
+
+    return result
 
 
 def mem_tile_fix(board_meta, from_pos, to_pos):
