@@ -167,10 +167,10 @@ def build_walks(netlist_filename, mode):
         nx_g, _ = parse_packed(netlist_filename)
     else:
         raise Exception("Unrecognized netlist file: " + netlist_filename)
-    p = 0.8
+    p = 0.6
     q = 1
     num_walks = 12
-    walk_length = 30
+    walk_length = 40
     num_dim = 12
     G = Graph(nx_g, False, p, q)
     G.preprocess_transition_probs()

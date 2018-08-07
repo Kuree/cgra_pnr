@@ -154,7 +154,6 @@ def load_packed_file(pack_filename):
     line = remove_comment(lines[line_num])
     assert (line == "ID to Names:")
     line_num += 1
-    folded_blocks = {}
     id_to_name = {}
     while line_num < len(lines):
         line = remove_comment(lines[line_num])
@@ -232,8 +231,7 @@ def generate_netlists(connections, instances):
                 port = "data1"
             elif port == "in":
                 # either a reg or IO
-                if "reg" in blk_name:
-                    port = "reg"
+                port = "in"
             elif port == "bit.in.0":
                 port = "bit0"
             elif port == "bit.in.1":
@@ -326,7 +324,8 @@ def pack_netlists(raw_netlists, name_to_id):
             # NOTE:
             # disable reg folding to the same block that i's connected to
             elif blk_id[0] == "r":
-                if blk_id not in dont_absorb and next_blk is not None:
+                if blk_id not in dont_absorb and next_blk is not None and  \
+                        len(net) == 2:
                     # only PE blocks can absorb registers
                     new_port = next_port
                     remove_blks.add((blk_id, id_to_name[next_blk], port))
@@ -341,9 +340,8 @@ def pack_netlists(raw_netlists, name_to_id):
             print("Absorb", id_to_name[blk_id], "to", entry[1])
             item = (entry[0], entry[2])
             net.remove(item)
-            if blk_id in changed_pe:
-                # this is actually can be folded
-                changed_pe.remove(blk_id)
+            assert (blk_id not in changed_pe)
+
         assert(len(net) > 0)
 
         # remove netlists
@@ -361,7 +359,7 @@ def pack_netlists(raw_netlists, name_to_id):
     for net_id in raw_netlists:
         net = raw_netlists[net_id]
         for index, (blk_id, port) in enumerate(net):
-            if port == "reg" and (blk_id, "out") in folded_blocks:
+            if port == "in" and (blk_id, "out") in folded_blocks:
                 # replace with new folded blocks
                 net[index] = folded_blocks[(blk_id, "out")]
 

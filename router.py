@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 from arch.cgra import parse_placement, save_routing_result
 from arch.cgra_packer import load_packed_file
-from arch.cgra import determine_pin_direction
+from arch.cgra import determine_pin_ports
 from arch.cgra_route import parse_routing_resource, build_routing_resource
 from arch import parse_cgra
 import sys
@@ -89,13 +89,15 @@ class Router:
             if available_res_bus == 0:
                 extra = 100 # a large number
             else:
-                extra = 40 / available_res_bus
+                extra = 20 / available_res_bus
             extra = 0
             dist += extra
         return dist
 
     def get_port_neighbors(self, routing_resource, bus, chan, pos, port):
         port_chan = routing_resource[pos]["port"][port]
+        route_source = self.get_route_resource(self.board_meta,
+                                               routing_resource, pos)
         x, y = pos
         results = []
         working_set = set()
@@ -111,12 +113,21 @@ class Router:
         # remove itself, if there is any
         if pos in working_set:
             working_set.remove(pos)
+
+        board_layout = self.board_meta[0]
+        is_io = board_layout[pos[1]][pos[0]] == "i"
         for new_pos in working_set:
             out_direction = self.compute_direction(pos, new_pos)
+            in_direction = self.compute_direction(new_pos, pos)
             # check if out is okay
             dir_out = (bus, 1, out_direction, chan)
-            if dir_out in port_chan:
-                results.append((new_pos, dir_out))
+            dir_in = (bus, 0, in_direction, chan)
+            if is_io:
+                if dir_out in port_chan:
+                    results.append((new_pos, dir_out, dir_in))
+            else:
+                if dir_out in port_chan and (dir_out, dir_in) in route_source:
+                    results.append((new_pos, dir_out, dir_in))
         return results
 
     @staticmethod
@@ -238,7 +249,7 @@ class Router:
             net.sort(key=lambda pos:
                      self.manhattan_dist(self.placement[src_id],
                      self.placement[pos[0]]))
-            pin_directions = determine_pin_direction(net, self.placement)
+            pin_port_set = determine_pin_ports(net, self.placement)
 
             dst_set_cpy = net[1:]
             route_path = {}
@@ -286,7 +297,7 @@ class Router:
                                                         dst_pos, dst_port),
                                                        bus,
                                                        chan,
-                                                       pin_directions,
+                                                       pin_port_set,
                                                        is_src,
                                                        final_path,
                                                        routing_resource)
@@ -385,7 +396,7 @@ class Router:
                                             bus, chan, point)
             for entry in points:
                 if is_src:
-                    p, dir_out = entry
+                    p, dir_out, dir_in = entry
                 else:
                     p, dir_out, dir_in = entry
                 if p in finished_set or p in working_set or \
@@ -395,7 +406,7 @@ class Router:
                 # point backwards
                 if is_src:
                     assert(point == src_pos)
-                    link[p] = [(point, src_port, dir_out)]
+                    link[p] = [(point, src_port, dir_out, dir_in)]
                 else:
                     link[p] = ((point, dir_out), (p, dir_in))
                 depth[p] = depth[point] + 1
@@ -430,10 +441,11 @@ class Router:
         for pin_info in path:
             if len(pin_info) == 1:
                 # this is src
-                p, port, dir_out = pin_info[0]
+                p, port, dir_out, dir_in = pin_info[0]
                 ports = routing_resource[p]["port"][port]
                 ports.remove(dir_out)
             if len(pin_info) == 2:
+                # passing through
                 p1, dir_out = pin_info[0]
                 p2, dir_in = pin_info[1]
                 res1 = self.get_route_resource(self.board_meta,
@@ -512,7 +524,6 @@ class Router:
         print("Top 10 most used tiles:")
         for pos, res in top_10:
             print(pos, "\tchannels left:", res)
-
 
     def vis_routing_resource(self):
         scale = 30
