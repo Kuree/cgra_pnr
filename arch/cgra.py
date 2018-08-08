@@ -420,11 +420,12 @@ def handle_sink(self_conn, conn, dst, track_in,
         if len(info) == 2:
             blk_id, port = info
             pos = placement[blk_id]
-            pos_port_set.add((pos, dst_port))
-    if dst in pos_port_set:
-        track_str = " (r)"
-    else:
-        track_str = ""
+            pos_port_set.add((pos, port))
+    #if dst in pos_port_set:
+    #    track_str = " (r)"
+    #else:
+    #    track_str = ""
+    track_str = ""
     tile = tile_mapping[dst_pos]
     track = "" if conn[0] == 16 else "b"
     end = "T{}_{}{}{}\n".format(tile,
@@ -473,9 +474,12 @@ def get_const_value(instance):
         genref = instance["genref"]
         if genref == "coreir.const":
             str_val = instance["modargs"]["value"][-1]
-            start_index = str_val.index("h")
-            str_val = str_val[start_index + 1:]
-            int_val = int(str_val, 16)
+            if isinstance(str_val, int):
+                int_val = str_val
+            else:
+                start_index = str_val.index("h")
+                str_val = str_val[start_index + 1:]
+                int_val = int(str_val, 16)
             return "const{0}_{0}".format(int_val)
     return None
 

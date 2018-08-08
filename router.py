@@ -5,6 +5,7 @@ from arch.cgra import determine_pin_ports
 from arch.cgra_route import parse_routing_resource, build_routing_resource
 from arch import parse_cgra
 import sys
+import os
 import numpy as np
 from visualize import draw_board, draw_cell
 import matplotlib.pyplot as plt
@@ -42,6 +43,10 @@ class Router:
         self.routing_resource = build_routing_resource(r)
 
         self.avoid_congestion = avoid_congestion
+
+        base_filename = os.path.basename(packed_filename)
+        design_name, _ = os.path.splitext(base_filename)
+        self.design_name = design_name
 
     @staticmethod
     def manhattan_dist(p1, p2):
@@ -189,6 +194,13 @@ class Router:
         # remove itself, if there is any
         if pos in working_set:
             working_set.remove(pos)
+
+        # another override for mem tile jumping
+        # FIXME
+        if self.layout_board[pos[1]][pos[0]] == "m" and \
+                track_in[2] == 1:
+            track_in = (track_in[0], 1, 7, track_in[-1])
+
         for new_pos in working_set:
             out_direction = self.compute_direction(pos, new_pos)
             route_resource_current_pos2 = self.get_route_resource(
@@ -199,6 +211,11 @@ class Router:
             dir_out = (bus, 1, out_direction, chan)
             in_direction = self.compute_direction(new_pos, pos)
             dir_in = (bus, 0, in_direction, chan)
+
+            if self.layout_board[pos[1]][pos[0]] == "m" and \
+                    dir_out[2] == 1:
+                dir_out = (dir_out[0], dir_out[1], 7, dir_out[-1])
+
             if (track_in, dir_out) not in route_resource_current_pos:
                 # can't make the turn
                 continue
@@ -230,8 +247,6 @@ class Router:
         # that is, in -> op
         dir_in = (bus, 0, direction, chan)
 
-
-        test = [entry for entry in route_resource if entry[0][-1] == 0]
         if self.layout_board[current_point[1]][current_point[0]] == "m" and \
                 dir_in[2] == 1:
             # make the dir in as dir_out from the bottom tile
@@ -302,6 +317,20 @@ class Router:
                 return pos1
         raise Exception("Unable to find pre pos for pos " + str(pos))
 
+    @staticmethod
+    def sort_net(net, placement):
+        new_net = [net[0]]
+        working_set = net[1:]
+        for i in range(len(net) - 1):
+            src_id, _ = new_net[-1]
+            working_set.sort(key=lambda pin:
+                             Router.manhattan_dist(placement[src_id],
+                                                   placement[pin[0]]))
+            new_net.append(working_set[0])
+            working_set.pop(0)
+        assert(len(net) == len(new_net))
+        return new_net
+
     def route(self):
         print("INFO: Performing greedy BFS/A* routing")
         net_list_ids = self.sort_netlist_id_for_io(self.netlists)
@@ -312,9 +341,7 @@ class Router:
             bus = Router.get_bus_type(net)
             src_id, src_port = net[0]
             # avoid going back
-            net.sort(key=lambda pos:
-                     self.manhattan_dist(self.placement[src_id],
-                     self.placement[pos[0]]))
+            net = self.sort_net(net, self.placement)
             pin_port_set = determine_pin_ports(net, self.placement)
 
             dst_set_cpy = net[1:]
@@ -676,8 +703,14 @@ class Router:
                     color = int(255 * res / 4 / self.channel_width)
                 draw_cell(draw, (i, j), color=(255 - color, 0, color),
                           scale=scale)
+        plt.axis('off')
         plt.imshow(im)
         plt.show()
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        output_png = self.design_name + "_route.png"
+        output_path = os.path.join(file_dir, "figures", output_png)
+        im.save(output_path)
+        print("Image saved to", output_path)
 
 
 if __name__ == "__main__":

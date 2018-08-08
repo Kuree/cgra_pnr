@@ -167,8 +167,10 @@ def main():
     else:
         placement_filename = packed_filename.replace(".packed", ".place")
         save_placement(board_pos, id_to_name, folded_blocks, placement_filename)
+        basename_file = os.path.basename(placement_filename)
+        design_name, _ = os.path.splitext(basename_file)
         if vis_opt:
-            visualize_placement_cgra(board_pos)
+            visualize_placement_cgra(board_pos, design_name)
 
 
 def visualize_placement_fpga(board_pos, clusters):
@@ -184,7 +186,7 @@ def visualize_placement_fpga(board_pos, clusters):
     plt.show()
 
 
-def visualize_placement_cgra(board_pos):
+def visualize_placement_cgra(board_pos, design_name):
     color_index = "imopr"
     scale = 30
     im, draw = draw_board(20, 20, scale)
@@ -196,6 +198,11 @@ def visualize_placement_cgra(board_pos):
     plt.imshow(im)
     plt.show()
 
+    file_dir = os.path.dirname(os.path.realpath(__file__))
+    output_png = design_name + "_place.png"
+    output_path = os.path.join(file_dir, "figures", output_png)
+    im.save(output_path)
+    print("Image saved to", output_path)
 
 
 def perform_deblock_placement(board, board_pos, fixed_blk_pos, netlists):

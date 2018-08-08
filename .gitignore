@@ -122,3 +122,6 @@ serpent.log*
 *.route
 dataset
 *.xml
+
+# other folders
+figures
