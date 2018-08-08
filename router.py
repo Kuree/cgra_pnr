@@ -8,7 +8,7 @@ import sys
 import numpy as np
 from visualize import draw_board, draw_cell
 import matplotlib.pyplot as plt
-from util import parse_args
+from util import parse_args, deepcopy
 
 
 class Router:
@@ -80,6 +80,8 @@ class Router:
         return direction
 
     def heuristic_dist(self, depth, pos, dst, bus):
+        if len(pos) == 3:
+            pos, _, _ = pos
         x, y = pos
         dist = abs(x - dst[0]) + abs(y - dst[1]) + depth[(x, y)]
         if self.avoid_congestion and (y, x) in self.routing_resource:
@@ -96,8 +98,6 @@ class Router:
 
     def get_port_neighbors(self, routing_resource, bus, chan, pos, port):
         port_chan = routing_resource[pos]["port"][port]
-        route_source = self.get_route_resource(self.board_meta,
-                                               routing_resource, pos)
         x, y = pos
         results = []
         working_set = set()
@@ -119,6 +119,10 @@ class Router:
         for new_pos in working_set:
             out_direction = self.compute_direction(pos, new_pos)
             in_direction = self.compute_direction(new_pos, pos)
+            route_resource_current_pos2 = self.get_route_resource(
+                self.board_meta,
+                routing_resource,
+                new_pos)
             # check if out is okay
             dir_out = (bus, 1, out_direction, chan)
             dir_in = (bus, 0, in_direction, chan)
@@ -126,8 +130,14 @@ class Router:
                 if dir_out in port_chan:
                     results.append((new_pos, dir_out, dir_in))
             else:
-                if dir_out in port_chan and (dir_out, dir_in) in route_source:
-                    results.append((new_pos, dir_out, dir_in))
+                if dir_out in port_chan:
+                    can_turn = False
+                    for conn_in, conn_out in route_resource_current_pos2:
+                        if conn_out == dir_out:
+                            can_turn = True
+                            break
+                    if can_turn:
+                        results.append((new_pos, dir_out, dir_in))
         return results
 
     @staticmethod
@@ -141,12 +151,29 @@ class Router:
         else:
             return routing_resource[pos]["route_resource"]
 
-    def get_neighbors(self, routing_resource, bus, chan, pos):
+    @staticmethod
+    def get_port_resource(board_meta, routing_resource, pos):
+        # FIXME: use height for searching
+        if pos not in routing_resource:
+            # FIXME: use height for searching
+            pos_fixed = (pos[0], pos[1] - 1)
+            assert (board_meta[0][pos_fixed[1]][pos_fixed[0]] == "m")
+            return routing_resource[pos_fixed]["port"]
+        else:
+            return routing_resource[pos]["port"]
+
+    def get_neighbors(self, routing_resource, bus, chan, pos, track_in,
+                      pin_ports):
         # tricky in the current CGRA design:
         # if pos is in the bottom of a MEM tile, it won't have an entry
         route_resource_current_pos = self.get_route_resource(self.board_meta,
                                                              routing_resource,
                                                              pos)
+        # just needs to pos, the later logic will handle the connection to
+        # the port
+        pin_pos = set()
+        for pp, _ in pin_ports:
+            pin_pos.add(pp)
         x, y = pos
         results = []
         working_set = set()
@@ -164,13 +191,27 @@ class Router:
             working_set.remove(pos)
         for new_pos in working_set:
             out_direction = self.compute_direction(pos, new_pos)
+            route_resource_current_pos2 = self.get_route_resource(
+                self.board_meta,
+                routing_resource,
+                new_pos)
             # check if out is okay
             dir_out = (bus, 1, out_direction, chan)
             in_direction = self.compute_direction(new_pos, pos)
             dir_in = (bus, 0, in_direction, chan)
-            if (dir_out, dir_in) not in route_resource_current_pos:
+            if (track_in, dir_out) not in route_resource_current_pos:
+                # can't make the turn
                 continue
-            results.append((new_pos, dir_out, dir_in))
+            can_turn = False
+            if new_pos not in pin_pos:
+                for conn_in, conn_out in route_resource_current_pos2:
+                    if conn_in == dir_in:
+                        can_turn = True
+                        break
+                if can_turn:
+                    results.append((new_pos, dir_out, dir_in))
+            else:
+                results.append((new_pos, dir_out, dir_in))
         return results
 
     def is_pin_available(self, routing_resource,
@@ -182,18 +223,29 @@ class Router:
         sink_resource = routing_resource[current_point]["port"]
         operand_channels = sink_resource[port]
 
+        operand_channels = [entry for entry in operand_channels
+                            if entry[-1] == chan]
+
         # test if we have direct connection to the operand
         # that is, in -> op
         dir_in = (bus, 0, direction, chan)
+
+
+        test = [entry for entry in route_resource if entry[0][-1] == 0]
+        if self.layout_board[current_point[1]][current_point[0]] == "m" and \
+                dir_in[2] == 1:
+            # make the dir in as dir_out from the bottom tile
+            dir_in = (bus, 1, 7, chan)
         if dir_in in operand_channels:
             return True, [dir_in, current_point, port]
+
 
         # need to determine if we can connect to a out bus
         # that is, in_sxtx -> out_sxtx
         #          out_sxts -> op
         for conn in operand_channels:
             # the format in operand_channels is out -> in
-            conn_chann = (conn, dir_in)
+            conn_chann = (dir_in, conn)
             if conn_chann in route_resource:
                 return True, [dir_in, conn, current_point, port]
         if is_self_connection:
@@ -215,14 +267,7 @@ class Router:
         return 16
 
     def copy_resource(self):
-        res = {}
-        for tile in self.routing_resource:
-            entry = {}
-            entry["route_resource"] = self.routing_resource[tile] \
-                                                ["route_resource"].copy()
-            entry["port"] = self.routing_resource[tile]["port"].copy()
-            res[tile] = entry
-
+        res = deepcopy(self.routing_resource)
         return res
 
     @staticmethod
@@ -235,6 +280,27 @@ class Router:
             return 1
         netlist_ids.sort(key=lambda net_id: sort(netlist[net_id]))
         return netlist_ids
+
+    @staticmethod
+    def find_pre_pos(pos, path):
+        for i in range(len(path) - 1, -1, -1):
+            path_entry = path[i]
+            # TODO: FIXME
+            if isinstance(path_entry, list):
+                # it could be src
+                if not isinstance(path_entry[-1], str) and \
+                        len(path_entry[0][0]) == 2:
+                    pos1 = path_entry[0][0]
+                    if pos1 != pos:
+                        return pos1
+                continue
+            pos1 = path_entry[0][0]
+            pos2 = path_entry[1][0]
+            if pos2 != pos:
+                return pos2
+            if pos1 != pos:
+                return pos1
+        raise Exception("Unable to find pre pos for pos " + str(pos))
 
     def route(self):
         print("INFO: Performing greedy BFS/A* routing")
@@ -261,11 +327,11 @@ class Router:
                 # this is used for rough route (no port control)
                 # usefully when we have a net connected to two pins in a same
                 # tile
-                pos_list = []
                 dst_set = dst_set_cpy[:]
                 src_pos = self.placement[src_id]
                 # local routing resource
                 routing_resource = self.copy_resource()
+                pos_set = set()
                 # used for bitstream
                 is_src = True
                 while len(dst_set) > 0:
@@ -278,7 +344,7 @@ class Router:
                     # in a single block
                     if dst_pos == src_pos:
                         # FIXME use path instead
-                        pre_pos = pos_list[-2]   # we didn't do reverse
+                        pre_pos = self.find_pre_pos(dst_pos, final_path)
                         available, pin_info = \
                             self.is_pin_available(routing_resource,
                                                   pre_pos, dst_pos, dst_port,
@@ -300,6 +366,7 @@ class Router:
                                                        pin_port_set,
                                                        is_src,
                                                        final_path,
+                                                       pos_set,
                                                        routing_resource)
                     if (dst_pos, dst_port) not in link:
                         # failed to route in this channel
@@ -309,19 +376,13 @@ class Router:
                         break
                     # merge the search path to channel path
                     pp = dst_pos
+                    pos_set.add(pp)
                     path = []
-                    pos_path = [dst_pos]
                     while pp != src_pos:
                         path.append(link[pp])
                         pp = link[pp][0][0]
-                        assert(pp not in pos_path)
-                        pos_path.append(pp)
+                        pos_set.add(pp)
 
-                    # FIXME see pre_pos above
-                    pos_path.reverse()
-                    for pp in pos_path:
-                        if pp not in pos_list:
-                            pos_list.append(pp)
                     path.reverse()
 
                     entry = (dst_pos, dst_port)
@@ -331,17 +392,12 @@ class Router:
                         break
                     path.append(link[entry])
 
-
                     # append this to the final path
                     if len(final_path) == 0:
                         final_path = path
                     else:
                         # skip the first one since src and dst overlap
                         final_path = final_path + path
-
-                    # update routing resource
-                    self.update_routing_resource(routing_resource,
-                                                 path)
 
                     # move along the hyper edge
                     src_pos = dst_pos
@@ -352,6 +408,9 @@ class Router:
 
                 # update the routing info
                 if len(final_path) > 1 and final_path[0] is not None:
+                    # update routing resource
+                    self.update_routing_resource(routing_resource,
+                                                 final_path)
                     chan_resources[chan] = routing_resource
                 elif len(final_path) == 0:
                     raise Exception("no path found. unexpected error")
@@ -370,9 +429,28 @@ class Router:
             # self-loop is fixed up
             self.routing_resource = chan_resources[min_chan]
 
-    def connect_two_points(self, src, dst, bus, chan, pin_directions,
-                           is_src,
-                           final_path, routing_resource):
+    @staticmethod
+    def get_track_in_from_path(src_pos, path):
+        for i in range(len(path) - 1, -1, -1):
+            if isinstance(path[i][-1], str):
+                continue
+            if len(path[i]) == 1:
+                pos, _, _, conn = path[i][0]
+            elif len(path[i]) == 2:
+                pos, conn = path[i][-1]
+                src_pp, src_conn = path[i][0]
+            else:
+                raise Exception("Unknown path")
+            if pos == src_pos:
+                if src_conn[1] == 0:
+                    return src_conn
+            assert conn[1] == 0    # it's actually coming in
+            return conn
+        raise Exception("Unable to find track in")
+
+    def connect_two_points(self, src, dst, bus, chan, pin_ports,
+                           is_src, final_path,
+                           pos_set, routing_resource):
         src_pos, src_port = src
         (dst_id, dst_pos, dst_port) = dst
         working_set = []
@@ -381,26 +459,34 @@ class Router:
         working_set.append(src_pos)
         terminate = False
         depth = {src_pos: 0}
+        track_in = None
         while len(working_set) > 0 and not terminate:
             # using manhattan distance as heuristics
             working_set.sort(
                 key=lambda pos: self.heuristic_dist(depth, pos,
                                                     dst_pos, bus))
             point = working_set.pop(0)
+            if len(point) == 3:
+                point, _, track_in = point
             finished_set.add(point)
             if is_src:
                 points = self.get_port_neighbors(routing_resource, bus, chan,
                                                  point, src_port)
             else:
+                if track_in is None:
+                    assert len(final_path) > 0
+                    track_in = self.get_track_in_from_path(src_pos, final_path)
+                    # get previous track in
                 points = self.get_neighbors(routing_resource,
-                                            bus, chan, point)
+                                            bus, chan, point, track_in,
+                                            pin_ports)
             for entry in points:
                 if is_src:
                     p, dir_out, dir_in = entry
                 else:
                     p, dir_out, dir_in = entry
-                if p in finished_set or p in working_set or \
-                        p in final_path:
+                if p in finished_set or entry in working_set or \
+                        p in pos_set:
                     # we have already explored this position
                     continue
                 # point backwards
@@ -414,7 +500,7 @@ class Router:
                     # we have found it!
                     # but hang on as we need to make sure the
                     # pin resource is available
-                    if (dst_pos, dst_port) in pin_directions:
+                    if (dst_pos, dst_port) in pin_ports:
                         available, pin_info = \
                             self.is_pin_available(routing_resource,
                                                   point, p,
@@ -431,7 +517,7 @@ class Router:
                     terminate = True
                     break
                 else:
-                    working_set.append(p)
+                    working_set.append(entry)
 
             # we're done with the src
             is_src = False
@@ -444,6 +530,16 @@ class Router:
                 p, port, dir_out, dir_in = pin_info[0]
                 ports = routing_resource[p]["port"][port]
                 ports.remove(dir_out)
+                # also remove the routing resource
+                res = self.get_route_resource(self.board_meta,
+                                              routing_resource,
+                                              p)
+                conn_remove = set()
+                for conn1, conn2 in res:
+                    if conn2 == dir_out:
+                        conn_remove.add((conn1, conn2))
+                for entry in conn_remove:
+                    res.remove(entry)
             if len(pin_info) == 2:
                 # passing through
                 p1, dir_out = pin_info[0]
@@ -458,26 +554,46 @@ class Router:
                 # out is the first one and in is the second one
                 conn_remove = set()
                 for conn1, conn2 in res1:
-                    if conn1 == dir_out:
+                    if conn2 == dir_out:
                         conn_remove.add((conn1, conn2))
                 for entry in conn_remove:
                     res1.remove(entry)
+                # also disable any in/out port that can connect to this tile
+                port_resource = self.get_port_resource(self.board_meta,
+                                                       routing_resource,
+                                                       p1)
+                for port in port_resource:
+                    port_conn = port_resource[port]
+                    if dir_out in port_conn:
+                        port_conn.remove(dir_out)
+
                 conn_remove = set()
                 for conn1, conn2 in res2:
-                    if conn2 == dir_in:
+                    if conn1 == dir_in:
                         conn_remove.add((conn1, conn2))
                 for entry in conn_remove:
                     res2.remove(entry)
+
+                # also disable any in/out port that can connect to this tile
+                port_resource = self.get_port_resource(self.board_meta,
+                                                       routing_resource,
+                                                       p2)
+                for port in port_resource:
+                    port_conn = port_resource[port]
+                    if dir_in in port_conn:
+                        port_conn.remove(dir_in)
             elif len(pin_info) == 3:
                 if not(isinstance(pin_info[-1], str)) and \
                        not(isinstance(pin_info[-1], unicode)):
                     raise Exception("Unknown pin_info " + str(pin_info))
+                # no turn sink
                 # need to delete the port path
                 # it might be redundant for PE tiles, but for IO ports
                 # it's critical?
                 conn, pos, port = pin_info
                 ports = routing_resource[pos]["port"][port]
-                ports.remove(conn)
+                if conn in ports:
+                    ports.remove(conn)
                 continue
 
             elif len(pin_info) == 4:
@@ -488,12 +604,18 @@ class Router:
                 res = routing_resource[pos]["route_resource"]
                 conn_remove = set()
                 for conn1, conn2 in res:
-                    if conn1 == conn:
+                    if conn2 == conn:
                         conn_remove.add((conn1, conn2))
                 for entry in conn_remove:
                     res.remove(entry)
-                ports = routing_resource[pos]["port"][pin_info[-1]]
-                ports.remove(conn)
+                #ports = routing_resource[pos]["port"][pin_info[-1]]
+                #ports.remove(conn)
+
+                # disable any port output to it
+                for port in routing_resource[pos]["port"]:
+                    ports = routing_resource[pos]["port"][port]
+                    if conn in ports:
+                        ports.remove(conn)
 
     def compute_stats(self):
         top_10 = []
@@ -547,6 +669,10 @@ class Router:
                         if conn1[0] == 16:
                             un_used_16.add(conn1)
                     res = np.sum(len(un_used_16))
+                    # mem tiles strike again!
+                    if self.layout_board[j][i] == "m" or \
+                            self.layout_board[j - 1][i] == "m":
+                        res /= 2
                     color = int(255 * res / 4 / self.channel_width)
                 draw_cell(draw, (i, j), color=(255 - color, 0, color),
                           scale=scale)

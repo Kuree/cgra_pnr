@@ -60,7 +60,13 @@ def parse_routing_resource(cgra_file):
                     src = reg_elem.attrib["src"]
                     sb_entry["reg"].add(src)
 
-                sb_bus[bus] = sb_entry
+                if bus in sb_bus:
+                    sb_bus[bus]["mux"].update(sb_entry["mux"])
+                    sb_bus[bus]["reg"] = sb_bus[bus]["reg"].union(
+                        sb_entry["reg"]
+                    )
+                else:
+                    sb_bus[bus] = sb_entry
 
             # put into result, using (col, row) as an index
             result[(col, row)] = {"cb": cb_bus, "sb": sb_bus}
@@ -97,10 +103,11 @@ def convert_bus_to_tuple(wire):
             # e.g. 'sb_wire_out_1_BUS16_S3_T4'
             raw_data.pop(0)
             raw_data.pop(0)
-            raw_data.pop(1)
-            side_offset = 4
-    elif len(raw_data) == 5:
+    if len(raw_data) == 5:
         if raw_data[0] in ["in", "out"]:
+            row_index = int(raw_data[1])
+            if row_index == 1:
+                side_offset += 4
             raw_data.pop(1)
     # TODO: FIX THIS
     if len(raw_data) != 4:
@@ -117,6 +124,8 @@ def convert_bus_to_tuple(wire):
         bus = int(raw_data[1][3:])
     elif raw_data[1][-3:] == "BIT":
         bus = int(raw_data[1][0:len(raw_data[1]) - 3])
+    else:
+        raise Exception("Unknown BUS " + raw_data[1][:3])
     assert(raw_data[2][0] == "S")
     assert(len(raw_data[2]) == 2)
     side = int(raw_data[2][1]) + side_offset
@@ -190,7 +199,10 @@ def build_routing_resource(parsed_resource):
         for w1 in connections:
             w1_info = convert_bus_to_tuple(w1)
             for w2 in connections[w1]:
-                route_resource.add((w1_info, w2))
+                # NOTE:
+                # we might not use all the mem routing resource, which allows
+                # in -> in on different rows
+                route_resource.add((w2, w1_info))
         result[(x, y)] = {"route_resource": route_resource,
                           "port": operands}
 

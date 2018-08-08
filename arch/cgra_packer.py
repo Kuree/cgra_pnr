@@ -369,7 +369,7 @@ def pack_netlists(raw_netlists, name_to_id):
         for net_id in raw_netlists:
             net = raw_netlists[net_id]
             for index, (b_id, port) in enumerate(net):
-                if b_id == blk_id and port == "reg":
+                if b_id == blk_id and port == "in":
                     # always fold at data0 port
                     net[index] = (blk_id, "data0")
 

@@ -287,7 +287,7 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
         tile_op, print_order = get_tile_op(instance)
         if tile_op is None:
             continue
-        pins = get_tile_pins(blk_id, tile_op, folded_blocks)
+        pins = get_tile_pins(blk_id, tile_op, folded_blocks, instances)
 
         # parse pins from the packing
 
@@ -352,9 +352,6 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
         output_string += s
 
         output_string += "\n"
-
-
-
 
     with open(output_filename, "w+") as f:
         f.write(output_string)
@@ -444,7 +441,7 @@ def handle_link(conn1, conn2, pre_in, tile_mapping, board_layout):
     src_pos, dst_pos = conn1
     track_out, track_in = conn2
     start = make_track_string(src_pos, pre_in, tile_mapping, board_layout)
-    end = make_track_string(dst_pos, track_out, tile_mapping, board_layout)
+    end = make_track_string(src_pos, track_out, tile_mapping, board_layout)
     result = start + " -> " + end + "\n"
     return result, track_in
 
@@ -456,13 +453,34 @@ def handle_src(src, conn, tile_mapping, board_layout):
     tile = tile_mapping[src_pos]
     if src_port == "out":
         src_port = "pe_out"
-    start = "T{}_{}".format(tile, src_port)
+    track = "" if conn[0][0] == 16 else "b"
+    start = "T{}_{}{}".format(tile, src_port, track)
     end = make_track_string(src_pos, conn[0], tile_mapping, board_layout)
     result = start + " -> " + end + "\n"
     return result, conn[1]
 
 
-def get_tile_pins(blk_id, op, folded_block):
+def get_const_value(instance):
+    if "modref" in instance:
+        modref = instance["modref"]
+        if modref == "corebit.const":
+            val = instance["modargs"]["value"][-1]
+            if val:
+                return "const1_1"
+            else:
+                return "const0_0"
+    elif "genref" in instance:
+        genref = instance["genref"]
+        if genref == "coreir.const":
+            str_val = instance["modargs"]["value"][-1]
+            start_index = str_val.index("h")
+            str_val = str_val[start_index + 1:]
+            int_val = int(str_val, 16)
+            return "const{0}_{0}".format(int_val)
+    return None
+
+
+def get_tile_pins(blk_id, op, folded_block, instances):
     # TODO: Fix this using CGRA info
     if op == "mem":
         return None
@@ -483,10 +501,13 @@ def get_tile_pins(blk_id, op, folded_block):
                 pin_name = "reg"
             elif len(entry_data) == 3:
                 b_id, pin_name, port = entry_data
+                # it's constant
+                pin_name = get_const_value(instances[pin_name])
             else:
                 raise Exception("Unknown folded block data " + str(entry_data))
             if b_id == blk_id:
                 index = int(port[-1])
+                assert(pin_name is not None)
                 pins[index] = pin_name
         if blk_id[0] == "r":
             pins[0] = "reg"

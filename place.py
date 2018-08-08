@@ -149,7 +149,7 @@ def main():
     #board_pos.update(macro_result)
 
     # only use deblock when we have lots of clusters
-    if len(clusters) > 4:
+    if len(clusters) > 2:
         board_pos = perform_deblock_placement(board, board_pos, fixed_blk_pos,
                                               netlists)
 

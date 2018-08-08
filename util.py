@@ -23,6 +23,25 @@ def compute_hpwl(netlists, blk_pos):
     return netlist_wirelength
 
 
+def deepcopy(obj_to_copy):
+    if isinstance(obj_to_copy, dict):
+        d = obj_to_copy.copy()  # shallow dict copy
+        for k, v in d.iteritems():
+            d[k] = deepcopy(v)
+    elif isinstance(obj_to_copy, list):
+        d = obj_to_copy[:]  # shallow list/tuple copy
+        i = len(d)
+        while i:
+            i -= 1
+            d[i] = deepcopy(d[i])
+    elif isinstance(obj_to_copy, set):
+        d = obj_to_copy.copy()
+    else:
+        # tuple is fine since we're not modifying tuples
+        d = obj_to_copy
+    return d
+
+
 def manhattan_distance(p1, p2):
     return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
 
