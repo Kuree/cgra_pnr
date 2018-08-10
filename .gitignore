@@ -113,7 +113,7 @@ venv.bak/
 *.emb
 
 # binary files
-metapath2vec
+word2vec
 
 # cgra files
 cgra_info.txt

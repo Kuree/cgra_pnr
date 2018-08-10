@@ -7,7 +7,7 @@ import os
 from util import parse_args
 
 FILE_PATH = os.path.dirname(__file__)
-NETLIST2VEC = os.path.join(FILE_PATH, "./metapath2vec")
+NETLIST2VEC = os.path.join(FILE_PATH, "./word2vec")
 
 # copied from node2vec
 class Graph():

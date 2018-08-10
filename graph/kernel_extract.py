@@ -20,9 +20,9 @@ def build_raw_graph(raw_connections):
         conn2_name = conn2.split(".")[0]
         assert (conn1_out ^ conn2_out)
         if conn1_out:
-            g.add_edge(conn2_name, conn1_name)
-        else:
             g.add_edge(conn1_name, conn2_name)
+        else:
+            g.add_edge(conn2_name, conn1_name)
     return g
 
 
