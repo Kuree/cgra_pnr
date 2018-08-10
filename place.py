@@ -1,6 +1,6 @@
 from __future__ import print_function
 from util import reduce_cluster_graph, compute_centroid, parse_args
-from parser import parse_emb
+from arch.parser import parse_emb
 from sa import SAClusterPlacer, SADetailedPlacer, DeblockAnnealer
 from sa import ClusterException, SAMacroPlacer
 from arch import make_board, parse_cgra, parse_vpr, generate_place_on_board

@@ -1,11 +1,8 @@
 from __future__ import print_function
 import json
-from parser import parse_emb
-import os
 import numpy as np
 import sys
 import networkx as nx
-import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 
 
@@ -27,8 +24,12 @@ def build_raw_graph(raw_connections):
 
 
 def cluster_on_embedding(embedding_file):
+    if __name__ == "__main__":
+        from os import sys, path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
     num_clusters = 5
     from arch.cgra import load_packed_file
+    from arch.parser import parse_emb
     packed_file = embedding_file.replace(".emb", ".packed")
     _, folded_blocks, id_to_name = load_packed_file(packed_file)
     num_dim, emb = parse_emb(embedding_file)
@@ -302,7 +303,10 @@ def lb_clustering(connections, raw_names):
 
 
 def visualize(g, lb_set):
-    from visualize import color_palette
+    if __name__ == "__main__":
+        from os import sys, path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+        from visualize import color_palette
 
     def to_hex(color):
         return "#{0:02X}{1:02X}{2:02X}".format(color[0], color[1], color[2])
