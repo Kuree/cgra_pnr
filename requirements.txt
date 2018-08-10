@@ -4,3 +4,4 @@ sklearn
 matplotlib
 networkx
 lxml
+pillow
