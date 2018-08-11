@@ -13,6 +13,8 @@ from util import parse_args, deepcopy
 
 
 class Router:
+    MAX_PATH_LENGTH = 10000
+
     def __init__(self, cgra_filename,
                  board_meta, packed_filename, placement_filename,
                  avoid_congestion=True):
@@ -288,6 +290,7 @@ class Router:
     @staticmethod
     def sort_netlist_id_for_io(netlist):
         netlist_ids = list(netlist.keys())
+
         def sort(nets):
             for blk_id, _ in nets:
                 if blk_id[0] == "i":
@@ -339,115 +342,24 @@ class Router:
             if len(net) == 1:
                 continue    # no need to route
             bus = Router.get_bus_type(net)
-            src_id, src_port = net[0]
             # avoid going back
             net = self.sort_net(net, self.placement)
             pin_port_set = determine_pin_ports(net, self.placement)
 
             dst_set_cpy = net[1:]
             route_path = {}
-            # TODO: change how to present failure
-            failed_route = [None] * 100
+            route_length = {}
             chan_resources = {}
             for chan in range(self.channel_width):
-                final_path = []
-                # this is used for rough route (no port control)
-                # usefully when we have a net connected to two pins in a same
-                # tile
-                dst_set = dst_set_cpy[:]
-                src_pos = self.placement[src_id]
-                # local routing resource
-                routing_resource = self.copy_resource()
-                pos_set = set()
-                # used for bitstream
-                is_src = True
-                while len(dst_set) > 0:
-                    dst_point = dst_set.pop(0)
-                    dst_id, dst_port = dst_point
-                    dst_pos = self.placement[dst_id]
-
-                    # self loop prevention
-                    # this will happen if two operands share the same input
-                    # in a single block
-                    if dst_pos == src_pos:
-                        # FIXME use path instead
-                        pre_pos = self.find_pre_pos(dst_pos, final_path)
-                        available, pin_info = \
-                            self.is_pin_available(routing_resource,
-                                                  pre_pos, dst_pos, dst_port,
-                                                  bus, chan,
-                                                  is_self_connection=True)
-
-                        if not available:
-                            # failed to connect
-                            final_path = failed_route
-                            break
-                        # just that it won't blow up the later logic
-                        link = {(dst_pos, dst_port): pin_info}
-                    else:
-                        link = self.connect_two_points((src_pos, src_port),
-                                                       (dst_id,
-                                                        dst_pos, dst_port),
-                                                       bus,
-                                                       chan,
-                                                       pin_port_set,
-                                                       is_src,
-                                                       final_path,
-                                                       pos_set,
-                                                       routing_resource)
-                    if (dst_pos, dst_port) not in link:
-                        # failed to route in this channel
-                        final_path = failed_route
-                        dst_set = []
-                        # early termination
-                        break
-                    # merge the search path to channel path
-                    pp = dst_pos
-                    pos_set.add(pp)
-                    path = []
-                    while pp != src_pos:
-                        path.append(link[pp])
-                        pp = link[pp][0][0]
-                        pos_set.add(pp)
-
-                    path.reverse()
-
-                    entry = (dst_pos, dst_port)
-                    if entry not in link:
-                        # routing failed
-                        assert(final_path[0] is None)
-                        break
-                    path.append(link[entry])
-
-                    # append this to the final path
-                    if len(final_path) == 0:
-                        final_path = path
-                    else:
-                        # skip the first one since src and dst overlap
-                        final_path = final_path + path
-
-                    # move along the hyper edge
-                    src_pos = dst_pos
-                    # disable the src since we're moving along the net
-                    is_src = False
-
-                route_path[chan] = final_path
-
-                # update the routing info
-                if len(final_path) > 1 and final_path[0] is not None:
-                    # update routing resource
-                    self.update_routing_resource(routing_resource,
-                                                 final_path)
-                    chan_resources[chan] = routing_resource
-                elif len(final_path) == 0:
-                    raise Exception("no path found. unexpected error")
+                self.route_net(bus, chan, chan_resources, dst_set_cpy,
+                               route_length, pin_port_set, route_path, net[0])
 
             # find the minimum route path
             min_chan = 0
             for i in range(1, self.channel_width):
-                if len(route_path[i]) < len(route_path[min_chan]):
+                if route_length[i] < route_length[min_chan]:
                     min_chan = i
-            if len(route_path[min_chan]) == len(failed_route):
+            if route_length[min_chan] == self.MAX_PATH_LENGTH:
                 raise Exception("Failed to route for net " + net_id)
             # add the final path to the design
             self.route_result[net_id] = route_path[min_chan]
@@ -455,6 +367,99 @@ class Router:
             # update the actual routing resource
             # self-loop is fixed up
             self.routing_resource = chan_resources[min_chan]
+
+    def route_net(self, bus, chan, chan_resources, dst_set, path_length,
+                  pin_port_set, route_path, src_entry):
+        src_id, src_port = src_entry
+        final_path = []
+
+        # this is used for rough route (no port control)
+        # usefully when we have a net connected to two pins in a same
+        # tile
+        dst_set = dst_set[:]
+        src_pos = self.placement[src_id]
+        # local routing resource
+        routing_resource = self.copy_resource()
+        pos_set = set()
+        # used for bitstream
+        is_src = True
+        while len(dst_set) > 0:
+            dst_point = dst_set.pop(0)
+            dst_id, dst_port = dst_point
+            dst_pos = self.placement[dst_id]
+
+            # self loop prevention
+            # this will happen if two operands share the same input
+            # in a single block
+            if dst_pos == src_pos:
+                pre_pos = self.find_pre_pos(dst_pos, final_path)
+                available, pin_info = \
+                    self.is_pin_available(routing_resource,
+                                          pre_pos, dst_pos, dst_port,
+                                          bus, chan,
+                                          is_self_connection=True)
+
+                if not available:
+                    # failed to connect
+                    path_length[chan] = self.MAX_PATH_LENGTH
+                    break
+                # just that it won't blow up the later logic
+                link = {(dst_pos, dst_port): pin_info}
+            else:
+                link = self.connect_two_points((src_pos, src_port),
+                                               (dst_id,
+                                                dst_pos, dst_port),
+                                               bus,
+                                               chan,
+                                               pin_port_set,
+                                               is_src,
+                                               final_path,
+                                               pos_set,
+                                               routing_resource)
+            if (dst_pos, dst_port) not in link:
+                # failed to route in this channel
+                path_length[chan] = self.MAX_PATH_LENGTH
+                # early termination
+                break
+            # merge the search path to channel path
+            pp = dst_pos
+            pos_set.add(pp)
+            path = []
+            while pp != src_pos:
+                path.append(link[pp])
+                pp = link[pp][0][0]
+                pos_set.add(pp)
+
+            path.reverse()
+
+            entry = (dst_pos, dst_port)
+            if entry not in link:
+                # routing failed
+                assert (final_path[0] is None)
+                break
+            path.append(link[entry])
+
+            # append this to the final path
+            if len(final_path) == 0:
+                final_path = path
+            else:
+                # skip the first one since src and dst overlap
+                final_path = final_path + path
+
+            # move along the hyper edge
+            src_pos = dst_pos
+            # disable the src since we're moving along the net
+            is_src = False
+        route_path[chan] = final_path
+        # update the routing info
+        if len(final_path) > 1 and chan not in path_length:
+            # update routing resource
+            self.update_routing_resource(routing_resource,
+                                         final_path)
+            chan_resources[chan] = routing_resource
+            path_length[chan] = len(final_path)
+        elif len(final_path) == 0 and chan not in path_length:
+            raise Exception("no path found. unexpected error")
 
     @staticmethod
     def get_track_in_from_path(src_pos, path):
