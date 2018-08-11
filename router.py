@@ -283,8 +283,9 @@ class Router:
                 return 1
         return 16
 
-    def copy_resource(self):
-        res = deepcopy(self.routing_resource)
+    @staticmethod
+    def copy_resource(routing_resource):
+        res = deepcopy(routing_resource)
         return res
 
     @staticmethod
@@ -334,13 +335,75 @@ class Router:
         assert(len(net) == len(new_net))
         return new_net
 
+    @staticmethod
+    def group_reg_nets(netlists):
+        net_id_to_remove = set()
+        linked_nets = {}
+
+        reg_srcs = {}
+        reg_srcs_nets = set()
+        # first pass to find any nets whose sources are a reg
+        for net_id in netlists:
+            net = netlists[net_id]
+            if net[0][0][0] == "r":
+                reg_id = net[0][0]
+                reg_srcs[reg_id] = net_id
+                reg_srcs_nets.add(net_id)
+                # also means we have to remove it from the main netlists
+                net_id_to_remove.add(net_id)
+
+        # Keyi:
+        # because a reg cannot drive more than one wire (otherwise they will be
+        # merged together at the first place), it's safe to assume there is an
+        # one-to-one relation between src -> reg -> other wire. However, because
+        # it is possible to have reg (src) -> reg (sink) and both of them are
+        # unfolded, we need to create a list of nets in order that's going to be
+        # merged into the main net.
+
+        def squash_net(netlists, src_id):
+            result = [src_id]
+            net = netlists[src_id][1:]
+            for blk_id, _ in net:
+                if blk_id[0] == "r":
+                    # found another one
+                    next_id = reg_srcs[blk_id]
+                    result += squash_net(netlists, next_id)
+            return result
+
+        resolved_net = set()
+        for reg_id in reg_srcs:
+            r_net_id = reg_srcs[reg_id]
+            if r_net_id in resolved_net:
+                continue
+            # search for the ultimate src
+            reg = netlists[r_net_id][0][0]  # id for that reg
+            for net_id in netlists:
+                if net_id in reg_srcs_nets:
+                    continue
+                net = netlists[net_id]
+                for blk_id, _ in net:
+                    if blk_id == reg:
+                        # found the ultimate src
+                        # now do a squash to obtain the set of all nets
+                        merged_nets = squash_net(netlists, r_net_id)
+                        for m_id in merged_nets:
+                            resolved_net.add(m_id)
+                        linked_nets[net_id] = merged_nets
+
+        # make sure we've merged every nets
+        assert(len(resolved_net) == len(net_id_to_remove))
+
+        return linked_nets, net_id_to_remove
+
     def route(self):
         print("INFO: Performing greedy BFS/A* routing")
+        linked_nets, reg_nets = self.group_reg_nets(self.netlists)
         net_list_ids = self.sort_netlist_id_for_io(self.netlists)
         for net_id in net_list_ids:
+            if net_id in reg_nets:
+                continue
             net = self.netlists[net_id]
-            if len(net) == 1:
-                continue    # no need to route
+            assert (len(net) > 1)
             bus = Router.get_bus_type(net)
             # avoid going back
             net = self.sort_net(net, self.placement)
@@ -351,8 +414,16 @@ class Router:
             route_length = {}
             chan_resources = {}
             for chan in range(self.channel_width):
-                self.route_net(bus, chan, chan_resources, dst_set_cpy,
-                               route_length, pin_port_set, route_path, net[0])
+                path_len, final_path, routing_resource = \
+                    self.route_net(bus, chan, dst_set_cpy,
+                                   pin_port_set, net[0],
+                                   self.routing_resource)
+                chan_resources[chan] = routing_resource
+                route_path[chan] = final_path
+                route_length[chan] = path_len
+                if net_id in linked_nets:
+                    for reg_net_id in linked_nets[net_id]:
+                        pass
 
             # find the minimum route path
             min_chan = 0
@@ -368,10 +439,11 @@ class Router:
             # self-loop is fixed up
             self.routing_resource = chan_resources[min_chan]
 
-    def route_net(self, bus, chan, chan_resources, dst_set, path_length,
-                  pin_port_set, route_path, src_entry):
+    def route_net(self, bus, chan, dst_set,
+                  pin_port_set, src_entry, routing_resource):
         src_id, src_port = src_entry
         final_path = []
+        path_length = 0
 
         # this is used for rough route (no port control)
         # usefully when we have a net connected to two pins in a same
@@ -379,7 +451,7 @@ class Router:
         dst_set = dst_set[:]
         src_pos = self.placement[src_id]
         # local routing resource
-        routing_resource = self.copy_resource()
+        routing_resource = self.copy_resource(routing_resource)
         pos_set = set()
         # used for bitstream
         is_src = True
@@ -401,7 +473,7 @@ class Router:
 
                 if not available:
                     # failed to connect
-                    path_length[chan] = self.MAX_PATH_LENGTH
+                    path_length = self.MAX_PATH_LENGTH
                     break
                 # just that it won't blow up the later logic
                 link = {(dst_pos, dst_port): pin_info}
@@ -418,7 +490,7 @@ class Router:
                                                routing_resource)
             if (dst_pos, dst_port) not in link:
                 # failed to route in this channel
-                path_length[chan] = self.MAX_PATH_LENGTH
+                path_length = self.MAX_PATH_LENGTH
                 # early termination
                 break
             # merge the search path to channel path
@@ -450,16 +522,18 @@ class Router:
             src_pos = dst_pos
             # disable the src since we're moving along the net
             is_src = False
-        route_path[chan] = final_path
         # update the routing info
-        if len(final_path) > 1 and chan not in path_length:
+        if len(final_path) > 1 and path_length != self.MAX_PATH_LENGTH:
             # update routing resource
             self.update_routing_resource(routing_resource,
                                          final_path)
-            chan_resources[chan] = routing_resource
-            path_length[chan] = len(final_path)
-        elif len(final_path) == 0 and chan not in path_length:
+            path_length = len(final_path)
+        elif len(final_path) == 0 and path_length != self.MAX_PATH_LENGTH:
             raise Exception("no path found. unexpected error")
+
+        assert (path_length != 0)
+
+        return path_length, final_path, routing_resource
 
     @staticmethod
     def get_track_in_from_path(src_pos, path):
