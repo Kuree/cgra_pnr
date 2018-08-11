@@ -390,8 +390,12 @@ def change_name_to_id(instances):
         attrs = instances[name]
         if "genref" not in attrs:
             assert ("modref" in attrs)
-            assert (attrs["modref"] == u"corebit.const")
-            blk_type = "b"
+            if attrs["modref"] == u"corebit.const":
+                blk_type = "b"
+            elif attrs["modref"] == u"cgralib.BitIO":
+                blk_type = "i"
+            else:
+                raise Exception("Unknown instance type " + name)
         else:
             # TODO: stupid 1 bit IO thing need to take care of
             instance_type = attrs["genref"]

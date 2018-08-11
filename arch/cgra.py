@@ -520,6 +520,10 @@ def get_tile_pins(blk_id, op, folded_block, instances):
 
 
 def get_tile_op(instance):
+    if "genref" not in instance:
+        assert ("modref" in instance)
+        assert (instance["modref"] == "cgralib.BitIO")
+        return None, None
     pe_type = instance["genref"]
     if pe_type == "coreir.reg":
         # reg tile, reg in and reg out
