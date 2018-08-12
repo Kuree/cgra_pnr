@@ -120,10 +120,21 @@ def save_routing_result(route_result, output_file):
                 elif len(conn) == 3:
                     # direct sink
                     conn, pos, port = conn
-                    f.write("Node {}: SINK {}::{} <- {}\n".format(node_index,
-                                                                  pos,
-                                                                  port,
-                                                                  conn))
+                    if isinstance(port, str):
+                        f.write("Node {}: SINK {}::{} <- {}\n".format(
+                            node_index,
+                            pos,
+                            port,
+                            conn))
+                    else:
+                        assert (isinstance(port, tuple))
+                        f.write(
+                            "Node {}: SINK {}::{}\t{} <- {}\n".format(
+                                node_index,
+                                pos,
+                                "reg",
+                                port,
+                                conn))
                 elif len(conn) == 4:
                     # self-connection sink
                     # [dir_in, conn, current_point, port]
@@ -217,16 +228,28 @@ def parse_routing_result(routing_file):
                     has_sink = True
                     line = line[4:].strip()
                     assert ("<-" in line)
-                    dst, conn = line.split("<-")
-                    dst_pos, dst_port = dst.split("::")
-                    dst_pos = parse_conn(dst_pos)
-                    dst_port = dst_port.strip()
-                    conn = parse_conn(conn)
-                    if self_connected_sink:
-                        conns[-1] = ("sink", conns[-1][1:], conn,
-                                     (dst_pos, dst_port))
+                    if "\t" in line:
+                        pos_port, link = line.split("\t")
+                        dst_pos, dst_port = pos_port.split("::")
+                        dst_pos = parse_conn(dst_pos)
+                        assert (dst_port == "reg")
+                        conn_in, conn_out = link.split("<-")
+                        conn_in, conn_out = parse_conn(conn_in),\
+                            parse_conn(conn_out)
+                        conns.append(("sink", (conn_in, conn_out),
+                                      (dst_pos, dst_port)))
+                        pass
                     else:
-                        conns.append(("sink", conn, (dst_pos, dst_port)))
+                        dst, conn = line.split("<-")
+                        dst_pos, dst_port = dst.split("::")
+                        dst_pos = parse_conn(dst_pos)
+                        dst_port = dst_port.strip()
+                        conn = parse_conn(conn)
+                        if self_connected_sink:
+                            conns[-1] = ("sink", conns[-1][1:], conn,
+                                         (dst_pos, dst_port))
+                        else:
+                            conns.append(("sink", conn, (dst_pos, dst_port)))
                 else:
                     # links
                     assert ("\t" in line)
@@ -239,7 +262,7 @@ def parse_routing_result(routing_file):
                     conns.append(("link", (src_pos, dst_pos), (conn1, conn2)))
 
             # make sure it's an actual net
-            assert (has_src and has_sink)
+            assert has_sink
             result[net_id] = conns
 
     return result
@@ -385,19 +408,31 @@ def handle_sink_entry(entry, track_in, tile_mapping, board_layout,
                                   folded_blocks,
                                   placement)
     elif len(entry) == 3:
-        s, track_in = handle_sink(None, entry[1], entry[2],
-                                  track_in,
-                                  tile_mapping,
-                                  board_layout,
-                                  folded_blocks,
-                                  placement)
+        if entry[-1][-1] == "reg":
+            s, track_in = handle_reg_sink(entry[1:], track_in, tile_mapping,
+                                          board_layout)
+        else:
+            s, track_in = handle_sink(None, entry[1], entry[2],
+                                      track_in,
+                                      tile_mapping,
+                                      board_layout,
+                                      folded_blocks,
+                                      placement)
     else:
         raise Exception("Unknown entry " + str(entry))
     return s, track_in
 
+def handle_reg_sink(entry, track_in, tile_mapping, board_layout):
+    (dir_out, dir_in), (pos, port) = entry
+    assert (port == "reg")
+    result, _ = handle_link((pos, pos), (dir_out, dir_in), dir_in, tile_mapping,
+                         board_layout, track_str=" (r)")
+    return result, track_in
+
 
 def handle_sink(self_conn, conn, dst, track_in,
-                tile_mapping, board_layout, folded_blocks, placement):
+                tile_mapping, board_layout, folded_blocks, placement,
+                track_str=""):
     result = ""
     dst_pos, dst_port = dst
     if self_conn is not None:
@@ -425,7 +460,6 @@ def handle_sink(self_conn, conn, dst, track_in,
     #    track_str = " (r)"
     #else:
     #    track_str = ""
-    track_str = ""
     tile = tile_mapping[dst_pos]
     track = "" if conn[0] == 16 else "b"
     end = "T{}_{}{}{}\n".format(tile,
@@ -438,22 +472,23 @@ def handle_sink(self_conn, conn, dst, track_in,
     return result, track_in
 
 
-def handle_link(conn1, conn2, pre_in, tile_mapping, board_layout):
+def handle_link(conn1, conn2, pre_in, tile_mapping, board_layout, track_str=""):
     src_pos, dst_pos = conn1
     track_out, track_in = conn2
     start = make_track_string(src_pos, pre_in, tile_mapping, board_layout)
     end = make_track_string(src_pos, track_out, tile_mapping, board_layout)
-    result = start + " -> " + end + "\n"
+    result = start + " -> " + end + track_str + "\n"
     return result, track_in
 
 
 def handle_src(src, conn, tile_mapping, board_layout):
-    # TODO: change it once we can fold registers
     src_pos = src[0]
     src_port = src[1]
     tile = tile_mapping[src_pos]
     if src_port == "out":
         src_port = "pe_out"
+    elif src_port == "reg":
+        return "", conn[1]
     track = "" if conn[0][0] == 16 else "b"
     start = "T{}_{}{}".format(tile, src_port, track)
     end = make_track_string(src_pos, conn[0], tile_mapping, board_layout)

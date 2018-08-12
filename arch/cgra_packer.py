@@ -373,12 +373,13 @@ def pack_netlists(raw_netlists, name_to_id):
                     # always fold at data0 port
                     net[index] = (blk_id, "data0")
 
-    # sanity check. shouldn't be any reg left
     assert(len(changed_pe) == len(dont_absorb))
+    # last pass to change any un-folded register's port to "reg"
     for net_id in raw_netlists:
         net = raw_netlists[net_id]
-        for blk_id, port in net:
-            assert (port != "reg")
+        for index, (blk_id, port) in enumerate(net):
+            if blk_id[0] == "r":
+                net[index] = (blk_id, "reg")
 
     return raw_netlists, folded_blocks
 

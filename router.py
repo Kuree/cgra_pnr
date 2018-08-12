@@ -420,8 +420,7 @@ class Router:
         net_list_ids = self.sort_netlist_id_for_io(self.netlists)
         for net_id in net_list_ids:
             if net_id in reg_nets:
-                #continue
-                pass
+                continue
             net = self.netlists[net_id]
             assert (len(net) > 1)
             bus = Router.get_bus_type(net)
@@ -431,6 +430,7 @@ class Router:
             route_path = {}
             route_length = {}
             chan_resources = {}
+            reg_route_path = {}
             for chan in range(self.channel_width):
                 path_len, final_path, routing_resource = \
                     self.route_net(bus, chan, net,
@@ -438,19 +438,37 @@ class Router:
                 chan_resources[chan] = routing_resource
                 route_path[chan] = final_path
                 route_length[chan] = path_len
+                if path_len >= self.MAX_PATH_LENGTH:
+                    continue    # don't even bother
                 if net_id in linked_nets:
+                    reg_path = final_path
                     for reg_net_id in linked_nets[net_id]:
-                        pass
+                        reg_net = self.netlists[reg_net_id]
+                        reg_length, reg_path, routing_resource = \
+                            self.route_reg_net(reg_net, bus, chan,
+                                               routing_resource,
+                                               reg_path)
+                        route_length[chan] += reg_length
+                        if route_length[chan] >= self.MAX_PATH_LENGTH:
+                            break   # just terminate without proceeding next
+                        if chan not in reg_route_path:
+                            reg_route_path[chan] = {}
+                        reg_route_path[chan][reg_net_id] = reg_path
+                        chan_resources[chan] = routing_resource
 
             # find the minimum route path
             min_chan = 0
             for i in range(1, self.channel_width):
                 if route_length[i] < route_length[min_chan]:
                     min_chan = i
-            if route_length[min_chan] == self.MAX_PATH_LENGTH:
+            if route_length[min_chan] >= self.MAX_PATH_LENGTH:
                 raise Exception("Failed to route for net " + net_id)
             # add the final path to the design
             self.route_result[net_id] = route_path[min_chan]
+            if net_id in linked_nets:
+                reg_path = reg_route_path[min_chan]
+                for reg_net_id in reg_path:
+                    self.route_result[reg_net_id] = reg_path[reg_net_id]
 
             # update the actual routing resource
             # self-loop is fixed up
@@ -550,9 +568,7 @@ class Router:
             raise Exception("no path found. unexpected error")
 
         assert (path_length != 0)
-
         return path_length, final_path, routing_resource
-
 
     @staticmethod
     def get_track_in_from_path(src_pos, path):
@@ -573,13 +589,14 @@ class Router:
             return conn
         raise Exception("Unable to find track in")
 
-    def route_reg_net(self, src, net, bus, chan, routing_resource,
+    def route_reg_net(self, net, bus, chan, routing_resource,
                       main_path):
         # obtain the out direction of the reg from main path
         # notice that is is possible the reg is the last sink. If so,
         # pick up any
-        src_pos, src_port = src
-        assert  (src_port == "reg")
+        src_id, src_port = net[0]
+        src_pos = self.placement[src_id]
+        assert (src_port == "reg")
         res = self.get_route_resource(self.board_meta,
                                       routing_resource,
                                       src_pos)
@@ -599,6 +616,8 @@ class Router:
                     break
         assert (reg_index != -1)
 
+        # sort the net first
+        net = self.sort_net(net, self.placement)
         # route the wire
         path_length, final_path, routing_resource = \
             self.route_net(bus, chan, net, routing_resource)
@@ -611,7 +630,7 @@ class Router:
         # reconnect to in -> out (reg)
         dir_in, pos, port = main_path[reg_index]
         # remove the first entry
-        p, port, dir_out, _ = final_path.pop(0)
+        p, port, dir_out, _ = final_path[0][0]
         path_length -= 1
         assert(p == pos)
         main_path[reg_index] = (dir_in, pos, dir_out)
@@ -701,8 +720,9 @@ class Router:
             if len(pin_info) == 1:
                 # this is src
                 p, port, dir_out, dir_in = pin_info[0]
-                ports = routing_resource[p]["port"][port]
-                ports.remove(dir_out)
+                if port != "reg":
+                    ports = routing_resource[p]["port"][port]
+                    ports.remove(dir_out)
                 # also remove the routing resource
                 res = self.get_route_resource(self.board_meta,
                                               routing_resource,
@@ -764,6 +784,8 @@ class Router:
                 # it might be redundant for PE tiles, but for IO ports
                 # it's critical?
                 conn, pos, port = pin_info
+                if port == "reg":
+                    continue    # will be handled later
                 ports = routing_resource[pos]["port"][port]
                 if conn in ports:
                     ports.remove(conn)
