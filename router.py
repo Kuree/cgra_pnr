@@ -104,7 +104,19 @@ class Router:
         return dist
 
     def get_port_neighbors(self, routing_resource, bus, chan, pos, port):
-        port_chan = routing_resource[pos]["port"][port]
+        route_resource_current_pos = self.get_route_resource(self.board_meta,
+                                                             routing_resource,
+                                                             pos)
+        if port not in routing_resource[pos]["port"]:
+            assert (port == "reg")
+            port_chan = set()
+            for _, conn_out in route_resource_current_pos:
+                if conn_out[-1] == chan and conn_out[0] == bus:
+                    # as long as there is an out, we are good
+                    port_chan.add(conn_out)
+        else:
+            # normal ports
+            port_chan = routing_resource[pos]["port"][port]
         x, y = pos
         results = []
         working_set = set()
@@ -139,8 +151,8 @@ class Router:
             else:
                 if dir_out in port_chan:
                     can_turn = False
-                    for conn_in, conn_out in route_resource_current_pos2:
-                        if conn_out == dir_out:
+                    for conn_in, _ in route_resource_current_pos2:
+                        if conn_in == dir_in:
                             can_turn = True
                             break
                     if can_turn:
@@ -223,7 +235,7 @@ class Router:
                 continue
             can_turn = False
             if new_pos not in pin_pos:
-                for conn_in, conn_out in route_resource_current_pos2:
+                for conn_in, _ in route_resource_current_pos2:
                     if conn_in == dir_in:
                         can_turn = True
                         break
@@ -238,42 +250,49 @@ class Router:
                          is_self_connection=False):
         """returns True/False, [connection list + port]"""
         direction = self.compute_direction(current_point, pre_point)
-        route_resource = routing_resource[current_point]["route_resource"]
-        sink_resource = routing_resource[current_point]["port"]
-        operand_channels = sink_resource[port]
-
-        operand_channels = [entry for entry in operand_channels
-                            if entry[-1] == chan]
-
         # test if we have direct connection to the operand
         # that is, in -> op
         dir_in = (bus, 0, direction, chan)
-
-        if self.layout_board[current_point[1]][current_point[0]] == "m" and \
-                dir_in[2] == 1:
-            # make the dir in as dir_out from the bottom tile
-            dir_in = (bus, 1, 7, chan)
-        if dir_in in operand_channels:
-            return True, [dir_in, current_point, port]
-
-
-        # need to determine if we can connect to a out bus
-        # that is, in_sxtx -> out_sxtx
-        #          out_sxts -> op
-        for conn in operand_channels:
-            # the format in operand_channels is out -> in
-            conn_chann = (dir_in, conn)
-            if conn_chann in route_resource:
-                return True, [dir_in, conn, current_point, port]
-        if is_self_connection:
-            # because we already remove the routing resource from the
-            # routing resource, it won't be able to handle that
-            # brute forcing to see if we can make the connection
+        route_resource = routing_resource[current_point]["route_resource"]
+        sink_resource = routing_resource[current_point]["port"]
+        if port not in sink_resource:
+            assert(port == "reg")
             for i in range(4):
                 dir_out = (bus, 1, i, chan)
-                if dir_out in operand_channels:
-                    return True, [dir_in, dir_out, current_point, port]
-        return False, None
+                if (dir_in, dir_out) in route_resource:
+                    return True, [dir_in, current_point, port]
+            return False, None
+        else:
+            operand_channels = sink_resource[port]
+
+            operand_channels = [entry for entry in operand_channels
+                                if entry[-1] == chan]
+
+            if self.layout_board[current_point[1]][current_point[0]] == "m" and \
+                    dir_in[2] == 1:
+                # make the dir in as dir_out from the bottom tile
+                dir_in = (bus, 1, 7, chan)
+            if dir_in in operand_channels:
+                return True, [dir_in, current_point, port]
+
+
+            # need to determine if we can connect to a out bus
+            # that is, in_sxtx -> out_sxtx
+            #          out_sxts -> op
+            for conn in operand_channels:
+                # the format in operand_channels is out -> in
+                conn_chann = (dir_in, conn)
+                if conn_chann in route_resource:
+                    return True, [dir_in, conn, current_point, port]
+            if is_self_connection:
+                # because we already remove the routing resource from the
+                # routing resource, it won't be able to handle that
+                # brute forcing to see if we can make the connection
+                for i in range(4):
+                    dir_out = (bus, 1, i, chan)
+                    if dir_out in operand_channels:
+                        return True, [dir_in, dir_out, current_point, port]
+            return False, None
 
     @staticmethod
     def get_bus_type(net):
@@ -401,22 +420,20 @@ class Router:
         net_list_ids = self.sort_netlist_id_for_io(self.netlists)
         for net_id in net_list_ids:
             if net_id in reg_nets:
-                continue
+                #continue
+                pass
             net = self.netlists[net_id]
             assert (len(net) > 1)
             bus = Router.get_bus_type(net)
             # avoid going back
             net = self.sort_net(net, self.placement)
-            pin_port_set = determine_pin_ports(net, self.placement)
 
-            dst_set_cpy = net[1:]
             route_path = {}
             route_length = {}
             chan_resources = {}
             for chan in range(self.channel_width):
                 path_len, final_path, routing_resource = \
-                    self.route_net(bus, chan, dst_set_cpy,
-                                   pin_port_set, net[0],
+                    self.route_net(bus, chan, net,
                                    self.routing_resource)
                 chan_resources[chan] = routing_resource
                 route_path[chan] = final_path
@@ -439,16 +456,17 @@ class Router:
             # self-loop is fixed up
             self.routing_resource = chan_resources[min_chan]
 
-    def route_net(self, bus, chan, dst_set,
-                  pin_port_set, src_entry, routing_resource):
-        src_id, src_port = src_entry
+    def route_net(self, bus, chan, net, routing_resource):
+        src_id, src_port = net[0]
+        pin_port_set = determine_pin_ports(net,
+                                           self.placement)
         final_path = []
         path_length = 0
 
         # this is used for rough route (no port control)
         # usefully when we have a net connected to two pins in a same
         # tile
-        dst_set = dst_set[:]
+        dst_set = net[1:]
         src_pos = self.placement[src_id]
         # local routing resource
         routing_resource = self.copy_resource(routing_resource)
@@ -535,6 +553,7 @@ class Router:
 
         return path_length, final_path, routing_resource
 
+
     @staticmethod
     def get_track_in_from_path(src_pos, path):
         for i in range(len(path) - 1, -1, -1):
@@ -553,6 +572,42 @@ class Router:
             assert conn[1] == 0    # it's actually coming in
             return conn
         raise Exception("Unable to find track in")
+
+    def route_reg_net(self, src, net, bus, chan, routing_resource,
+                      main_path):
+        # obtain the out direction of the reg from main path
+        # notice that is is possible the reg is the last sink. If so,
+        # pick up any
+        src_pos, src_port = src
+        assert  (src_port == "reg")
+        res = self.get_route_resource(self.board_meta,
+                                      routing_resource,
+                                      src_pos)
+        # traverse the main path to make sure that the main reg sink has an
+        # out direction. If not, create one accordingly
+        reg_index = -1
+        for i in range(len(main_path) - 1, -1, -1):
+            entry = main_path[i]
+            # cannot be source
+            assert (len(entry) != 1)
+            # it has to be a direct sink
+            if len(entry) == 3:
+                conn, pos, port = entry
+                if pos == src_pos and port == src_port:
+                    # we have found it
+                    reg_index = i
+                    break
+        assert (reg_index != -1)
+
+        if reg_index == len(main_path) - 1:
+            # our reg is the end of the main net
+            # pick an available chan and override the old routing track
+            # obtain the track in
+            entry = main_path[reg_index]
+            track_in = entry[0]
+            points = self.get_neighbors(routing_resource, bus, chan, src_pos,
+                                        track_in, set())
+
 
     def connect_two_points(self, src, dst, bus, chan, pin_ports,
                            is_src, final_path,
@@ -576,10 +631,13 @@ class Router:
                 point, _, track_in = point
             finished_set.add(point)
             if is_src:
-                points = self.get_port_neighbors(routing_resource, bus, chan,
+                points = self.get_port_neighbors(routing_resource, bus,
+                                                 chan,
                                                  point, src_port)
             else:
                 if track_in is None:
+                    # sink to sink
+                    # need to figure out the last track in
                     assert len(final_path) > 0
                     track_in = self.get_track_in_from_path(src_pos, final_path)
                     # get previous track in

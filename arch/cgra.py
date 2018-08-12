@@ -565,7 +565,7 @@ def determine_pin_ports(net, placement):
     pin_directions = set()
     # FIXME use the naming in the CGRA description file
     allowed_initial_ports = {"data0", "data1", "bit0", "bit1", "bit2", "wen",
-                             }
+                             "reg"}
     for index, (blk_id, port) in enumerate(net):
         if index == 0 and port not in allowed_initial_ports:
             # it's a a source
