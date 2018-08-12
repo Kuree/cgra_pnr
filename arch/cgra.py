@@ -94,7 +94,9 @@ def save_routing_result(route_result, output_file):
         # write header
         f.write("# Path format:\n")
         f.write("# (BUS, IN (0) | OUT(1), SIDE, TRACK)\n\n")
-        for net_id in route_result:
+        net_id_list = list(route_result.keys())
+        net_id_list.sort(key=lambda x: int(x[1:]))
+        for net_id in net_id_list:
             f.write("Net ID: {}\n".format(net_id))
             path = route_result[net_id]
             node_index = 0
@@ -335,6 +337,8 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
                                                          id_to_name[blk_id])
 
     output_string += "\n\n#ROUTING\n"
+    net_id_list = list(route_result.keys())
+    net_id_list.sort(key=lambda x: int(x[1:]))
     for net_id in route_result:
         path = route_result[net_id]
         output_string += "\n# net id: {}\n".format(net_id)
@@ -421,6 +425,7 @@ def handle_sink_entry(entry, track_in, tile_mapping, board_layout,
     else:
         raise Exception("Unknown entry " + str(entry))
     return s, track_in
+
 
 def handle_reg_sink(entry, track_in, tile_mapping, board_layout):
     (dir_out, dir_in), (pos, port) = entry
@@ -562,8 +567,7 @@ def get_tile_op(instance):
     pe_type = instance["genref"]
     if pe_type == "coreir.reg":
         # reg tile, reg in and reg out
-        op = "add"
-        print_order = 1
+        return None, None
     elif pe_type == "cgralib.Mem":
         op = "mem_" + str(instance["modargs"]["depth"][-1])
         print_order = 3

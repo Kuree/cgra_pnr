@@ -182,7 +182,11 @@ class Router:
             return routing_resource[pos]["port"]
 
     def get_neighbors(self, routing_resource, bus, chan, pos, track_in,
-                      pin_ports):
+                      pin_ports, force_connect=False):
+        # Keyi:
+        # force connect is used when track_in has been updated but you still
+        # want to connect to the next tile
+        # ONLY useful in reg src connection
         # tricky in the current CGRA design:
         # if pos is in the bottom of a MEM tile, it won't have an entry
         route_resource_current_pos = self.get_route_resource(self.board_meta,
@@ -229,10 +233,17 @@ class Router:
             if self.layout_board[pos[1]][pos[0]] == "m" and \
                     dir_out[2] == 1:
                 dir_out = (dir_out[0], dir_out[1], 7, dir_out[-1])
-
-            if (track_in, dir_out) not in route_resource_current_pos:
-                # can't make the turn
-                continue
+            if not force_connect:
+                if (track_in, dir_out) not in route_resource_current_pos:
+                    # can't make the turn
+                    continue
+            else:
+                dir_out_set = set()
+                for _, conn_out in route_resource_current_pos:
+                    if conn_out[-2] != track_in[-2]:
+                        dir_out_set.add(conn_out)
+                if dir_out not in dir_out_set:
+                    continue
             can_turn = False
             if new_pos not in pin_pos:
                 for conn_in, _ in route_resource_current_pos2:
@@ -474,13 +485,18 @@ class Router:
             # self-loop is fixed up
             self.routing_resource = chan_resources[min_chan]
 
-    def route_net(self, bus, chan, net, routing_resource):
+    def route_net(self, bus, chan, net, routing_resource, final_path=None,
+                  is_src=True):
         src_id, src_port = net[0]
         pin_port_set = determine_pin_ports(net,
                                            self.placement)
-        final_path = []
-        path_length = 0
 
+        path_length = 0
+        if final_path is None:
+            final_path = []
+            force_connect = False
+        else:
+            force_connect = True
         # this is used for rough route (no port control)
         # usefully when we have a net connected to two pins in a same
         # tile
@@ -489,8 +505,7 @@ class Router:
         # local routing resource
         routing_resource = self.copy_resource(routing_resource)
         pos_set = set()
-        # used for bitstream
-        is_src = True
+
         while len(dst_set) > 0:
             dst_point = dst_set.pop(0)
             dst_id, dst_port = dst_point
@@ -523,7 +538,9 @@ class Router:
                                                is_src,
                                                final_path,
                                                pos_set,
-                                               routing_resource)
+                                               routing_resource,
+                                               force_connect=force_connect)
+                force_connect = False
             if (dst_pos, dst_port) not in link:
                 # failed to route in this channel
                 path_length = self.MAX_PATH_LENGTH
@@ -597,9 +614,6 @@ class Router:
         src_id, src_port = net[0]
         src_pos = self.placement[src_id]
         assert (src_port == "reg")
-        res = self.get_route_resource(self.board_meta,
-                                      routing_resource,
-                                      src_pos)
         # traverse the main path to make sure that the main reg sink has an
         # out direction. If not, create one accordingly
         reg_index = -1
@@ -616,11 +630,29 @@ class Router:
                     break
         assert (reg_index != -1)
 
+        # Keyi:
+        # because of the way `route_net` works, if the entry is a src, it will
+        # ignore any previous track and try to use port channels to figure the
+        # shortest path. since we disabled the port channel searching for "reg",
+        # it will try to route any direction possible. Hence we will arrive at
+        # this illegal situation:
+        # (x, y) -> (x, y + 1) : (16, 1, 1, 0) -> (16, 0, 3, 0)
+        # where (x, y + 1) is a reg
+        # then it will try to route back as the next destination is (x, y - 1)
+        # (x, y + 1) -> (x, y) : (16, 1, 3, 0) -> (16, 0, 1, 0)
+        # if we simply pick up the out as reg, we will end up as
+        # (x, y + 1)::reg  (16, 0, 3, 0) -> (16, 1, 3, 0) (r)
+        # *Solution:*
+        # pass in the tail of `main_path` and disable `is_src` so that
+        # `route_net` will handle the connection properly.
+        # However, we need to be careful about cross over the old tiles
+        tail_main_path = [main_path[reg_index - 1]]
         # sort the net first
         net = self.sort_net(net, self.placement)
         # route the wire
         path_length, final_path, routing_resource = \
-            self.route_net(bus, chan, net, routing_resource)
+            self.route_net(bus, chan, net, routing_resource, is_src=False,
+                           final_path=tail_main_path)
         if path_length == self.MAX_PATH_LENGTH:
             # not routable
             # just return that and the rest of the logic is going to handle
@@ -629,9 +661,10 @@ class Router:
         # fill in the gap
         # reconnect to in -> out (reg)
         dir_in, pos, port = main_path[reg_index]
-        # remove the first entry
-        p, port, dir_out, _ = final_path[0][0]
-        path_length -= 1
+        final_path.pop(0)
+        (p, dir_out), (_, conn_in) = final_path[0]
+        # rewrite the first entry as the src format
+        final_path[0] = [(pos, port, dir_out, conn_in)]
         assert(p == pos)
         main_path[reg_index] = (dir_in, pos, dir_out)
 
@@ -639,7 +672,7 @@ class Router:
 
     def connect_two_points(self, src, dst, bus, chan, pin_ports,
                            is_src, final_path,
-                           pos_set, routing_resource):
+                           pos_set, routing_resource, force_connect=False):
         src_pos, src_port = src
         (dst_id, dst_pos, dst_port) = dst
         working_set = []
@@ -671,7 +704,9 @@ class Router:
                     # get previous track in
                 points = self.get_neighbors(routing_resource,
                                             bus, chan, point, track_in,
-                                            pin_ports)
+                                            pin_ports,
+                                            force_connect=force_connect)
+                force_connect = False
             for entry in points:
                 if is_src:
                     p, dir_out, dir_in = entry
