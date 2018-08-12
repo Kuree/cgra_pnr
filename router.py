@@ -599,15 +599,24 @@ class Router:
                     break
         assert (reg_index != -1)
 
-        if reg_index == len(main_path) - 1:
-            # our reg is the end of the main net
-            # pick an available chan and override the old routing track
-            # obtain the track in
-            entry = main_path[reg_index]
-            track_in = entry[0]
-            points = self.get_neighbors(routing_resource, bus, chan, src_pos,
-                                        track_in, set())
+        # route the wire
+        path_length, final_path, routing_resource = \
+            self.route_net(bus, chan, net, routing_resource)
+        if path_length == self.MAX_PATH_LENGTH:
+            # not routable
+            # just return that and the rest of the logic is going to handle
+            # this failure
+            return path_length, final_path, routing_resource
+        # fill in the gap
+        # reconnect to in -> out (reg)
+        dir_in, pos, port = main_path[reg_index]
+        # remove the first entry
+        p, port, dir_out, _ = final_path.pop(0)
+        path_length -= 1
+        assert(p == pos)
+        main_path[reg_index] = (dir_in, pos, dir_out)
 
+        return path_length, final_path, routing_resource
 
     def connect_two_points(self, src, dst, bus, chan, pin_ports,
                            is_src, final_path,
