@@ -9,6 +9,7 @@ Arch parser that supports different type of circuits, i.e., either FPGA (VPR)
 or CGRA
 """
 
+
 def convert_vpr_type(vpr_type):
     if vpr_type == "io":
         return 'i'
@@ -23,6 +24,7 @@ def convert_vpr_type(vpr_type):
     else:
         # unknown type
         return None
+
 
 def parse_vpr(filename):
     root = etree.parse(filename)
@@ -270,7 +272,6 @@ def generate_is_cell_legal(board_meta, fold_reg=True):
         if layout_board[y][x] != blk_type:
             return False
         if board is not None:
-            # for FPGA
             if type(board[y][x]) == list:
                 capacity = blk_capacity[blk_type]
                 if len(board[y][x]) >= capacity:

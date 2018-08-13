@@ -3,7 +3,7 @@ from util import reduce_cluster_graph, compute_centroid, parse_args
 from arch.parser import parse_emb
 from sa import SAClusterPlacer, SADetailedPlacer, DeblockAnnealer
 from sa import ClusterException, SAMacroPlacer
-from arch import make_board, parse_cgra, parse_vpr, generate_place_on_board
+from arch import make_board, parse_cgra, generate_place_on_board
 from arch import generate_is_cell_legal
 import numpy as np
 import os
@@ -13,6 +13,8 @@ from visualize import draw_board, draw_cell, color_palette
 from sklearn.cluster import KMeans
 import random
 from multiprocessing import Pool
+from arch.cgra import place_special_blocks, save_placement, prune_netlist
+from arch.cgra_packer import load_packed_file
 
 
 def detailed_placement(args):
@@ -59,7 +61,7 @@ def main():
     if len(argv) < 4:
         print("Usage:", sys.argv[0], "[options] <arch_file> <packed_list>",
               "<embedding>", file=sys.stderr)
-        print("[options]: -no-vis -cgra -fpga", file=sys.stderr)
+        print("[options]: -no-vis -no-reg-fold", file=sys.stderr)
         exit(1)
     # force some internal library random sate
     random.seed(0)
@@ -71,21 +73,8 @@ def main():
 
     vis_opt = "no-vis" not in options
 
-    _, ext = os.path.splitext(packed_filename)
-    arch_type = ""
-    if "cgra" in options:
-        arch_type = "cgra"
-    elif "fpga" in options:
-        arch_type = "fpga"
-    if len(arch_type) == 0:
-        print("Please indicate either -fpga or -cgra", packed_filename,
-              file=sys.stderr)
-        exit(1)
     fold_reg = "no-reg-fold" not in options
-    if arch_type == "fpga":
-        board_meta = parse_vpr(arch_filename)
-    else:
-        board_meta = parse_cgra(arch_filename, fold_reg=fold_reg)
+    board_meta = parse_cgra(arch_filename, fold_reg=fold_reg)
     board_name, board_meta = board_meta.popitem()
     print("INFO: Placing for", board_name)
     num_dim, raw_emb = parse_emb(netlist_embedding)
@@ -95,39 +84,18 @@ def main():
 
     fixed_blk_pos = {}
     emb = {}
-    # import board specific functions as well as macro placement
-    if arch_type == "fpga":
-        from arch.fpga import parse_placement, parse_packed, save_placement
-        reference_placement = packed_filename.replace(".packed", ".place")
-        if not os.path.isfile(reference_placement):
-            print("Cannot find reference placement file",
-                  reference_placement, file=sys.stderr)
-            exit(1)
-        _, reference_blk_pos = parse_placement(reference_placement)
-        netlists, _ = parse_packed(packed_filename)
-
-        for blk_id in raw_emb:
-            if blk_id[0] != "c":
-                b_id = int(blk_id[1:])
-                fixed_blk_pos[blk_id] = reference_blk_pos[b_id]
-            else:
-                emb[blk_id] = raw_emb[blk_id]
-    else:
-        from arch.cgra import place_special_blocks, save_placement, \
-            prune_netlist
-        from arch.cgra_packer import load_packed_file
-        raw_netlist, folded_blocks, id_to_name = \
-            load_packed_file(packed_filename)
-        netlists = prune_netlist(raw_netlist)
-        special_blocks = set()
-        for blk_id in raw_emb:
-            if blk_id[0] != "p" and blk_id[0] != "r":
-                special_blocks.add(blk_id)
-            else:
-                emb[blk_id] = raw_emb[blk_id]
-        # place the spacial blocks first
-        place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
-                             place_on_board)
+    raw_netlist, folded_blocks, id_to_name = \
+        load_packed_file(packed_filename)
+    netlists = prune_netlist(raw_netlist)
+    special_blocks = set()
+    for blk_id in raw_emb:
+        if blk_id[0] != "p" and blk_id[0] != "r":
+            special_blocks.add(blk_id)
+        else:
+            emb[blk_id] = raw_emb[blk_id]
+    # place the spacial blocks first
+    place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
+                         place_on_board)
 
     data_x = np.zeros((len(emb), num_dim))
     blks = list(emb.keys())
@@ -158,32 +126,12 @@ def main():
         place_on_board(board, blk_id, pos)
 
     # save the placement file
-    if arch_type == "fpga":
-        new_placement_filename = os.path.basename(reference_placement)
-        save_placement(reference_placement, new_placement_filename, board,
-                       board_pos)
-        if vis_opt:
-            visualize_placement_fpga(board_pos, clusters)
-    else:
-        placement_filename = packed_filename.replace(".packed", ".place")
-        save_placement(board_pos, id_to_name, folded_blocks, placement_filename)
-        basename_file = os.path.basename(placement_filename)
-        design_name, _ = os.path.splitext(basename_file)
-        if vis_opt:
-            visualize_placement_cgra(board_pos, design_name)
-
-
-def visualize_placement_fpga(board_pos, clusters):
-    # draw the board
-    im, draw = draw_board()
-    for cluster_id in clusters:
-        cells = clusters[cluster_id]
-        for blk_id in cells:
-            pos = board_pos[blk_id]
-            color = color_palette[cluster_id]
-            draw_cell(draw, pos, color)
-    plt.imshow(im)
-    plt.show()
+    placement_filename = packed_filename.replace(".packed", ".place")
+    save_placement(board_pos, id_to_name, folded_blocks, placement_filename)
+    basename_file = os.path.basename(placement_filename)
+    design_name, _ = os.path.splitext(basename_file)
+    if vis_opt:
+        visualize_placement_cgra(board_pos, design_name)
 
 
 def visualize_placement_cgra(board_pos, design_name):
@@ -274,14 +222,11 @@ def perform_deblock_placement(board, board_pos, fixed_blk_pos, netlists):
 def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                              is_cell_legal, board_info):
     # simple heuristics to calculate the clusters
-    if board_info["arch_type"] == "cgra":
-        if len(emb) > 50:
-            # TODO: fix this using kernel extraction
-            num_clusters = 5
-        else:
-            num_clusters = int(np.ceil(len(emb) / 40)) + 1
+    if len(emb) > 50:
+        # TODO: fix this using kernel extraction
+        num_clusters = 5
     else:
-        num_clusters = int(np.ceil(len(emb) / 120)) + 1
+        num_clusters = int(np.ceil(len(emb) / 40)) + 1
     factor = 6
     while True:     # this just enforce we can actually place it
         if num_clusters == 0:

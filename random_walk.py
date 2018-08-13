@@ -6,9 +6,12 @@ import subprocess
 import os
 from tqdm import tqdm
 from util import parse_args
+from arch.cgra_packer import load_packed_file
+from arch.cgra import build_graph
 
 FILE_PATH = os.path.dirname(__file__)
 NETLIST2VEC = os.path.join(FILE_PATH, "./word2vec")
+
 
 # copied from node2vec
 class Graph():
@@ -156,17 +159,9 @@ def alias_draw(J, q):
         return J[kk]
 
 
-def build_walks(netlist_filename, mode):
-    if mode == "cgra":
-        from arch.cgra_packer import load_packed_file
-        from arch.cgra import build_graph
-        netlists, _, _ = load_packed_file(netlist_filename)
-        nx_g = build_graph(netlists)
-    elif mode == ".fpga":
-        from arch.fpga import parse_packed
-        nx_g, _ = parse_packed(netlist_filename)
-    else:
-        raise Exception("Unrecognized netlist file: " + netlist_filename)
+def build_walks(netlist_filename):
+    netlists, _, _ = load_packed_file(netlist_filename)
+    nx_g = build_graph(netlists)
     p = 0.6
     q = 1
     num_walks = 15
@@ -195,13 +190,6 @@ if __name__ == "__main__":
     if len(argv) != 2:
         print("Usage:", argv[0], "<netlist_filename>", file=sys.stderr)
         exit(1)
-    if "cgra" in options:
-        mode = "cgra"
-    elif "fpga" in options:
-        mode = "fpga"
-    else:
-        print("Please indicate either -cgra or -fpga", file=sys.stderr)
-        exit(1)
     filename = argv[1]
     emb_file = filename.replace(".packed", ".emb")
     if os.path.isfile(emb_file):
@@ -211,4 +199,4 @@ if __name__ == "__main__":
     seed = 2
     random.seed(seed)
     np.random.seed(seed)
-    build_walks(filename, mode)
+    build_walks(filename)
