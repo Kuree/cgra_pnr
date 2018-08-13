@@ -17,7 +17,7 @@ class Router:
 
     def __init__(self, cgra_filename,
                  board_meta, packed_filename, placement_filename,
-                 avoid_congestion=True):
+                 avoid_congestion=True, fold_reg=True):
         self.board_meta = board_meta
         self.layout_board = board_meta[0]
         netlists, _, id_to_name, = load_packed_file(packed_filename)
@@ -36,6 +36,9 @@ class Router:
         self.board_size = (width, height)
         # TODO: fix this after parsing routing info from the arch
         self.channel_width = 5
+
+        # whether to fold registers when do routing
+        self.fold_reg = fold_reg
 
         # result
         self.route_result = {}
@@ -108,7 +111,7 @@ class Router:
                                                              routing_resource,
                                                              pos)
         if port not in routing_resource[pos]["port"]:
-            assert (port == "reg")
+            assert (self.fold_reg and port == "reg")
             port_chan = set()
             for _, conn_out in route_resource_current_pos:
                 if conn_out[-1] == chan and conn_out[0] == bus:
@@ -240,7 +243,9 @@ class Router:
             else:
                 dir_out_set = set()
                 for _, conn_out in route_resource_current_pos:
-                    if conn_out[-2] != track_in[-2]:
+                    if conn_out[-2] != track_in[-2] and \
+                            conn_out[0] == track_in[0] and \
+                            conn_out[-1] == track_in[-1]:
                         dir_out_set.add(conn_out)
                 if dir_out not in dir_out_set:
                     continue
@@ -267,7 +272,7 @@ class Router:
         route_resource = routing_resource[current_point]["route_resource"]
         sink_resource = routing_resource[current_point]["port"]
         if port not in sink_resource:
-            assert(port == "reg")
+            assert(self.fold_reg and port == "reg")
             for i in range(4):
                 dir_out = (bus, 1, i, chan)
                 if (dir_in, dir_out) in route_resource:
@@ -279,6 +284,10 @@ class Router:
             operand_channels = [entry for entry in operand_channels
                                 if entry[-1] == chan]
 
+            route_resource = [entry for entry in route_resource
+                                  if entry[-1][-1] == chan and \
+                                  entry[-1][0] == bus]
+
             if self.layout_board[current_point[1]][current_point[0]] == "m" and \
                     dir_in[2] == 1:
                 # make the dir in as dir_out from the bottom tile
@@ -286,14 +295,13 @@ class Router:
             if dir_in in operand_channels:
                 return True, [dir_in, current_point, port]
 
-
             # need to determine if we can connect to a out bus
             # that is, in_sxtx -> out_sxtx
             #          out_sxts -> op
             for conn in operand_channels:
                 # the format in operand_channels is out -> in
-                conn_chann = (dir_in, conn)
-                if conn_chann in route_resource:
+                conn_chan = (dir_in, conn)
+                if conn_chan in route_resource:
                     return True, [dir_in, conn, current_point, port]
             if is_self_connection:
                 # because we already remove the routing resource from the
@@ -427,7 +435,11 @@ class Router:
 
     def route(self):
         print("INFO: Performing greedy BFS/A* routing")
-        linked_nets, reg_nets = self.group_reg_nets(self.netlists)
+        if self.fold_reg:
+            linked_nets, reg_nets = self.group_reg_nets(self.netlists)
+        else:
+            linked_nets = {}
+            reg_nets = set()
         net_list_ids = self.sort_netlist_id_for_io(self.netlists)
         for net_id in net_list_ids:
             if net_id in reg_nets:
@@ -504,12 +516,21 @@ class Router:
         src_pos = self.placement[src_id]
         # local routing resource
         routing_resource = self.copy_resource(routing_resource)
+        # Keyi:
+        # because of the way it updates routing resource, the router is not
+        # allowed to re-visit a pos it's been used for routing. It's fine until
+        # we have a very complex net where there are lots of "semi-circles".
+        # *Solution*
+        # we can use pos_set to enforce the router won't go through it
         pos_set = set()
+        for (p_id, _) in dst_set:
+            pos_set.add(self.placement[p_id])
 
         while len(dst_set) > 0:
             dst_point = dst_set.pop(0)
             dst_id, dst_port = dst_point
             dst_pos = self.placement[dst_id]
+            pos_set.remove(dst_pos)
 
             # self loop prevention
             # this will happen if two operands share the same input
@@ -736,13 +757,13 @@ class Router:
                                                   chan)
                         if not available:
                             # we're doomed for this chan
-                            # consider to re-route?
+                            # re-route!
                             link.pop(p, None)
                             depth.pop(p, None)
                         else:
                             link[(p, dst_port)] = pin_info
-                    terminate = True
-                    break
+                            terminate = True
+                            break
                 else:
                     working_set.append(entry)
 
@@ -758,6 +779,8 @@ class Router:
                 if port != "reg":
                     ports = routing_resource[p]["port"][port]
                     ports.remove(dir_out)
+                else:
+                    assert self.fold_reg
                 # also remove the routing resource
                 res = self.get_route_resource(self.board_meta,
                                               routing_resource,
@@ -820,6 +843,7 @@ class Router:
                 # it's critical?
                 conn, pos, port = pin_info
                 if port == "reg":
+                    assert self.fold_reg
                     continue    # will be handled later
                 ports = routing_resource[pos]["port"][port]
                 if conn in ports:
