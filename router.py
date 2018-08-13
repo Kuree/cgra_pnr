@@ -10,6 +10,7 @@ import numpy as np
 from visualize import draw_board, draw_cell
 import matplotlib.pyplot as plt
 from util import parse_args, deepcopy
+from tqdm import tqdm
 
 
 class Router:
@@ -441,7 +442,7 @@ class Router:
             linked_nets = {}
             reg_nets = set()
         net_list_ids = self.sort_netlist_id_for_io(self.netlists)
-        for net_id in net_list_ids:
+        for net_id in tqdm(net_list_ids):
             if net_id in reg_nets:
                 continue
             net = self.netlists[net_id]

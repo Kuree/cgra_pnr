@@ -271,7 +271,8 @@ def parse_routing_result(routing_file):
 
 
 def generate_bitstream(board_filename, packed_filename, placement_filename,
-                       routing_filename, output_filename):
+                       routing_filename, output_filename,
+                       fold_reg=True):
     netlists, folded_blocks, id_to_name, = load_packed_file(packed_filename)
     g = build_graph(netlists)
     board_meta = arch.parse_cgra(board_filename, True)["CGRA"]
@@ -355,7 +356,8 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
             if index == 0:
                 assert (path_type == "src")
                 s, track_in = handle_src(entry[1], entry[2], tile_mapping,
-                                         board_layout)
+                                         board_layout,
+                                         fold_reg=fold_reg)
                 output_string += s
             else:
                 if path_type == "link":
@@ -367,7 +369,8 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
                 elif path_type == "sink":
                     s, track_in = handle_sink_entry(entry, track_in,
                                                     tile_mapping, board_layout,
-                                                    folded_blocks, placement)
+                                                    folded_blocks, placement,
+                                                    fold_reg=fold_reg)
                     output_string += s
                 else:
                     raise Exception("Unknown stage: " + path_type)
@@ -375,7 +378,8 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
         entry = path[-1]
         s, _ = handle_sink_entry(entry, track_in,
                                  tile_mapping, board_layout,
-                                 folded_blocks, placement)
+                                 folded_blocks, placement,
+                                 fold_reg=fold_reg)
         output_string += s
 
         output_string += "\n"
@@ -403,7 +407,7 @@ def make_track_string(pos, track, tile_mapping, board_layout, track_str=""):
 
 
 def handle_sink_entry(entry, track_in, tile_mapping, board_layout,
-                      folded_blocks, placement):
+                      folded_blocks, placement, fold_reg=True):
     if len(entry) == 4:
         s, track_in = handle_sink(entry[1], entry[2], entry[3],
                                   track_in,
@@ -413,6 +417,7 @@ def handle_sink_entry(entry, track_in, tile_mapping, board_layout,
                                   placement)
     elif len(entry) == 3:
         if entry[-1][-1] == "reg":
+            assert fold_reg
             s, track_in = handle_reg_sink(entry[1:], track_in, tile_mapping,
                                           board_layout)
         else:
@@ -486,13 +491,14 @@ def handle_link(conn1, conn2, pre_in, tile_mapping, board_layout, track_str=""):
     return result, track_in
 
 
-def handle_src(src, conn, tile_mapping, board_layout):
+def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
     src_pos = src[0]
     src_port = src[1]
     tile = tile_mapping[src_pos]
     if src_port == "out":
         src_port = "pe_out"
     elif src_port == "reg":
+        assert fold_reg
         return "", conn[1]
     track = "" if conn[0][0] == 16 else "b"
     start = "T{}_{}{}".format(tile, src_port, track)

@@ -15,6 +15,10 @@ if __name__ == "__main__":
     else:
         print("Please indicate either -cgra or -fpga", file=sys.stderr)
         exit(1)
+
+    fold_reg = True
+    if "no-reg-fold" in options:
+        fold_reg = False
     filename = argv[1]
     if mode == "cgra":
         packed = filename.replace(".json", ".packed")

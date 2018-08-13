@@ -5,3 +5,5 @@ matplotlib
 networkx
 lxml
 pillow
+# for progress bar
+tqdm

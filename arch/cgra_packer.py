@@ -50,9 +50,9 @@ def convert2netlist(connections):
     return netlists
 
 
-def save_packing_result(netlist_filename, pack_filename):
+def save_packing_result(netlist_filename, pack_filename, fold_reg=True):
     netlists, folded_blocks, id_to_name = \
-        parse_and_pack_netlist(netlist_filename)
+        parse_and_pack_netlist(netlist_filename, fold_reg=fold_reg)
 
     with open(pack_filename, "w+") as f:
         def tuple_to_str(t_val):
@@ -168,11 +168,12 @@ def load_packed_file(pack_filename):
     return netlists, folded_blocks, id_to_name
 
 
-def parse_and_pack_netlist(netlist_filename):
+def parse_and_pack_netlist(netlist_filename, fold_reg=True):
     connections, instances = read_netlist_json(netlist_filename)
     netlists, name_to_id = generate_netlists(connections, instances)
     before_packing = len(netlists)
-    netlists, folded_blocks = pack_netlists(netlists, name_to_id)
+    netlists, folded_blocks = pack_netlists(netlists, name_to_id,
+                                            fold_reg=fold_reg)
     after_packing = len(netlists)
     print("Before packing: num of netlists:", before_packing,
           "After packing: num of netlists:", after_packing)
@@ -254,7 +255,7 @@ def generate_netlists(connections, instances):
     return netlists, name_to_id
 
 
-def pack_netlists(raw_netlists, name_to_id):
+def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
     netlist_ids = set(raw_netlists.keys())
     folded_blocks = {}
     id_to_name = {}
@@ -374,12 +375,18 @@ def pack_netlists(raw_netlists, name_to_id):
                     net[index] = (blk_id, "data0")
 
     assert(len(changed_pe) == len(dont_absorb))
-    # last pass to change any un-folded register's port to "reg"
-    for net_id in raw_netlists:
-        net = raw_netlists[net_id]
-        for index, (blk_id, port) in enumerate(net):
-            if blk_id[0] == "r":
-                net[index] = (blk_id, "reg")
+    if fold_reg:
+        # last pass to change any un-folded register's port to "reg"
+        for net_id in raw_netlists:
+            net = raw_netlists[net_id]
+            for index, (blk_id, port) in enumerate(net):
+                if blk_id[0] == "r":
+                    net[index] = (blk_id, "reg")
+    else:
+        for net_id in raw_netlists:
+            net = raw_netlists[net_id]
+            for blk_id, port in net:
+                assert (port != "reg")
 
     return raw_netlists, folded_blocks
 

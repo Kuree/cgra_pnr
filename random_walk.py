@@ -4,6 +4,7 @@ import sys
 import random
 import subprocess
 import os
+from tqdm import tqdm
 from util import parse_args
 
 FILE_PATH = os.path.dirname(__file__)
@@ -51,7 +52,7 @@ class Graph():
         walks = []
         nodes = list(G.nodes())
         print('Walk iteration:')
-        for walk_iter in range(num_walks):
+        for walk_iter in tqdm(range(num_walks)):
                 print(str(walk_iter+1), '/', str(num_walks))
                 random.shuffle(nodes)
                 for node in nodes:
