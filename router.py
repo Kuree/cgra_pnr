@@ -502,7 +502,8 @@ class Router:
                   is_src=True):
         src_id, src_port = net[0]
         pin_port_set = determine_pin_ports(net,
-                                           self.placement)
+                                           self.placement,
+                                           fold_reg=self.fold_reg)
 
         path_length = 0
         if final_path is None:
@@ -950,7 +951,8 @@ if __name__ == "__main__":
         exit(1)
     vis_opt = "no-vis" not in options
     arch_file = argv[1]
-    meta = parse_cgra(arch_file)["CGRA"]
+    fold_reg = "no-reg-fold" not in options
+    meta = parse_cgra(arch_file, fold_reg=fold_reg)["CGRA"]
     r = Router(arch_file, meta, argv[2], argv[3])
     r.route()
     if vis_opt:

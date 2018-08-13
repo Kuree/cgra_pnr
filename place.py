@@ -81,11 +81,11 @@ def main():
         print("Please indicate either -fpga or -cgra", packed_filename,
               file=sys.stderr)
         exit(1)
-
+    fold_reg = "no-reg-fold" not in options
     if arch_type == "fpga":
         board_meta = parse_vpr(arch_filename)
     else:
-        board_meta = parse_cgra(arch_filename)
+        board_meta = parse_cgra(arch_filename, fold_reg=fold_reg)
     board_name, board_meta = board_meta.popitem()
     print("INFO: Placing for", board_name)
     num_dim, raw_emb = parse_emb(netlist_embedding)
@@ -190,11 +190,16 @@ def visualize_placement_cgra(board_pos, design_name):
     color_index = "imopr"
     scale = 30
     im, draw = draw_board(20, 20, scale)
+    pos_set = set()
     for blk_id in board_pos:
         pos = board_pos[blk_id]
         index = color_index.index(blk_id[0])
         color = color_palette[index]
+        if pos in pos_set:
+            pos = pos[0] + 0.5, pos[1]
         draw_cell(draw, pos, color, scale)
+
+        pos_set.add(pos)
     plt.imshow(im)
     plt.show()
 

@@ -160,8 +160,7 @@ def convert_cgra_type(tile_type):
         raise Exception("Unknown tile type " + tile_type)
 
 
-# TODO: need to merge it with routng resource when rewritten
-def parse_cgra(filename, use_tile_addr=False):
+def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
     root = etree.parse(filename)
     layout_name = "CGRA"
     # only one layout in CGRA files
@@ -175,8 +174,6 @@ def parse_cgra(filename, use_tile_addr=False):
         x = int(tile.attrib["col"])
         y = int(tile.attrib["row"])
         tile_addr = int(tile.attrib["tile_addr"], 16)
-        # TODO
-        # need to parse track info for routing
         blk_type = convert_cgra_type(tile_type)
         board_dict[(x, y)] = blk_type
         available_types.add(blk_type)
@@ -198,6 +195,10 @@ def parse_cgra(filename, use_tile_addr=False):
         blk_height[blk] = 1
         blk_capacity[blk] = 1
 
+    # fold reg
+    if fold_reg:
+        blk_capacity["p"] = 2
+
     # find pe margin
     pe_margin = -1
     for ii in range(min(height, height)):
@@ -209,7 +210,6 @@ def parse_cgra(filename, use_tile_addr=False):
         pe_margin = 2
 
     # id_remap
-    # used for legal placements
     id_remap = {"r": "p"}
 
     info = {"margin": pe_margin, "clb_type": "p", "arch_type": "cgra",
@@ -228,7 +228,7 @@ def parse_cgra(filename, use_tile_addr=False):
 
 
 def make_board(board_meta):
-    layout_board, blk_capacity, _, _ = board_meta
+    layout_board, _, blk_capacity, _ = board_meta
     height = len(layout_board)
     width = len(layout_board[0])
     capacity = 1
@@ -248,7 +248,8 @@ def make_board(board_meta):
     return board
 
 
-def generate_is_cell_legal(board_meta):
+def generate_is_cell_legal(board_meta, fold_reg=True):
+    """fold_reg is only valid for CGRA"""
     layout_board, blk_height, blk_capacity, board_info = board_meta
     height = len(layout_board)
     width = len(layout_board[0])
@@ -274,6 +275,12 @@ def generate_is_cell_legal(board_meta):
                 capacity = blk_capacity[blk_type]
                 if len(board[y][x]) >= capacity:
                     return False
+                if fold_reg:
+                    if len(board[y][x]) == 1:
+                        old_blk = board[y][x][0]
+                        if old_blk[0] == blk[0]:
+                            # cannot have the same type
+                            return False
                 if blk_height[blk_type] != 1:
                     b_height = blk_height[blk_type]
                     y_min = max(0, y - b_height)
@@ -300,7 +307,6 @@ def generate_place_on_board(board_meta):
                 raise Exception("Illegal position for " + blk_id + " at " + \
                                 str(pos))
             board[y][x].append(blk_id)
-            print(board[y][x])
         else:
             if board[y][x] == blk_id:
                 return

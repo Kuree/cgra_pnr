@@ -46,6 +46,7 @@ class SADetailedPlacer(Annealer):
         b = self.random.choice(self.state.keys())
         pos_a = self.state[a]
         pos_b = self.state[b]
+        # try to move one to another
         if self.is_legal(pos_a, b, self.board) and \
            self.is_legal(pos_b, a, self.board):
             # swap

@@ -309,7 +309,6 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
         tile = tile_mapping[pos]
 
         # find out the PE type
-        # TODO: Fix reg only PE tiles
         tile_op, print_order = get_tile_op(instance)
         if tile_op is None:
             continue
@@ -606,11 +605,13 @@ def get_tile_op(instance):
     return op, print_order
 
 
-def determine_pin_ports(net, placement):
+def determine_pin_ports(net, placement, fold_reg=True):
     pin_directions = set()
     # FIXME use the naming in the CGRA description file
     allowed_initial_ports = {"data0", "data1", "bit0", "bit1", "bit2", "wen",
                              "reg"}
+    if not fold_reg:
+        allowed_initial_ports.remove("reg")
     for index, (blk_id, port) in enumerate(net):
         if index == 0 and port not in allowed_initial_ports:
             # it's a a source
