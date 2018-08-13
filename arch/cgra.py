@@ -454,6 +454,8 @@ def handle_sink(self_conn, conn, dst, track_in,
     # need to find out if it's a folded register or not
     pos_to_id = {}
     for blk_id in placement:
+        if blk_id[0] == "r":
+            continue
         pos = placement[blk_id]
         assert (pos not in pos_to_id)
         pos_to_id[pos] = blk_id

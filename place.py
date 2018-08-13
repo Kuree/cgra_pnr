@@ -117,9 +117,9 @@ def main():
     #board_pos.update(macro_result)
 
     # only use deblock when we have lots of clusters
-    if len(clusters) > 2:
-        board_pos = perform_deblock_placement(board, board_pos, fixed_blk_pos,
-                                              netlists)
+    #if len(clusters) > 2:
+    #    board_pos = perform_deblock_placement(board, board_pos, fixed_blk_pos,
+    #                                          netlists)
 
     for blk_id in board_pos:
         pos = board_pos[blk_id]
@@ -139,15 +139,21 @@ def visualize_placement_cgra(board_pos, design_name):
     scale = 30
     im, draw = draw_board(20, 20, scale)
     pos_set = set()
-    for blk_id in board_pos:
+    blk_id_list = list(board_pos.keys())
+    blk_id_list.sort(key=lambda x: 1 if x[0] == "r" else 0)
+    for blk_id in blk_id_list:
         pos = board_pos[blk_id]
         index = color_index.index(blk_id[0])
         color = color_palette[index]
-        if pos in pos_set:
+        if blk_id[0] == "r":
+            assert pos not in pos_set
+            pos_set.add(pos)
             pos = pos[0] + 0.5, pos[1]
-        draw_cell(draw, pos, color, scale)
+            width_frac = 0.5
+        else:
+            width_frac = 1
+        draw_cell(draw, pos, color, scale, width_frac=width_frac)
 
-        pos_set.add(pos)
     plt.imshow(im)
     plt.show()
 

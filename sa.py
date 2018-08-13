@@ -9,7 +9,7 @@ import random
 # main class to perform simulated annealing within each cluster
 class SADetailedPlacer(Annealer):
     def __init__(self, blocks, available_pos, netlists, board,
-                 board_pos, is_legal=None, multi_thread=False):
+                 board_pos, is_legal=None, multi_thread=False, fold_reg=True):
         """Please notice that netlists has to be prepared already, i.e., replace
         the remote partition with a pseudo block.
         Also assumes that available_pos is the same size as blocks. If not,
@@ -19,14 +19,20 @@ class SADetailedPlacer(Annealer):
         self.blocks = blocks
         self.available_pos = available_pos
         self.netlists = netlists
-        self.board = board
         self.blk_pos = board_pos
-        assert (len(blocks) == len(available_pos))
+        self.board = board
+        if fold_reg:
+            assert (len(blocks) >= len(available_pos))
+        else:
+            assert (len(blocks) == len(available_pos))
         if is_legal is None:
-            self.is_legal = lambda pos, blk_id, board: True
+            if fold_reg:
+                self.is_legal = self.__is_legal_fold
+            else:
+                self.is_legal = lambda pos, blk_id, s: True
         else:
             self.is_legal = is_legal
-
+        self.fold_reg = fold_reg
         rand = random.Random()
         rand.seed(0)
         state = self.__init_placement()
@@ -35,23 +41,64 @@ class SADetailedPlacer(Annealer):
                           rand=rand)
 
     def __init_placement(self):
+        # filling in PE tiles first
         pos = list(self.available_pos)
+        num_pos = len(pos)
         state = {}
-        for idx, blk_id in enumerate(self.blocks):
-            state[blk_id] = pos[idx]
+        pe_blocks = [b for b in self.blocks if b[0] == "p"]
+        reg_blocks = [b for b in self.blocks if b not in pe_blocks]
+        total_blocks = pe_blocks + reg_blocks
+        assert (len(total_blocks) == len(self.blocks))
+        for index, blk_id in enumerate(total_blocks):
+            state[blk_id] = pos[index % num_pos]
         return state
 
+    @staticmethod
+    def __is_legal_fold(pos, blk, board):
+        # reverse index pos -> blk
+        assert (pos in board)   # it has to be since we're packing more stuff in
+        # we only allow capacity 2
+        if len(board[pos]) > 1:
+            return False
+        if board[pos][0][0] == blk[0]:
+            return False
+        return True
+
     def move(self):
-        a = self.random.choice(self.state.keys())
-        b = self.random.choice(self.state.keys())
-        pos_a = self.state[a]
-        pos_b = self.state[b]
-        # try to move one to another
-        if self.is_legal(pos_a, b, self.board) and \
-           self.is_legal(pos_b, a, self.board):
-            # swap
-            self.state[a] = pos_b
-            self.state[b] = pos_a
+        if self.fold_reg:
+            board = {}
+            for blk_id in self.state:
+                b_pos = self.state[blk_id]
+                if b_pos not in board:
+                    board[b_pos] = []
+                board[b_pos].append(blk_id)
+            blk = self.random.choice(self.state.keys())
+            blk_pos = self.state[blk]
+            pos = self.random.sample(self.available_pos, 1)[0]
+            if pos != blk_pos:
+                if self.is_legal(pos, blk, board):
+                    self.state[blk] = pos
+                else:
+                    # swap
+                    blks = board[pos]
+                    same_type_blocks = [b for b in blks if b[0] == blk[0]]
+                    assert (len(same_type_blocks) == 1)
+                    blk_swap = same_type_blocks[0]
+
+                    self.state[blk] = pos
+                    self.state[blk_swap] = blk_pos
+
+        else:
+            a = self.random.choice(self.state.keys())
+            b = self.random.choice(self.state.keys())
+            pos_a = self.state[a]
+            pos_b = self.state[b]
+            if self.is_legal(pos_a, b, self.board) and \
+                    self.is_legal(pos_b, a, self.board):
+                # swap
+                self.state[a] = pos_b
+                self.state[b] = pos_a
+
 
     def energy(self):
         """we use HPWL as the cost function"""
@@ -218,7 +265,8 @@ class DeblockAnnealer(Annealer):
 # main class to perform simulated annealing on each cluster
 class SAClusterPlacer(Annealer):
     def __init__(self, clusters, netlists, board, board_pos, board_info,
-                 is_legal=None, is_cell_legal=None, place_factor=6):
+                 is_legal=None, is_cell_legal=None, place_factor=6,
+                 fold_reg=True):
         """Notice that each clusters has to be a condensed node in a networkx graph
         whose edge denotes how many intra-cluster connections.
         """
@@ -244,6 +292,7 @@ class SAClusterPlacer(Annealer):
 
         self.squeeze_iter = 5
         self.place_factor = place_factor
+        self.fold_reg = fold_reg
 
         self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)
 
@@ -301,6 +350,12 @@ class SAClusterPlacer(Annealer):
         else:
             return x * y
 
+    def get_cluster_size(self, cluster):
+        if self.fold_reg:
+            return sum([1 for x in cluster if x[0] == "p"])
+        else:
+            return len(cluster)
+
     def __init_placement(self, rand):
         state = {}
         initial_x = self.clb_margin
@@ -310,7 +365,7 @@ class SAClusterPlacer(Annealer):
         col = 0
         for cluster_id in self.clusters:
             cluster = self.clusters[cluster_id]
-            cluster_size = len(cluster)
+            cluster_size = self.get_cluster_size(cluster)
             square_size = int(np.ceil(cluster_size ** 0.5))
             self.square_sizes[cluster_id] = square_size
             # put it on the board. notice that most of the blocks will span
@@ -502,7 +557,7 @@ class SAClusterPlacer(Annealer):
         # make each position sets
         for cluster_id in cluster_pos:
             pos = cluster_pos[cluster_id]
-            cluster_size = len(self.clusters[cluster_id])
+            cluster_size = self.get_cluster_size(self.clusters[cluster_id])
             square_size = self.square_sizes[cluster_id]
             bbox = self.compute_bbox(pos, square_size)
             # find four corners and compare which one is closer
@@ -555,7 +610,8 @@ class SAClusterPlacer(Annealer):
                     cluster_cells[cluster_id2])
                 overlap_set = overlap_set.union(overlap)
 
-            assert (len(cluster_cells[cluster_id1]) == len(self.clusters[cluster_id1]))
+            assert (len(cluster_cells[cluster_id1]) ==
+                    self.get_cluster_size(self.clusters[cluster_id1]))
             # boolean board
             bboard = self.__get_bboard(cluster_cells, False)
             self.deoverlap(cluster_cells, cluster_id1, overlap_set)
@@ -569,10 +625,12 @@ class SAClusterPlacer(Annealer):
                     cluster_cells[cluster_id1].remove(old_cell)
                     cluster_cells[cluster_id1].add(cell)
                     assert(not bboard[cell[1]][cell[0]])
-            assert (len(cluster_cells[cluster_id1]) == len(self.clusters[cluster_id1]))
+            assert (len(cluster_cells[cluster_id1]) ==
+                    self.get_cluster_size(self.clusters[cluster_id1]))
 
         for i in self.clusters:
-            assert(len(cluster_cells[i]) == len(self.clusters[i]))
+            assert(len(cluster_cells[i]) ==
+                   self.get_cluster_size(self.clusters[i]))
         # check no overlap
         self.__get_bboard(cluster_cells)
 
@@ -695,7 +753,7 @@ class SAClusterPlacer(Annealer):
             else:
                 effort_count = 0
             old_overlap_set = len(overlap_set)
-        assert (len(cluster_cells[cluster_id]) == len(
+        assert (len(cluster_cells[cluster_id]) == self.get_cluster_size(
             self.clusters[cluster_id]))
 
 

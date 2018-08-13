@@ -35,12 +35,13 @@ def draw_board(width=60, height=60, scale=None):
     return im, draw
 
 
-def draw_cell(draw, pos, color, scale=None):
+def draw_cell(draw, pos, color, scale=None, width_frac=1):
     if scale is None:
         scale = SCALE_FACTOR
     size = scale - 1
+    width = size * width_frac
     x, y = pos
-    draw.rectangle((x * scale + 1, y * scale + 1, x * scale + size,
+    draw.rectangle((x * scale + 1, y * scale + 1, x * scale + width,
                     y * scale + size), fill=color)
 
 
