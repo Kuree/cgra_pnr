@@ -1,4 +1,4 @@
-PnR
+CGRA PnR
 ---
 Generic place and route tool for CGRA/FPGA.
 ## Getting started
@@ -12,8 +12,10 @@ $ pip install -r requirements.txt
 ```
 ### Usage
 ```
-$ ./scripts/pnr_flow.sh <cgra_info.txt> <mapped_design.json>
+$ ./scripts/pnr_flow.sh [-no-reg-fold] <cgra_info.txt> <mapped_design.json>
 ```
+`-no-reg-fold` optimizes for the routing resources as it turns some registers into PE tiles. Without using `-no-reg-fold` we will have about 15% area reduction, but it uses significantly more routing resource, based on the current CGRA design. So given timing information as well as more flexible hardware generation in the future, this option needs to be used on a case by case basis.
+
 Files created in the same directory as `<mapped_design.json>`:
 + `<mapped_design.n2v>`: random walk on the star-expanded netlist graph
 + `<mapped_design.emb>`: netlist embedding computed by `word2vec`
