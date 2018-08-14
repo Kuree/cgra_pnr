@@ -296,8 +296,8 @@ def generate_is_cell_legal(board_meta, fold_reg=True):
     return is_legal
 
 
-def generate_place_on_board(board_meta):
-    is_legal = generate_is_cell_legal(board_meta)
+def generate_place_on_board(board_meta, fold_reg=True):
+    is_legal = generate_is_cell_legal(board_meta, fold_reg=fold_reg)
 
     def place_on_board(board, blk_id, pos):
         x, y = pos

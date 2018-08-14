@@ -432,9 +432,11 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
             for index, (b_id, port) in enumerate(net):
                 if b_id == blk_id and port == "in":
                     # always fold at data0 port
-                    if fold_reg:
-                        blk_id = "p" + blk_id[1:]
-                    net[index] = (blk_id, "data0")
+                    b_id = "p" + b_id[1:]
+                    net[index] = (b_id, "data0")
+                elif b_id == blk_id and port == "out":
+                    b_id = "p" + b_id[1:]
+                    net[index] = (b_id, "out")
 
     if fold_reg:
         # last pass to change any un-folded register's port to "reg"
@@ -443,9 +445,9 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
             for index, (blk_id, port) in enumerate(net):
                 if blk_id[0] == "r" and blk_id not in changed_pe:
                     net[index] = (blk_id, "reg")
-                elif blk_id[0] == "r" and blk_id in changed_pe and port == "out":
-                    blk_id = "p" + blk_id[1:]
-                    net[index] = (blk_id, "out")
+                #elif blk_id[0] == "r" and blk_id in changed_pe and port == "out":
+                #    blk_id = "p" + blk_id[1:]
+                #    net[index] = (blk_id, "out")
     else:
         assert (len(changed_pe) == len(dont_absorb))
         for net_id in raw_netlists:

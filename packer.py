@@ -22,5 +22,5 @@ if __name__ == "__main__":
     filename = argv[1]
     if mode == "cgra":
         packed = filename.replace(".json", ".packed")
-        save_packing_result(filename, packed)
+        save_packing_result(filename, packed, fold_reg=fold_reg)
         print("saved to", packed)

@@ -18,9 +18,9 @@ from arch.cgra_packer import load_packed_file
 
 
 def detailed_placement(args):
-    clusters, cells, netlist, board, blk_pos = args
+    clusters, cells, netlist, board, blk_pos, fold_reg = args
     detailed = SADetailedPlacer(clusters, cells, netlist, board, blk_pos,
-                                multi_thread=True)
+                                multi_thread=True, fold_reg=fold_reg)
     #detailed.steps = 10
     detailed.anneal()
     return detailed.state
@@ -79,8 +79,8 @@ def main():
     print("INFO: Placing for", board_name)
     num_dim, raw_emb = parse_emb(netlist_embedding)
     board = make_board(board_meta)
-    place_on_board = generate_place_on_board(board_meta)
-    is_cell_legal = generate_is_cell_legal(board_meta)
+    place_on_board = generate_place_on_board(board_meta, fold_reg=fold_reg)
+    is_cell_legal = generate_is_cell_legal(board_meta, fold_reg=fold_reg)
 
     fixed_blk_pos = {}
     emb = {}
@@ -104,12 +104,13 @@ def main():
 
     centroids, cluster_cells, clusters = perform_global_placement(
         blks, data_x, emb, fixed_blk_pos, netlists, board, is_cell_legal,
-        board_meta[-1])
+        board_meta[-1], fold_reg=fold_reg)
 
     # anneal with each cluster
     board_pos = perform_detailed_placement(board, centroids,
                                            cluster_cells, clusters,
-                                           fixed_blk_pos, netlists)
+                                           fixed_blk_pos, netlists,
+                                           fold_reg)
 
     # do a macro placement
     #macro_result = macro_placement(board, board_pos, fixed_blk_pos, netlists,
@@ -228,7 +229,7 @@ def perform_deblock_placement(board, board_pos, fixed_blk_pos, netlists):
 
 
 def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
-                             is_cell_legal, board_info):
+                             is_cell_legal, board_info, fold_reg):
     # simple heuristics to calculate the clusters
     if len(emb) > 50:
         # TODO: fix this using kernel extraction
@@ -256,7 +257,8 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
             cluster_placer = SAClusterPlacer(clusters, netlists, board,
                                              fixed_blk_pos, place_factor=factor,
                                              is_cell_legal=is_cell_legal,
-                                             board_info=board_info)
+                                             board_info=board_info,
+                                             fold_reg=fold_reg)
             break
         except ClusterException as ex:
             num_clusters -= 1
@@ -269,7 +271,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
 
 
 def perform_detailed_placement(board, centroids, cluster_cells, clusters,
-                               fixed_blk_pos, netlists):
+                               fixed_blk_pos, netlists, fold_reg):
     board_pos = fixed_blk_pos.copy()
     map_args = []
     for c_id in cluster_cells:
@@ -283,7 +285,8 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
             node_id = "x" + str(i)
             pos = centroids[i]
             blk_pos[node_id] = pos
-        map_args.append((clusters[c_id], cells, new_netlist, board, blk_pos))
+        map_args.append((clusters[c_id], cells, new_netlist, board, blk_pos,
+                         fold_reg))
     pool = Pool(4)
     results = pool.map(detailed_placement, map_args)
     #detailed_placement(map_args[0])

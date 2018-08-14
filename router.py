@@ -914,7 +914,7 @@ if __name__ == "__main__":
         r.vis_routing_resource()
     r.compute_stats()
 
-    route_file = sys.argv[3].replace(".place", ".route")
+    route_file = argv[3].replace(".place", ".route")
 
     save_routing_result(r.route_result, route_file)
 
