@@ -1,6 +1,6 @@
 from __future__ import print_function
 import arch
-from cgra_packer import read_netlist_json, load_packed_file
+import cgra_packer
 import networkx as nx
 import random
 
@@ -273,7 +273,8 @@ def parse_routing_result(routing_file):
 def generate_bitstream(board_filename, packed_filename, placement_filename,
                        routing_filename, output_filename,
                        fold_reg=True):
-    netlists, folded_blocks, id_to_name, = load_packed_file(packed_filename)
+    netlists, folded_blocks, id_to_name, changed_pe =\
+        cgra_packer.load_packed_file(packed_filename)
     g = build_graph(netlists)
     board_meta = arch.parse_cgra(board_filename, True)["CGRA"]
     placement, _ = parse_placement(placement_filename)
@@ -282,7 +283,7 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
     board_layout = board_meta[0]
     # FIXME
     netlist_filename = packed_filename.replace(".packed", ".json")
-    connections, instances = read_netlist_json(netlist_filename)
+    connections, instances = cgra_packer.read_netlist_json(netlist_filename)
 
     output_string = ""
 
@@ -309,10 +310,11 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
         tile = tile_mapping[pos]
 
         # find out the PE type
-        tile_op, print_order = get_tile_op(instance)
+        tile_op, print_order = get_tile_op(instance, blk_id, changed_pe)
         if tile_op is None:
             continue
-        pins = get_tile_pins(blk_id, tile_op, folded_blocks, instances)
+        pins = get_tile_pins(blk_id, tile_op, folded_blocks, instances,
+                             changed_pe)
 
         # parse pins from the packing
 
@@ -531,7 +533,7 @@ def get_const_value(instance):
     return None
 
 
-def get_tile_pins(blk_id, op, folded_block, instances):
+def get_tile_pins(blk_id, op, folded_block, instances, changed_pe):
     # TODO: Fix this using CGRA info
     if op == "mem":
         return None
@@ -560,13 +562,13 @@ def get_tile_pins(blk_id, op, folded_block, instances):
                 index = int(port[-1])
                 assert(pin_name is not None)
                 pins[index] = pin_name
-        if blk_id[0] == "r":
+        if blk_id in changed_pe:
             pins[0] = "reg"
             pins[1] = "const0_0"
         return tuple(pins)
 
 
-def get_tile_op(instance):
+def get_tile_op(instance, blk_id, changed_pe):
     if "genref" not in instance:
         assert ("modref" in instance)
         assert (instance["modref"] == "cgralib.BitIO")
@@ -574,7 +576,10 @@ def get_tile_op(instance):
     pe_type = instance["genref"]
     if pe_type == "coreir.reg":
         # reg tile, reg in and reg out
-        return None, None
+        if blk_id in changed_pe:
+            return "add", 0
+        else:
+            return None, None
     elif pe_type == "cgralib.Mem":
         op = "mem_" + str(instance["modargs"]["depth"][-1])
         print_order = 3
@@ -643,3 +648,62 @@ def prune_netlist(raw_netlist):
         new_netlist[net_id] = new_net
     return new_netlist
 
+
+def group_reg_nets(netlists):
+    net_id_to_remove = set()
+    linked_nets = {}
+
+    reg_srcs = {}
+    reg_srcs_nets = set()
+    # first pass to find any nets whose sources are a reg
+    for net_id in netlists:
+        net = netlists[net_id]
+        if net[0][0][0] == "r":
+            reg_id = net[0][0]
+            reg_srcs[reg_id] = net_id
+            reg_srcs_nets.add(net_id)
+            # also means we have to remove it from the main netlists
+            net_id_to_remove.add(net_id)
+
+    # Keyi:
+    # because a reg cannot drive more than one wire (otherwise they will be
+    # merged together at the first place), it's safe to assume there is an
+    # one-to-one relation between src -> reg -> other wire. However, because
+    # it is possible to have reg (src) -> reg (sink) and both of them are
+    # unfolded, we need to create a list of nets in order that's going to be
+    # merged into the main net.
+
+    def squash_net(netlists, src_id):
+        result = [src_id]
+        net = netlists[src_id][1:]
+        for blk_id, _ in net:
+            if blk_id[0] == "r":
+                # found another one
+                next_id = reg_srcs[blk_id]
+                result += squash_net(netlists, next_id)
+        return result
+
+    resolved_net = set()
+    for reg_id in reg_srcs:
+        r_net_id = reg_srcs[reg_id]
+        if r_net_id in resolved_net:
+            continue
+        # search for the ultimate src
+        reg = netlists[r_net_id][0][0]  # id for that reg
+        for net_id in netlists:
+            if net_id in reg_srcs_nets:
+                continue
+            net = netlists[net_id]
+            for blk_id, _ in net:
+                if blk_id == reg:
+                    # found the ultimate src
+                    # now do a squash to obtain the set of all nets
+                    merged_nets = squash_net(netlists, r_net_id)
+                    for m_id in merged_nets:
+                        resolved_net.add(m_id)
+                    linked_nets[net_id] = merged_nets
+
+    # make sure we've merged every nets
+    assert(len(resolved_net) == len(net_id_to_remove))
+
+    return linked_nets, net_id_to_remove

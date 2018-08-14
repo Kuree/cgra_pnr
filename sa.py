@@ -33,6 +33,24 @@ class SADetailedPlacer(Annealer):
         else:
             self.is_legal = is_legal
         self.fold_reg = fold_reg
+
+        # figure out which position on which regs cannot be on the top
+
+        self.reg_no_pos = {}
+        if fold_reg:
+            for net_id in netlists:
+                net = netlists[net_id]
+                for blk in net:
+                    # we only care about the wire it's driving
+                    if blk[0] == "r" and blk in self.blocks:
+                        if blk not in self.reg_no_pos:
+                            self.reg_no_pos[blk] = set()
+                        for bb in net:
+                            if bb == blk:
+                                continue
+                            if bb in self.blocks:
+                                self.reg_no_pos[blk].add(bb)
+
         rand = random.Random()
         rand.seed(0)
         state = self.__init_placement()
@@ -47,14 +65,67 @@ class SADetailedPlacer(Annealer):
         state = {}
         pe_blocks = [b for b in self.blocks if b[0] == "p"]
         reg_blocks = [b for b in self.blocks if b not in pe_blocks]
+        # make sure there is enough space
+        assert (max(len(pe_blocks), len(reg_blocks) < len(pos)))
         total_blocks = pe_blocks + reg_blocks
         assert (len(total_blocks) == len(self.blocks))
-        for index, blk_id in enumerate(total_blocks):
-            state[blk_id] = pos[index % num_pos]
+        board = {}
+        pos_index = 0
+        index = 0
+        while index < len(total_blocks):
+            blk_id = total_blocks[index]
+            new_pos = pos[pos_index % num_pos]
+            pos_index += 1
+            if new_pos not in board:
+                board[new_pos] = []
+            if len(board[new_pos]) > 1:
+                continue
+            if blk_id[0] == "p":
+                if len(board[new_pos]) > 0 and board[new_pos][0][0] == "p":
+                    continue
+                # make sure we're not putting it in the reg net
+                elif len(board[new_pos]) > 0 and board[new_pos][0][0] == "r":
+                    reg = board[new_pos][0]
+                    if reg in self.reg_no_pos and \
+                            blk_id in self.reg_no_pos[reg]:
+                        continue
+                board[new_pos].append(blk_id)
+                state[blk_id] = new_pos
+                index += 1
+            else:
+                if len(board[new_pos]) > 0 and board[new_pos][0][0] == "r":
+                    continue
+                    # make sure we're not putting it in the reg net
+                elif len(board[new_pos]) > 0 and board[new_pos][0][0] == "p":
+                    p_block = board[new_pos][0]
+                    if blk_id in self.reg_no_pos and \
+                            p_block in self.reg_no_pos[blk_id]:
+                        continue
+                board[new_pos].append(blk_id)
+                state[blk_id] = new_pos
+                index += 1
         return state
 
-    @staticmethod
-    def __is_legal_fold(pos, blk, board):
+    def __reg_net(self, pos, blk, board):
+        # the board will always be occupied
+        # this one doesn't check if the board if over populated or not
+        if blk[0] == "p":
+            reg = [x for x in board[pos] if x[0] == "r"]
+            assert (len(reg) < 2)
+            if len(reg) == 1:
+                reg = reg[0]
+                if reg in self.reg_no_pos and blk in self.reg_no_pos[reg]:
+                    return False
+        else:
+            pe = [x for x in board[pos] if x[0] == "p"]
+            assert (len(pe) < 2)
+            if len(pe) == 1:
+                pe = pe[0]
+                if blk in self.reg_no_pos and pe in self.reg_no_pos[blk]:
+                    return False
+        return True
+
+    def __is_legal_fold(self, pos, blk, board):
         # reverse index pos -> blk
         assert (pos in board)   # it has to be since we're packing more stuff in
         # we only allow capacity 2
@@ -62,7 +133,8 @@ class SADetailedPlacer(Annealer):
             return False
         if board[pos][0][0] == blk[0]:
             return False
-        return True
+        # disallow the reg net
+        return self.__reg_net(pos, blk, board)
 
     def move(self):
         if self.fold_reg:
@@ -82,11 +154,12 @@ class SADetailedPlacer(Annealer):
                     # swap
                     blks = board[pos]
                     same_type_blocks = [b for b in blks if b[0] == blk[0]]
-                    assert (len(same_type_blocks) == 1)
-                    blk_swap = same_type_blocks[0]
-
-                    self.state[blk] = pos
-                    self.state[blk_swap] = blk_pos
+                    if len(same_type_blocks) == 1:
+                        blk_swap = same_type_blocks[0]
+                        if self.__reg_net(pos, blk, board) and \
+                            self.__reg_net(blk_pos, blk_swap, board):
+                            self.state[blk] = pos
+                            self.state[blk_swap] = blk_pos
 
         else:
             a = self.random.choice(self.state.keys())
@@ -352,7 +425,9 @@ class SAClusterPlacer(Annealer):
 
     def get_cluster_size(self, cluster):
         if self.fold_reg:
-            return sum([1 for x in cluster if x[0] == "p"])
+            p_len = sum([1 for x in cluster if x[0] == "p"])
+            r_len = sum([1 for x in cluster if x[0] == "r"])
+            return max(p_len, r_len)
         else:
             return len(cluster)
 

@@ -3,12 +3,13 @@ This tool designed to pack as much as possible for CGRA, yet gives placer
 and router flexibility to choose their algorithm.
 
 Because the current CGRA flow does not have packing tools. This might be the
-very first packing tools for AHA group
+very first packing/clustering tools for AHA group
 """
 from __future__ import print_function
 import sys
 import json
 import os
+import cgra
 
 
 def convert2netlist(connections):
@@ -50,9 +51,24 @@ def convert2netlist(connections):
     return netlists
 
 
+def rename_id_changed(id_to_name, changed_pe):
+    new_changed_pe = set()
+    for blk_id in changed_pe:
+        # need to make sure ID to name is correct
+        blk_name = id_to_name.pop(blk_id, None)
+        assert (blk_name is not None)
+        new_blk_id = "p" + blk_id[1:]
+        id_to_name[new_blk_id] = blk_name
+        new_changed_pe.add(new_blk_id)
+    changed_pe.clear()
+    changed_pe.update(new_changed_pe)
+
+
 def save_packing_result(netlist_filename, pack_filename, fold_reg=True):
-    netlists, folded_blocks, id_to_name = \
+    netlists, folded_blocks, id_to_name, changed_pe = \
         parse_and_pack_netlist(netlist_filename, fold_reg=fold_reg)
+
+    rename_id_changed(id_to_name, changed_pe)
 
     with open(pack_filename, "w+") as f:
         def tuple_to_str(t_val):
@@ -83,6 +99,12 @@ def save_packing_result(netlist_filename, pack_filename, fold_reg=True):
         ids = list(id_to_name.keys())
         ids.sort(key=lambda x: int(x[1:]))
         for blk_id in ids:
+            f.write(str(blk_id) + ": " + id_to_name[blk_id] + "\n")
+
+        f.write("\n")
+        # registers that have been changed to PE
+        f.write("Changed to PE:\n")
+        for blk_id in changed_pe:
             f.write(str(blk_id) + ": " + id_to_name[blk_id] + "\n")
 
 
@@ -165,15 +187,30 @@ def load_packed_file(pack_filename):
 
         line_num += 1
 
-    return netlists, folded_blocks, id_to_name
+    line_num = find_next_block(line_num)
+    line = remove_comment(lines[line_num])
+    assert (line == "Changed to PE:")
+    line_num += 1
+    changed_pe = set()
+    while line_num < len(lines):
+        line = remove_comment(lines[line_num])
+        if len(line) == 0:
+            break
+        blk_id, _ = line.split(":")
+        blk_id = blk_id.strip()
+        changed_pe.add(blk_id)
+
+        line_num += 1
+
+    return netlists, folded_blocks, id_to_name, changed_pe
 
 
 def parse_and_pack_netlist(netlist_filename, fold_reg=True):
     connections, instances = read_netlist_json(netlist_filename)
     netlists, name_to_id = generate_netlists(connections, instances)
     before_packing = len(netlists)
-    netlists, folded_blocks = pack_netlists(netlists, name_to_id,
-                                            fold_reg=fold_reg)
+    netlists, folded_blocks, changed_pe = pack_netlists(netlists, name_to_id,
+                                                        fold_reg=fold_reg)
     after_packing = len(netlists)
     print("Before packing: num of netlists:", before_packing,
           "After packing: num of netlists:", after_packing)
@@ -201,7 +238,7 @@ def parse_and_pack_netlist(netlist_filename, fold_reg=True):
                 regs.add(blk_id)
     print("PE:", len(pes), "IO:", len(ios), "MEM:", len(mems), "REG:",
           len(regs))
-    return netlists, folded_blocks, id_to_name
+    return netlists, folded_blocks, id_to_name, changed_pe
 
 
 def generate_netlists(connections, instances):
@@ -364,6 +401,29 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
                 # replace with new folded blocks
                 net[index] = folded_blocks[(blk_id, "out")]
 
+    # third-pass (if fold_reg)
+    # Keyi:
+    # we don't want situation where src -> reg -> reg - > reg -> sink happens.
+    # these mega-nets will burn the entire available track since it's not
+    # allowed to switch tracks with register folding.
+    # *Solution:*
+    # whenever there is a reg-> reg -> reg -> ..., burn a PE tile for the second
+    # reg. Hence it will be src -> reg -> pe -> reg -> pe
+    # as a result, you should not expect a size-two reg net list in the routing
+    # stage
+    if fold_reg:
+        # re-do the change_pe
+        changed_pe.clear()
+        linked_nets, _ = cgra.group_reg_nets(raw_netlists)
+        for net_id in linked_nets:
+            reg_nets = linked_nets[net_id]
+            if len(reg_nets) > 1:
+                for i in range(0, len(reg_nets), 2):
+                    reg_net_id = reg_nets[i]
+                    reg_src = raw_netlists[reg_net_id][0][0]
+                    changed_pe.add(reg_src)
+        pass
+
     for blk_id in changed_pe:
         print("Change", id_to_name[blk_id], "to a PE tile")
         # rewrite the nets
@@ -372,23 +432,36 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
             for index, (b_id, port) in enumerate(net):
                 if b_id == blk_id and port == "in":
                     # always fold at data0 port
+                    if fold_reg:
+                        blk_id = "p" + blk_id[1:]
                     net[index] = (blk_id, "data0")
 
-    assert(len(changed_pe) == len(dont_absorb))
     if fold_reg:
         # last pass to change any un-folded register's port to "reg"
         for net_id in raw_netlists:
             net = raw_netlists[net_id]
             for index, (blk_id, port) in enumerate(net):
-                if blk_id[0] == "r":
+                if blk_id[0] == "r" and blk_id not in changed_pe:
                     net[index] = (blk_id, "reg")
+                elif blk_id[0] == "r" and blk_id in changed_pe and port == "out":
+                    blk_id = "p" + blk_id[1:]
+                    net[index] = (blk_id, "out")
     else:
+        assert (len(changed_pe) == len(dont_absorb))
         for net_id in raw_netlists:
             net = raw_netlists[net_id]
             for blk_id, port in net:
                 assert (port != "reg")
 
-    return raw_netlists, folded_blocks
+    # sanity check the fold_reg, making sure there is no reg -> reg -> reg
+    # situation
+    if fold_reg:
+        linked_nets, _ = cgra.group_reg_nets(raw_netlists)
+        for net_id in linked_nets:
+            reg_nets = linked_nets[net_id]
+            assert (len(reg_nets) == 1)
+
+    return raw_netlists, folded_blocks, changed_pe
 
 
 def change_name_to_id(instances):

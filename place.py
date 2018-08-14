@@ -84,7 +84,7 @@ def main():
 
     fixed_blk_pos = {}
     emb = {}
-    raw_netlist, folded_blocks, id_to_name = \
+    raw_netlist, folded_blocks, id_to_name, changed_pe = \
         load_packed_file(packed_filename)
     netlists = prune_netlist(raw_netlist)
     special_blocks = set()
@@ -131,10 +131,10 @@ def main():
     basename_file = os.path.basename(placement_filename)
     design_name, _ = os.path.splitext(basename_file)
     if vis_opt:
-        visualize_placement_cgra(board_pos, design_name)
+        visualize_placement_cgra(board_pos, design_name, changed_pe)
 
 
-def visualize_placement_cgra(board_pos, design_name):
+def visualize_placement_cgra(board_pos, design_name, changed_pe):
     color_index = "imopr"
     scale = 30
     im, draw = draw_board(20, 20, scale)
@@ -145,6 +145,8 @@ def visualize_placement_cgra(board_pos, design_name):
         pos = board_pos[blk_id]
         index = color_index.index(blk_id[0])
         color = color_palette[index]
+        if blk_id in changed_pe:
+            color = color_palette[color_index.index("r")]
         if blk_id[0] == "r":
             assert pos not in pos_set
             pos_set.add(pos)
@@ -284,6 +286,7 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
         map_args.append((clusters[c_id], cells, new_netlist, board, blk_pos))
     pool = Pool(4)
     results = pool.map(detailed_placement, map_args)
+    #detailed_placement(map_args[0])
     pool.close()
     pool.join()
     for r in results:

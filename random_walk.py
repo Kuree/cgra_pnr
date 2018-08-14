@@ -160,7 +160,7 @@ def alias_draw(J, q):
 
 
 def build_walks(netlist_filename):
-    netlists, _, _ = load_packed_file(netlist_filename)
+    netlists, _, _, _ = load_packed_file(netlist_filename)
     nx_g = build_graph(netlists)
     p = 0.6
     q = 1
@@ -200,3 +200,4 @@ if __name__ == "__main__":
     random.seed(seed)
     np.random.seed(seed)
     build_walks(filename)
+    print()

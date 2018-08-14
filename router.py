@@ -1,5 +1,5 @@
 from __future__ import print_function, division
-from arch.cgra import parse_placement, save_routing_result
+from arch.cgra import parse_placement, save_routing_result, group_reg_nets
 from arch.cgra_packer import load_packed_file
 from arch.cgra import determine_pin_ports
 from arch.cgra_route import parse_routing_resource, build_routing_resource
@@ -9,7 +9,7 @@ import os
 import numpy as np
 from visualize import draw_board, draw_cell
 import matplotlib.pyplot as plt
-from util import parse_args, deepcopy, group_reg_nets
+from util import parse_args, deepcopy
 from tqdm import tqdm
 
 
@@ -21,7 +21,7 @@ class Router:
                  avoid_congestion=True, fold_reg=True):
         self.board_meta = board_meta
         self.layout_board = board_meta[0]
-        netlists, _, id_to_name, = load_packed_file(packed_filename)
+        netlists, _, id_to_name, _ = load_packed_file(packed_filename)
         self.id_to_name = id_to_name
         self.netlists = netlists
 
@@ -328,14 +328,16 @@ class Router:
         return res
 
     @staticmethod
-    def sort_netlist_id_for_io(netlist):
+    def sort_netlist_id_for_io(netlist, reg_nets):
         netlist_ids = list(netlist.keys())
 
         def sort(nets):
             for blk_id, _ in nets:
                 if blk_id[0] == "i":
                     return 0
-            return 1
+                elif blk_id in reg_nets:
+                    return 1
+            return 2
         netlist_ids.sort(key=lambda net_id: sort(netlist[net_id]))
         return netlist_ids
 
@@ -374,8 +376,6 @@ class Router:
         assert(len(net) == len(new_net))
         return new_net
 
-
-
     def route(self):
         print("INFO: Performing greedy BFS/A* routing")
         if self.fold_reg:
@@ -383,7 +383,7 @@ class Router:
         else:
             linked_nets = {}
             reg_nets = set()
-        net_list_ids = self.sort_netlist_id_for_io(self.netlists)
+        net_list_ids = self.sort_netlist_id_for_io(self.netlists, reg_nets)
         for net_id in tqdm(net_list_ids):
             if net_id in reg_nets:
                 continue
@@ -451,8 +451,11 @@ class Router:
         if final_path is None:
             final_path = []
             force_connect = False
+            final_path_index = 0
         else:
             force_connect = True
+            assert (len(final_path) == 1)
+            final_path_index = 1
         # this is used for rough route (no port control)
         # usefully when we have a net connected to two pins in a same
         # tile
@@ -544,7 +547,7 @@ class Router:
         if len(final_path) > 1 and path_length != self.MAX_PATH_LENGTH:
             # update routing resource
             self.update_routing_resource(routing_resource,
-                                         final_path)
+                                         final_path[final_path_index:])
             path_length = len(final_path)
         elif len(final_path) == 0 and path_length != self.MAX_PATH_LENGTH:
             raise Exception("no path found. unexpected error")
@@ -570,6 +573,10 @@ class Router:
             assert conn[1] == 0    # it's actually coming in
             return conn
         raise Exception("Unable to find track in")
+
+    @staticmethod
+    def is_sink(path_entry):
+        return isinstance(path_entry[-1], str)
 
     def route_reg_net(self, net, bus, chan, routing_resource,
                       main_path):
@@ -627,6 +634,12 @@ class Router:
         # reconnect to in -> out (reg)
         dir_in, pos, port = main_path[reg_index]
         final_path.pop(0)
+
+        # Keyi:
+        # More complications here
+        # if the reg is the same position as the connected blocks
+        # things will get very very tricky.
+        assert (not self.is_sink(final_path[0]))
         (p, dir_out), (_, conn_in) = final_path[0]
         # rewrite the first entry as the src format
         final_path[0] = [(pos, port, dir_out, conn_in)]
