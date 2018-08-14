@@ -314,7 +314,7 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
         if tile_op is None:
             continue
         pins = get_tile_pins(blk_id, tile_op, folded_blocks, instances,
-                             changed_pe)
+                             changed_pe, id_to_name, connections)
 
         # parse pins from the packing
 
@@ -532,40 +532,69 @@ def get_const_value(instance):
             return "const{0}_{0}".format(int_val)
     return None
 
+def get_lut_pins(instance):
+    assert ("genref" in instance and instance["genref"] == "cgralib.PE")
+    assert ("genargs" in instance and
+            instance["genargs"]["op_kind"][-1] == "bit")
+    assert ("modargs" in instance)
+    modargs = instance["modargs"]
+    bit0_value = modargs["bit0_value"][-1]
+    bit1_value = modargs["bit1_value"][-1]
+    bit2_value = modargs["bit2_value"][-1]
+    return int(bit0_value), int(bit1_value), int(bit2_value)
 
-def get_tile_pins(blk_id, op, folded_block, instances, changed_pe):
-    # TODO: Fix this using CGRA info
-    if op == "mem":
+
+def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
+                  id_to_name, connections):
+    instance_name = id_to_name[blk_id]
+    if op[:3] == "mem":
         return None
-    elif op == "lutFF":
-        return "const0", "const0", "const0"
+    if "lut" in op:
+        lut_pins = get_lut_pins(instances[instance_name])
+        pins = ["const{0}_{0}".format(i) for i in lut_pins]
+        assert len(pins) == 3
     else:
-        # ALU ops
-        if "lut" in op:
-            pins = ["wire", "wire", "wire"]
+        pins = [None, None]
+
+    # second pass to write wires
+    for net in connections:
+        for conn in net:
+            pin_name = conn.split(".")[0]
+            pin_port = ".".join(conn.split(".")[1:])
+            if pin_name == instance_name and "out" not in pin_port:
+                if pin_port != "in":
+                    index = int(pin_port[-1])
+                else:
+                    index = 0
+                pins[index] = "wire"
+
+    # third pass to determine the
+    for entry in folded_block:
+        entry_data = folded_block[entry]
+        if len(entry_data) == 2:
+            # reg folding
+            assert(entry[0][0] == "r")
+            b_id, port = entry_data
+            pin_name = "reg"
+        elif len(entry_data) == 3:
+            b_id, pin_name, port = entry_data
+            # it's constant
+            pin_name = get_const_value(instances[pin_name])
         else:
-            pins = ["wire", "wire"]
-        for entry in folded_block:
-            entry_data = folded_block[entry]
-            if len(entry_data) == 2:
-                # reg folding
-                assert(entry[0][0] == "r")
-                b_id, port = entry_data
-                pin_name = "reg"
-            elif len(entry_data) == 3:
-                b_id, pin_name, port = entry_data
-                # it's constant
-                pin_name = get_const_value(instances[pin_name])
-            else:
-                raise Exception("Unknown folded block data " + str(entry_data))
-            if b_id == blk_id:
-                index = int(port[-1])
-                assert(pin_name is not None)
-                pins[index] = pin_name
-        if blk_id in changed_pe:
-            pins[0] = "reg"
-            pins[1] = "const0_0"
-        return tuple(pins)
+            raise Exception("Unknown folded block data " + str(entry_data))
+        if b_id == blk_id:
+            index = int(port[-1])
+            assert(pin_name is not None)
+            pins[index] = pin_name
+    if blk_id in changed_pe:
+        pins[0] = "reg"
+        pins[1] = "const0_0"
+
+    # sanity check
+    for pin in pins:
+        assert (pin is not None)
+
+    return tuple(pins)
 
 
 def get_tile_op(instance, blk_id, changed_pe):
@@ -588,18 +617,11 @@ def get_tile_op(instance, blk_id, changed_pe):
     else:
         op = instance["genargs"]["op_kind"][-1]
         if op == "bit":
-            # and we have something called lut55 and lut88...
-            lut_type = instance["modargs"]["lut_value"][-1][3:]
-            if lut_type == "55":
-                op = "lut55"
-                print_order = 0
-                pass
-            elif lut_type == "88":
-                op = "lut88"
-                print_order = 0
-            else:
-                op = "lutFF"
+            lut_type = instance["modargs"]["lut_value"][-1][3:].lower()
+            print_order = 0
+            if lut_type == "3f":
                 print_order = 2
+            op = "lut" + lut_type.upper()
         elif op == "alu" or op == "combined":
             if "alu_op_debug" in instance["modargs"]:
                 op = instance["modargs"]["alu_op_debug"][-1]

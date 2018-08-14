@@ -28,7 +28,7 @@ def cluster_on_embedding(embedding_file):
         from os import sys, path
         sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
     num_clusters = 5
-    from arch.cgra import load_packed_file
+    from arch.cgra_packer import load_packed_file
     from arch.parser import parse_emb
     packed_file = embedding_file.replace(".emb", ".packed")
     _, folded_blocks, id_to_name = load_packed_file(packed_file)

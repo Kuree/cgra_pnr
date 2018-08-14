@@ -102,9 +102,11 @@ def main():
     for i in range(len(blks)):
         data_x[i] = emb[blks[i]]
 
+    num_of_kernels = get_num_clusters(id_to_name)
+
     centroids, cluster_cells, clusters = perform_global_placement(
         blks, data_x, emb, fixed_blk_pos, netlists, board, is_cell_legal,
-        board_meta[-1], fold_reg=fold_reg)
+        board_meta[-1], fold_reg=fold_reg, num_clusters=num_of_kernels)
 
     # anneal with each cluster
     board_pos = perform_detailed_placement(board, centroids,
@@ -228,13 +230,24 @@ def perform_deblock_placement(board, board_pos, fixed_blk_pos, netlists):
     return board_pos
 
 
+def get_num_clusters(id_to_name):
+    unique_names = set()
+    for blk_id in id_to_name:
+        blk_name = id_to_name[blk_id]
+        name = blk_name.split(".")[0]
+        name = name.split("$")[0]
+        unique_names.add(name)
+
+    count = [1 for name in unique_names if name[:2] == "lb" and
+             "lut" not in name]
+    return sum(count)
+
+
 def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
-                             is_cell_legal, board_info, fold_reg):
+                             is_cell_legal, board_info, fold_reg,
+                             num_clusters=None):
     # simple heuristics to calculate the clusters
-    if len(emb) > 50:
-        # TODO: fix this using kernel extraction
-        num_clusters = 5
-    else:
+    if num_clusters is None or num_clusters == 0:
         num_clusters = int(np.ceil(len(emb) / 40)) + 1
     factor = 6
     while True:     # this just enforce we can actually place it
