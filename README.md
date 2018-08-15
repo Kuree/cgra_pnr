@@ -1,10 +1,10 @@
-CGRA PnR
+CGRA PnR [![Build Status](https://travis-ci.org/Kuree/cgra_pnr.svg?branch=master)](https://travis-ci.org/Kuree/cgra_pnr)
 ---
 Generic place and route tool for CGRA/FPGA.
 ## Getting started
 ### Prerequisites
 + GCC 4.0.x and above
-+ Python 2.6+/Python 3.5+
++ Python 2.7+/Python 3.6+
 ### Install
 ```
 $ make

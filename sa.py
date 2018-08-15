@@ -162,8 +162,8 @@ class SADetailedPlacer(Annealer):
                             self.state[blk_swap] = blk_pos
 
         else:
-            a = self.random.choice(self.state.keys())
-            b = self.random.choice(self.state.keys())
+            a = self.random.sample(self.state.keys(), 1)[0]
+            b = self.random.sample(self.state.keys(), 1)[0]
             pos_a = self.state[a]
             pos_b = self.state[b]
             if self.is_legal(pos_a, b, self.board) and \
