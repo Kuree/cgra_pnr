@@ -86,10 +86,10 @@ class Router:
             Exception("direction error " + "{}->{}".format(src, dst))
 
         # if the current position is in the middle of a special
-        # FIXME: use the height to compute
-        if self.layout_board[y1][x1] is None and y1 > self.margin and \
-                self.layout_board[y1 - 1][x1] == "m":
-            direction += 4
+        # # FIXME: use the height to compute
+        # if self.layout_board[y1][x1] is None and y1 > self.margin and \
+        #         self.layout_board[y1 - 1][x1] == "m":
+        #     direction += 4
 
         return direction
 
@@ -170,10 +170,11 @@ class Router:
     def get_route_resource(board_meta, routing_resource, pos):
         # FIXME: use height for searching
         if pos not in routing_resource:
-            # FIXME: use height for searching
-            pos_fixed = (pos[0], pos[1] - 1)
-            assert(board_meta[0][pos_fixed[1]][pos_fixed[0]] == "m")
-            return routing_resource[pos_fixed]["route_resource"]
+            # # FIXME: use height for searching
+            # pos_fixed = (pos[0], pos[1] - 1)
+            # assert(board_meta[0][pos_fixed[1]][pos_fixed[0]] == "m")
+            # return routing_resource[pos_fixed]["route_resource"]
+            raise Exception("Illegal position")
         else:
             return routing_resource[pos]["route_resource"]
 
@@ -181,10 +182,11 @@ class Router:
     def get_port_resource(board_meta, routing_resource, pos):
         # FIXME: use height for searching
         if pos not in routing_resource:
-            # FIXME: use height for searching
-            pos_fixed = (pos[0], pos[1] - 1)
-            assert (board_meta[0][pos_fixed[1]][pos_fixed[0]] == "m")
-            return routing_resource[pos_fixed]["port"]
+            # # FIXME: use height for searching
+            # pos_fixed = (pos[0], pos[1] - 1)
+            # assert (board_meta[0][pos_fixed[1]][pos_fixed[0]] == "m")
+            # return routing_resource[pos_fixed]["port"]
+            raise Exception("Illegal position")
         else:
             return routing_resource[pos]["port"]
 
@@ -220,11 +222,11 @@ class Router:
         if pos in working_set:
             working_set.remove(pos)
 
-        # another override for mem tile jumping
-        # FIXME
-        if self.layout_board[pos[1]][pos[0]] == "m" and \
-                track_in[2] == 1:
-            track_in = (track_in[0], 1, 7, track_in[-1])
+        # # another override for mem tile jumping
+        # # FIXME
+        # if self.layout_board[pos[1]][pos[0]] == "m" and \
+        #         track_in[2] == 1:
+        #    track_in = (track_in[0], 1, 7, track_in[-1])
 
         for new_pos in working_set:
             out_direction = self.compute_direction(pos, new_pos)
@@ -237,9 +239,9 @@ class Router:
             in_direction = self.compute_direction(new_pos, pos)
             dir_in = (bus, 0, in_direction, chan)
 
-            if self.layout_board[pos[1]][pos[0]] == "m" and \
-                    dir_out[2] == 1:
-                dir_out = (dir_out[0], dir_out[1], 7, dir_out[-1])
+            # if self.layout_board[pos[1]][pos[0]] == "m" and \
+            #         dir_out[2] == 1:
+            #    dir_out = (dir_out[0], dir_out[1], 7, dir_out[-1])
             if not force_connect:
                 if (track_in, dir_out) not in route_resource_current_pos:
                     # can't make the turn
@@ -292,10 +294,10 @@ class Router:
                                   if entry[-1][-1] == chan and \
                                   entry[-1][0] == bus]
 
-            if self.layout_board[current_point[1]][current_point[0]] == "m" and \
-                    dir_in[2] == 1:
-                # make the dir in as dir_out from the bottom tile
-                dir_in = (bus, 1, 7, chan)
+            # if self.layout_board[current_point[1]][current_point[0]] == "m" and \
+            #         dir_in[2] == 1:
+            #     # make the dir in as dir_out from the bottom tile
+            #    dir_in = (bus, 1, 7, chan)
             if dir_in in operand_channels:
                 return True, [dir_in, current_point, port]
 
@@ -487,6 +489,12 @@ class Router:
 
                 if not available:
                     # failed to connect
+                    # give it a second try
+                    #link = self.amend_self_connect(src_pos, dst_port,
+                    #                               final_path, bus, chan,
+                    #                               pin_port_set,
+                    #                               routing_resource)
+                    #if (dst_pos, dst_port) not in link:
                     path_length = self.MAX_PATH_LENGTH
                     break
                 # just that it won't blow up the later logic
@@ -549,6 +557,15 @@ class Router:
 
         assert (path_length != 0)
         return path_length, final_path, routing_resource
+
+    def amend_self_connect(self, pos, dst_port, final_path, bus, chan,
+                           pin_ports, routing_resource):
+        """only useful when the out track has been used for previous routing"""
+        link = self.connect_two_points((pos, None), (pos, dst_port), bus, chan,
+                                       pin_ports, False, final_path, set(),
+                                       routing_resource)
+        return link
+
 
     @staticmethod
     def get_track_in_from_path(src_pos, path):
@@ -786,8 +803,7 @@ class Router:
                     if dir_in in port_conn:
                         port_conn.remove(dir_in)
             elif len(pin_info) == 3:
-                if not(isinstance(pin_info[-1], str)) and \
-                       not(isinstance(pin_info[-1], unicode)):
+                if not(isinstance(pin_info[-1], str)):
                     raise Exception("Unknown pin_info " + str(pin_info))
                 # no turn sink
                 # need to delete the port path
@@ -876,9 +892,9 @@ class Router:
                             un_used_16.add(conn1)
                     res = np.sum(len(un_used_16))
                     # mem tiles strike again!
-                    if self.layout_board[j][i] == "m" or \
-                            self.layout_board[j - 1][i] == "m":
-                        res /= 2
+                    # if self.layout_board[j][i] == "m" or \
+                    #         self.layout_board[j - 1][i] == "m":
+                    #     res /= 2
                     color = int(255 * res / 4 / self.channel_width)
                 draw_cell(draw, (i, j), color=(255 - color, 0, color),
                           scale=scale)

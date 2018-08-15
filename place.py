@@ -280,7 +280,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
             num_clusters -= 1
             factor = 4
 
-    #cluster_placer.steps = 10
+    #cluster_placer.steps = 2000
     cluster_placer.anneal()
     cluster_cells, centroids = cluster_placer.squeeze()
     return centroids, cluster_cells, clusters
@@ -305,7 +305,6 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
                          fold_reg))
     pool = Pool(4)
     results = pool.map(detailed_placement, map_args)
-    #detailed_placement(map_args[0])
     pool.close()
     pool.join()
     for r in results:

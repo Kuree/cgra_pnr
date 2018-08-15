@@ -4,6 +4,7 @@ from util import compute_hpwl, manhattan_distance
 from util import reduce_cluster_graph, compute_centroids
 import numpy as np
 import random
+import math
 
 
 # main class to perform simulated annealing within each cluster
@@ -64,7 +65,9 @@ class SADetailedPlacer(Annealer):
         num_pos = len(pos)
         state = {}
         pe_blocks = [b for b in self.blocks if b[0] == "p"]
+        pe_blocks.sort(key=lambda x: int(x[1:]))
         reg_blocks = [b for b in self.blocks if b not in pe_blocks]
+        reg_blocks.sort(key=lambda x: int(x[1:]))
         # make sure there is enough space
         assert (max(len(pe_blocks), len(reg_blocks) < len(pos)))
         total_blocks = pe_blocks + reg_blocks
@@ -144,9 +147,11 @@ class SADetailedPlacer(Annealer):
                 if b_pos not in board:
                     board[b_pos] = []
                 board[b_pos].append(blk_id)
-            blk = self.random.sample(self.state.keys(), 1)[0]
+            available_ids = list(self.state.keys())
+            available_pos = list(self.available_pos)
+            blk = self.random.choice(available_ids)
             blk_pos = self.state[blk]
-            pos = self.random.sample(self.available_pos, 1)[0]
+            pos = self.random.choice(available_pos)
             if pos != blk_pos:
                 if self.is_legal(pos, blk, board):
                     self.state[blk] = pos
@@ -162,8 +167,10 @@ class SADetailedPlacer(Annealer):
                             self.state[blk_swap] = blk_pos
 
         else:
-            a = self.random.sample(self.state.keys(), 1)[0]
-            b = self.random.sample(self.state.keys(), 1)[0]
+            ids = list(self.state.keys())
+            ids.sort(key=lambda x: int(x[1:]))
+            a = self.random.choice(ids)
+            b = self.random.choice(ids)
             pos_a = self.state[a]
             pos_b = self.state[b]
             if self.is_legal(pos_a, b, self.board) and \
@@ -522,14 +529,20 @@ class SAClusterPlacer(Annealer):
             result[cluster_id] = center
         return result
 
+    def random_choice(self, input_list):
+        index = input_list[int(self.random.random() * len(input_list))]
+        return input_list[index]
+
     def move(self):
-        ids = set(self.clusters.keys())
+        ids = list(self.clusters.keys())
+        ids.sort(key=lambda x: x)
         if len(ids) == 1:   # only one cluster
             direct_move = True
         else:
             direct_move = False
         if not direct_move:
-            id1, id2 = self.random.sample(ids, 2)
+            id1 = self.random_choice(ids)
+            id2 = self.random_choice(ids)
             pos1, pos2 = self.state[id1], self.state[id2]
             if self.is_legal(pos2, id1, self.state) and \
                     self.is_legal(pos1, id2, self.state):
@@ -538,10 +551,11 @@ class SAClusterPlacer(Annealer):
             else:
                 direct_move = True
         if direct_move:
-            id1 = self.random.sample(ids, 1)[0]
+            id1 = self.random_choice(ids)
             pos1 = self.state[id1]
             # try to move cluster a little bit
-            dx, dy = self.random.randrange(-2, 3), self.random.randrange(-2, 3)
+            dx = self.random.randrange(-2, 3)
+            dy = self.random.randrange(-2, 3)
             # only compute for cluster1
             new_pos = pos1[0] + dx, pos1[1] + dy
             if self.is_legal(new_pos, id1, self.state):

@@ -47,19 +47,16 @@ class Annealer(object):
     updates = 100
     copy_strategy = 'deepcopy'
     user_exit = False
-    save_state_on_exit = False
 
     # placeholders
     best_state = None
     best_energy = None
     start = None
 
-    def __init__(self, initial_state=None, load_state=None, multi_thread=False,
+    def __init__(self, initial_state=None, multi_thread=False,
                  rand=None):
         if initial_state is not None:
             self.state = self.copy_state(initial_state)
-        elif load_state:
-            self.load_state(load_state)
         else:
             raise ValueError('No valid values supplied for neither \
             initial_state nor load_state')
@@ -71,18 +68,9 @@ class Annealer(object):
         else:
             self.random = rand
 
-    def save_state(self, fname=None):
-        """Saves state to pickle"""
-        if not fname:
-            date = datetime.datetime.now().strftime("%Y-%m-%dT%Hh%Mm%Ss")
-            fname = date + "_energy_" + str(self.energy()) + ".state"
-        with open(fname, "wb") as fh:
-            pickle.dump(self.state, fh)
+        self.anneal_rand = random.Random()
+        self.anneal_rand.seed(0)
 
-    def load_state(self, fname=None):
-        """Loads state from pickle"""
-        with open(fname, 'rb') as fh:
-            self.state = pickle.load(fh)
 
     @abc.abstractmethod
     def move(self):
@@ -126,50 +114,6 @@ class Annealer(object):
                                'the self.copy_strategy "%s"' %
                                self.copy_strategy)
 
-    def update(self, *args, **kwargs):
-        """Wrapper for internal update.
-
-        If you override the self.update method,
-        you can chose to call the self.default_update method
-        from your own Annealer.
-        """
-        self.default_update(*args, **kwargs)
-
-    def default_update(self, step, T, E, acceptance, improvement):
-        """Default update, outputs to stderr.
-
-        Prints the current temperature, energy, acceptance rate,
-        improvement rate, elapsed time, and remaining time.
-
-        The acceptance rate indicates the percentage of moves since the last
-        update that were accepted by the Metropolis algorithm.  It includes
-        moves that decreased the energy, moves that left the energy
-        unchanged, and moves that increased the energy yet were reached by
-        thermal excitation.
-
-        The improvement rate indicates the percentage of moves since the
-        last update that strictly decreased the energy.  At high
-        temperatures it will include both moves that improved the overall
-        state and moves that simply undid previously accepted moves that
-        increased the energy by thermal excititation.  At low temperatures
-        it will tend toward zero as the moves that can decrease the energy
-        are exhausted and moves that would increase the energy are no longer
-        thermally accessible."""
-
-        elapsed = time.time() - self.start
-        if step == 0:
-           #  print(' Temperature        Energy    Accept   Improve     Elapsed   Remaining',
-           #       file=sys.stderr)
-            print('\r%12.5f  %12.2f                      %s            ' %
-                  (T, E, time_string(elapsed)), file=sys.stderr, end="\r")
-            sys.stderr.flush()
-        else:
-            remain = (self.steps - step) * (elapsed / step)
-            print('\r%12.5f  %12.2f  %7.2f%%  %7.2f%%  %s  %s\r' %
-                  (T, E, 100.0 * acceptance, 100.0 * improvement,
-                   time_string(elapsed), time_string(remain)), file=sys.stderr, end="\r")
-            sys.stderr.flush()
-
     def anneal(self):
         """Minimizes the energy of a system by simulated annealing.
 
@@ -196,9 +140,6 @@ class Annealer(object):
         self.best_state = self.copy_state(self.state)
         self.best_energy = E
         trials, accepts, improves = 0, 0, 0
-        if self.updates > 0:
-            updateWavelength = self.steps / self.updates
-            self.update(step, T, E, None, None)
 
         # Attempt moves to new states
         while step < self.steps and not self.user_exit:
@@ -208,10 +149,9 @@ class Annealer(object):
             E = self.energy()
             dE = E - prevEnergy
             trials += 1
-            if dE > 0.0 and math.exp(-dE / T) < self.random.random():
+            if dE > 0.0 and math.exp(-dE / T) < self.anneal_rand.random():
                 # Restore previous state
                 self.state = self.copy_state(prevState)
-                E = prevEnergy
             else:
                 # Accept new state and compare to best state
                 accepts += 1
@@ -222,19 +162,8 @@ class Annealer(object):
                 if E < self.best_energy:
                     self.best_state = self.copy_state(self.state)
                     self.best_energy = E
-            if self.updates > 1:
-                if (step // updateWavelength) > ((step - 1) // updateWavelength):
-                    self.update(
-                        step, T, E, accepts / trials, improves / trials)
-                    trials, accepts, improves = 0, 0, 0
-
-            # early termination
-            if T < 0.005 * E / len(self.state):
-                break
 
         self.state = self.copy_state(self.best_state)
-        if self.save_state_on_exit:
-            self.save_state()
 
         # Return best state and energy
         return self.best_state, self.best_energy
@@ -257,7 +186,7 @@ class Annealer(object):
                 self.move()
                 E = self.energy()
                 dE = E - prevEnergy
-                if dE > 0.0 and math.exp(-dE / T) < self.random.random():
+                if dE > 0.0 and math.exp(-dE / T) < self.anneal_rand.random():
                     self.state = self.copy_state(prevState)
                     E = prevEnergy
                 else:

@@ -65,9 +65,8 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
     input_io_locations = [(1, 2), (2, 1)]
     output_io_locations = [(18, 2), (2, 18)]
 
-    random.seed(0)
     blks = list(blks)
-    random.shuffle(blks)
+    blks.sort(key=lambda x: int(x[1:]))
 
     for blk_id in blks:
         if blk_id[0] == "i":
@@ -409,10 +408,10 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
 
 def make_track_string(pos, track, tile_mapping, board_layout, track_str=""):
     bus, is_out, side, chan = track
-    if board_layout[pos[1]][pos[0]] is None:
-        # TODO: USE MEM CAPACITY
-        assert(board_layout[pos[1] - 1][pos[0]] == "m")
-        pos = pos[0], pos[1] - 1
+    # if board_layout[pos[1]][pos[0]] is None:
+    #     # TODO: USE MEM CAPACITY
+    #    assert(board_layout[pos[1] - 1][pos[0]] == "m")
+    #    pos = pos[0], pos[1] - 1
     tile = tile_mapping[pos]
     result = "T{}_{}_s{}t{}{}{}".format(
         tile,
