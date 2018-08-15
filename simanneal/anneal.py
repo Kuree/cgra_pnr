@@ -9,13 +9,10 @@ from __future__ import print_function
 from __future__ import unicode_literals
 import abc
 import copy
-import datetime
 import math
-import pickle
 import random
-import signal
-import sys
 import time
+from tqdm import tqdm
 
 
 def round_figures(x, n):
@@ -53,15 +50,12 @@ class Annealer(object):
     best_energy = None
     start = None
 
-    def __init__(self, initial_state=None, multi_thread=False,
-                 rand=None):
+    def __init__(self, initial_state=None, rand=None):
         if initial_state is not None:
             self.state = self.copy_state(initial_state)
         else:
             raise ValueError('No valid values supplied for neither \
             initial_state nor load_state')
-        if not multi_thread:
-            signal.signal(signal.SIGINT, self.set_user_exit)
         if rand is None:
             self.random = random.Random()
             self.random.seed(0)
@@ -70,7 +64,6 @@ class Annealer(object):
 
         self.anneal_rand = random.Random()
         self.anneal_rand.seed(0)
-
 
     @abc.abstractmethod
     def move(self):
@@ -81,11 +74,6 @@ class Annealer(object):
     def energy(self):
         """Calculate state's energy"""
         pass
-
-    def set_user_exit(self, signum, frame):
-        """Raises the user_exit flag, further iterations are stopped
-        """
-        self.user_exit = True
 
     def set_schedule(self, schedule):
         """Takes the output from `auto` and sets the attributes
@@ -142,7 +130,7 @@ class Annealer(object):
         trials, accepts, improves = 0, 0, 0
 
         # Attempt moves to new states
-        while step < self.steps and not self.user_exit:
+        for step in tqdm(range(self.steps)):
             step += 1
             T = self.Tmax * math.exp(Tfactor * step / self.steps)
             self.move()

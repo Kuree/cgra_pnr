@@ -20,7 +20,7 @@ from arch.cgra_packer import load_packed_file
 def detailed_placement(args):
     clusters, cells, netlist, board, blk_pos, fold_reg = args
     detailed = SADetailedPlacer(clusters, cells, netlist, board, blk_pos,
-                                multi_thread=True, fold_reg=fold_reg)
+                                fold_reg=fold_reg)
     #detailed.steps = 10
     detailed.anneal()
     return detailed.state
@@ -28,8 +28,7 @@ def detailed_placement(args):
 
 def deblock_placement(args):
     clusters, cells, netlist, board, blk_pos = args
-    deblock = DeblockAnnealer(clusters, cells, netlist, blk_pos,
-                              multi_thread=True)
+    deblock = DeblockAnnealer(clusters, cells, netlist, blk_pos)
     #deblock.steps = 100
     deblock.anneal()
     return deblock.get_block_pos()

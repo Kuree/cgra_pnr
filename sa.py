@@ -10,7 +10,7 @@ import math
 # main class to perform simulated annealing within each cluster
 class SADetailedPlacer(Annealer):
     def __init__(self, blocks, available_pos, netlists, board,
-                 board_pos, is_legal=None, multi_thread=False, fold_reg=True):
+                 board_pos, is_legal=None, fold_reg=True):
         """Please notice that netlists has to be prepared already, i.e., replace
         the remote partition with a pseudo block.
         Also assumes that available_pos is the same size as blocks. If not,
@@ -56,8 +56,7 @@ class SADetailedPlacer(Annealer):
         rand.seed(0)
         state = self.__init_placement()
 
-        Annealer.__init__(self, initial_state=state, multi_thread=multi_thread,
-                          rand=rand)
+        Annealer.__init__(self, initial_state=state, rand=rand)
 
     def __init_placement(self):
         # filling in PE tiles first
@@ -245,8 +244,7 @@ class SAMacroPlacer(Annealer):
 # unused for CGRA
 class DeblockAnnealer(Annealer):
     def __init__(self, block_pos, available_pos, netlists, board_pos,
-                 is_legal=None,
-                 multi_thread=False, exclude_list=("u", "m", "i")):
+                 is_legal=None, exclude_list=("u", "m", "i")):
         # by default IO will be excluded
         # place note that in this case available_pos includes empty cells
         # as well
@@ -277,8 +275,7 @@ class DeblockAnnealer(Annealer):
         rand = random.Random()
         rand.seed(0)
 
-        Annealer.__init__(self, initial_state=state, multi_thread=multi_thread,
-                          rand=rand)
+        Annealer.__init__(self, initial_state=state, rand=rand)
 
         # reduce the schedule
         #self.Tmax = self.Tmin + 3
