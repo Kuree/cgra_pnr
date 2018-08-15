@@ -5,8 +5,8 @@ declare -a design_files=("conv_1_2_mapped" "conv_2_1_mapped" "conv_3_1_mapped"
 
 
 echo "Downloading CGRA info"
-wget https://github.com/StanfordAHA/CGRAGenerator/raw/master/hardware/generator_z/top/cgra_info.txt.dev
-cgra="cgra_info.txt.dev"
+wget https://github.com/StanfordAHA/CGRAGenerator/raw/shortmem/hardware/generator_z/top/examples/cgra_info.txt.shortmem
+cgra="cgra_info.txt.shortmem"
 
 for file in "${design_files[@]}"
 do
