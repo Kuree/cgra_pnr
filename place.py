@@ -250,6 +250,8 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
     # simple heuristics to calculate the clusters
     if num_clusters is None or num_clusters == 0:
         num_clusters = int(np.ceil(len(emb) / 40)) + 1
+    # extra careful
+    num_clusters = min(num_clusters, len(blks))
     factor = 6
     while True:     # this just enforce we can actually place it
         if num_clusters == 0:

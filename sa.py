@@ -144,7 +144,7 @@ class SADetailedPlacer(Annealer):
                 if b_pos not in board:
                     board[b_pos] = []
                 board[b_pos].append(blk_id)
-            blk = self.random.choice(self.state.keys())
+            blk = self.random.sample(self.state.keys(), 1)[0]
             blk_pos = self.state[blk]
             pos = self.random.sample(self.available_pos, 1)[0]
             if pos != blk_pos:
@@ -157,7 +157,7 @@ class SADetailedPlacer(Annealer):
                     if len(same_type_blocks) == 1:
                         blk_swap = same_type_blocks[0]
                         if self.__reg_net(pos, blk, board) and \
-                            self.__reg_net(blk_pos, blk_swap, board):
+                           self.__reg_net(blk_pos, blk_swap, board):
                             self.state[blk] = pos
                             self.state[blk_swap] = blk_pos
 
@@ -171,7 +171,6 @@ class SADetailedPlacer(Annealer):
                 # swap
                 self.state[a] = pos_b
                 self.state[b] = pos_a
-
 
     def energy(self):
         """we use HPWL as the cost function"""
@@ -620,7 +619,7 @@ class SAClusterPlacer(Annealer):
             corner = corners[corner_index]
             index_order = sorted(
                 ((x, y) for x in range(width) for y in range(height)),
-                key=lambda (x, y): (manhattan_distance((x, y), corner)))
+                key=lambda p: (manhattan_distance(p, corner)))
             result = {}
             for n, index in enumerate(index_order):
                 result[n] = index
@@ -814,9 +813,7 @@ class SAClusterPlacer(Annealer):
             ext = self.__get_exterior_set(cluster_id, cluster_cells, bboard)
             ext_list = list(ext)
             ext_list.sort(key=
-                          lambda (x, y): manhattan_distance((x, y),
-                                                            self.center_of_board
-                                                            ))
+                          lambda p: manhattan_distance(p, self.center_of_board))
             for ex in ext_list:
                 if len(overlap_set) == 0:
                     break

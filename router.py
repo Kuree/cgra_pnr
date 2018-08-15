@@ -1,5 +1,6 @@
 from __future__ import print_function, division
-from arch.cgra import parse_placement, save_routing_result, group_reg_nets
+from arch.cgra import parse_placement, save_routing_result
+from arch.netlist import group_reg_nets
 from arch.cgra_packer import load_packed_file
 from arch.cgra import determine_pin_ports
 from arch.cgra_route import parse_routing_resource, build_routing_resource

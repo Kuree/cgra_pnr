@@ -9,7 +9,8 @@ from __future__ import print_function
 import sys
 import json
 import os
-import cgra
+
+from . import group_reg_nets
 
 
 def convert2netlist(connections):
@@ -457,7 +458,7 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
     if fold_reg:
         # re-do the change_pe
         changed_pe.clear()
-        linked_nets, _ = cgra.group_reg_nets(raw_netlists)
+        linked_nets, _ = group_reg_nets(raw_netlists)
         for net_id in linked_nets:
             reg_nets = linked_nets[net_id]
             if len(reg_nets) > 1:
@@ -501,7 +502,7 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
     # sanity check the fold_reg, making sure there is no reg -> reg -> reg
     # situation
     if fold_reg:
-        linked_nets, _ = cgra.group_reg_nets(raw_netlists)
+        linked_nets, _ = group_reg_nets(raw_netlists)
         for net_id in linked_nets:
             reg_nets = linked_nets[net_id]
             assert (len(reg_nets) == 1)

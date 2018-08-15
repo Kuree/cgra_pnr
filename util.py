@@ -1,4 +1,5 @@
 import numpy as np
+import six
 
 
 def compute_hpwl(netlists, blk_pos):
@@ -26,7 +27,7 @@ def compute_hpwl(netlists, blk_pos):
 def deepcopy(obj_to_copy):
     if isinstance(obj_to_copy, dict):
         d = obj_to_copy.copy()  # shallow dict copy
-        for k, v in d.iteritems():
+        for k, v in six.iteritems(d):
             d[k] = deepcopy(v)
     elif isinstance(obj_to_copy, list):
         d = obj_to_copy[:]  # shallow list/tuple copy
