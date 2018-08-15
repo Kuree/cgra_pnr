@@ -64,11 +64,29 @@ def rename_id_changed(id_to_name, changed_pe):
     changed_pe.update(new_changed_pe)
 
 
+def determine_track_bus(netlists, id_to_name):
+    track_mode = {}
+    for net_id in netlists:
+        net = netlists[net_id]
+        bus = 16
+        for blk_id, port in net:
+            if "bit" in port or "en" in port:
+                bus = 1
+                break
+            blk_name = id_to_name[blk_id]
+            if "io1_" in blk_name:
+                bus = 1
+                break
+        track_mode[net_id] = bus
+    return track_mode
+
+
 def save_packing_result(netlist_filename, pack_filename, fold_reg=True):
     netlists, folded_blocks, id_to_name, changed_pe = \
         parse_and_pack_netlist(netlist_filename, fold_reg=fold_reg)
 
     rename_id_changed(id_to_name, changed_pe)
+    track_mode = determine_track_bus(netlists, id_to_name)
 
     with open(pack_filename, "w+") as f:
         def tuple_to_str(t_val):
@@ -107,8 +125,14 @@ def save_packing_result(netlist_filename, pack_filename, fold_reg=True):
         for blk_id in changed_pe:
             f.write(str(blk_id) + ": " + id_to_name[blk_id] + "\n")
 
+        f.write("\n")
+        # registers that have been changed to PE
+        f.write("Netlist Bus:\n")
+        for net_id in track_mode:
+            f.write(str(net_id) + ": " + str(track_mode[net_id]) + "\n")
 
-def load_packed_file(pack_filename):
+
+def load_packed_file(pack_filename, load_track_mode=False):
     with open(pack_filename) as f:
         lines = f.readlines()
 
@@ -202,7 +226,26 @@ def load_packed_file(pack_filename):
 
         line_num += 1
 
-    return netlists, folded_blocks, id_to_name, changed_pe
+    line_num = find_next_block(line_num)
+    line = remove_comment(lines[line_num])
+    assert (line == "Netlist Bus:")
+    line_num += 1
+    track_mode = {}
+    while line_num < len(lines):
+        line = remove_comment(lines[line_num])
+        if len(line) == 0:
+            break
+        net_id, mode = line.split(":")
+        net_id = net_id.strip()
+        mode = int(mode)
+        assert mode in [1, 16]
+        track_mode[net_id] = mode
+
+        line_num += 1
+    if load_track_mode:
+        return netlists, folded_blocks, id_to_name, changed_pe, track_mode
+    else:
+        return netlists, folded_blocks, id_to_name, changed_pe
 
 
 def parse_and_pack_netlist(netlist_filename, fold_reg=True):

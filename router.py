@@ -21,9 +21,11 @@ class Router:
                  avoid_congestion=True, fold_reg=True):
         self.board_meta = board_meta
         self.layout_board = board_meta[0]
-        netlists, _, id_to_name, _ = load_packed_file(packed_filename)
+        netlists, _, id_to_name, _, track_mode = load_packed_file(
+            packed_filename, load_track_mode=True)
         self.id_to_name = id_to_name
         self.netlists = netlists
+        self.track_mode = track_mode
 
         placement, _ = parse_placement(placement_filename)
         self.placement = placement
@@ -315,14 +317,6 @@ class Router:
             return False, None
 
     @staticmethod
-    def get_bus_type(net):
-        for pos, port in net:
-            # FIXME
-            if "bit" in port or "en" in port:
-                return 1
-        return 16
-
-    @staticmethod
     def copy_resource(routing_resource):
         res = deepcopy(routing_resource)
         return res
@@ -389,7 +383,7 @@ class Router:
                 continue
             net = self.netlists[net_id]
             assert (len(net) > 1)
-            bus = Router.get_bus_type(net)
+            bus = self.track_mode[net_id]
             # avoid going back
             net = self.sort_net(net, self.placement)
 

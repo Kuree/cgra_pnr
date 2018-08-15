@@ -151,13 +151,24 @@ def build_routing_resource(parsed_resource):
             input_channel = entry["input"]
             output_channels = entry["output"]
             sink = "in"
-            operands = {sink: [convert_bus_to_tuple(input_channel)]}
+            wire_in = convert_bus_to_tuple(input_channel)
+            operands = {sink: {wire_in}}
             sink = "out"
-            operands[sink] = []
+            operands[sink] = set()
             for wire_info in output_channels:
                 wire = convert_bus_to_tuple(wire_info)
                 if wire is not None:
-                    operands[sink].append(wire)
+                    operands[sink].add(wire)
+
+            for sink in operands:
+                add_set = set()
+                for wire in operands[sink]:
+                    if wire[0] == 16:
+                        new_wire = (1, wire[1], wire[2], wire[3])
+                        if new_wire not in operands[sink]:
+                            add_set.add(new_wire)
+                for wire in add_set:
+                    operands[sink].add(wire)
             result[(x, y)] = {"route_resource": set(),
                               "port": operands}
             continue
@@ -173,7 +184,7 @@ def build_routing_resource(parsed_resource):
                     wire_info = convert_bus_to_tuple(wire)
                     if wire_info is not None:
                         operands[sink].add(wire_info)
-        # FIXME: allow reg on the switch box
+
         for bus in entry["sb"]:
             muxes = entry["sb"][bus]["mux"]
             for sink in muxes:

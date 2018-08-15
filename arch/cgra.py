@@ -41,7 +41,8 @@ def parse_placement(placement_file):
     return placement, id_to_name
 
 
-def place_special_blocks(board, blks, board_pos, netlists, place_on_board):
+def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
+                         place_on_board):
     # put IO in fixed blocks
     # TODO: fix 1bit IO
     io_count = 0
@@ -73,7 +74,16 @@ def place_special_blocks(board, blks, board_pos, netlists, place_on_board):
             if is_input:
                 pos = input_io_locations.pop(0)
             else:
-                pos = output_io_locations.pop(0)
+                # FIXME
+                # Hard-code position since Steve's simulation only handles
+                # pad_S1_T0 1-bit output
+                io_name = id_to_name[blk_id]
+                if "io1_" in io_name:
+                    assert (2, 18) in output_io_locations
+                    pos = (2, 18)
+                    output_io_locations.remove(pos)
+                else:
+                    pos = output_io_locations.pop(0)
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
             io_count += 1
@@ -337,6 +347,13 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
                                                          ",".join(pins),
                                                          tab,
                                                          id_to_name[blk_id])
+
+    # FIXME 1-bit IO hack
+    for blk_id in id_to_name:
+        if blk_id[0] == "i" and "io1_" in id_to_name[blk_id]:
+            output_string += "\n\n#IO\n"
+            output_string += "Tx116_pad(out,1)\n"
+            break
 
     output_string += "\n\n#ROUTING\n"
     net_id_list = list(route_result.keys())
