@@ -499,6 +499,10 @@ def handle_sink(self_conn, conn, dst, track_in,
 
     result += start + " -> " + end
 
+    # Keyi:
+    # current bsbuilder doesn't like IO stuff
+    if board_layout[dst_pos[1]][dst_pos[0]] == "i":
+        result = ""
     return result, track_in
 
 
@@ -524,6 +528,11 @@ def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
     start = "T{}_{}{}".format(tile, src_port, track)
     end = make_track_string(src_pos, conn[0], tile_mapping, board_layout)
     result = start + " -> " + end + "\n"
+    # Keyi:
+    # the bsbuilder doesn't like IO tiles
+    # use board_layout to leave that black
+    if board_layout[src_pos[1]][src_pos[0]] == "i":
+        result = ""
     return result, conn[1]
 
 
@@ -548,6 +557,7 @@ def get_const_value(instance):
                 int_val = int(str_val, 16)
             return "const{0}_{0}".format(int_val)
     return None
+
 
 def get_lut_pins(instance):
     assert ("genref" in instance and instance["genref"] == "cgralib.PE")
