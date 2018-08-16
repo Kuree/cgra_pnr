@@ -448,6 +448,9 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
     # Improved routing so that we are able to allow src -> reg -> reg
     # remove the code while keep it in the git history in case in the future
     # we do need this kind of way to cope with long reg chains.
+    if fold_reg:
+        # re-do the change_pe
+        changed_pe.clear()
 
     for blk_id in changed_pe:
         print("Change", id_to_name[blk_id], "to a PE tile")
