@@ -13,6 +13,7 @@ from visualize import draw_board, draw_cell, color_palette
 from sklearn.cluster import KMeans
 import random
 from multiprocessing import Pool
+import multiprocessing
 from arch.cgra import place_special_blocks, save_placement, prune_netlist
 from arch.cgra_packer import load_packed_file
 
@@ -302,7 +303,8 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
             blk_pos[node_id] = pos
         map_args.append((clusters[c_id], cells, new_netlist, board, blk_pos,
                          fold_reg))
-    pool = Pool(4)
+    num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
+    pool = Pool(num_of_cpus)
     results = pool.map(detailed_placement, map_args)
     pool.close()
     pool.join()
