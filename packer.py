@@ -5,6 +5,7 @@ import sys
 
 if __name__ == "__main__":
     options, argv = parse_args(sys.argv)
+    mode = None
     if len(argv) != 2:
         print("Usage:", argv[0], "<netlist_filename>", file=sys.stderr)
         exit(1)

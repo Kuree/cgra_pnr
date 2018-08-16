@@ -334,6 +334,7 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
     # generate tile mapping
     # sort them for pretty printing
     pe_keys = list(pe_tiles.keys())
+    pe_keys.sort(key=lambda x: int(pe_tiles[x][0]))
     pe_keys.sort(key=lambda x: pe_tiles[x][-1])
     output_string += "# PLACEMENT\n"
     for blk_id in pe_keys:
@@ -358,7 +359,7 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
     output_string += "\n\n#ROUTING\n"
     net_id_list = list(route_result.keys())
     net_id_list.sort(key=lambda x: int(x[1:]))
-    for net_id in route_result:
+    for net_id in net_id_list:
         path = route_result[net_id]
         output_string += "\n# net id: {}\n".format(net_id)
         netlist = netlists[net_id]

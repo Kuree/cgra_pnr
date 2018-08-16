@@ -43,7 +43,7 @@ def parse_vpr(filename):
             layout_board.append(row)
 
         available_blk_types = set()
-        # fillling in tile types
+        # filling in tile types
         # fill first
         fill_priority = 0
         for fill in layout.iter("fill"):
@@ -85,7 +85,7 @@ def parse_vpr(filename):
             else:
                 # update the priority
                 corners_priority = priority
-            raw_blk_type == corners.attrib["type"]
+            raw_blk_type = corners.attrib["type"]
             blk_type = convert_vpr_type(raw_blk_type)
             available_blk_types.add(blk_type)
             layout_board[0][0] = blk_type
@@ -97,7 +97,8 @@ def parse_vpr(filename):
         for col in layout.iter("col"):
             priority = int(col.attrib["priority"])
             startx = int(col.attrib["startx"])
-            if (startx in cols_priority and priority < cols_priority[startx]) or \
+            if (startx in cols_priority and
+                priority < cols_priority[startx]) or \
                (priority < fill_priority):
                 continue
             else:
@@ -181,7 +182,7 @@ def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
         available_types.add(blk_type)
         tile_mapping[(x, y)] = tile_addr
     positions = list(board_dict.keys())
-    positions.sort(key=lambda pos: pos[0] + pos[1], reverse=True)
+    positions.sort(key=lambda entry: entry[0] + entry[1], reverse=True)
     pos = positions[0]
     width, height = pos[0] + 1, pos[1] + 1
     layout_board = []
@@ -240,12 +241,12 @@ def make_board(board_meta):
     if capacity > 1:
         board = []
         for y in range(height):
-            row = [[] for i in range(width)]
+            row = [[] for _ in range(width)]
             board.append(row)
     else:
         board = []
         for y in range(height):
-            row = [None for i in range(width)]
+            row = [None for _ in range(width)]
             board.append(row)
     return board
 
@@ -305,14 +306,14 @@ def generate_place_on_board(board_meta, fold_reg=True):
             if blk_id in board[y][x]:
                 return
             if not is_legal(board, pos, blk_id):
-                raise Exception("Illegal position for " + blk_id + " at " + \
+                raise Exception("Illegal position for " + blk_id + " at " +
                                 str(pos))
             board[y][x].append(blk_id)
         else:
             if board[y][x] == blk_id:
                 return
             if not is_legal(board, pos, blk_id):
-                raise Exception("Illegal position for " + blk_id + " at " + \
+                raise Exception("Illegal position for " + blk_id + " at " +
                                 str(pos))
             board[y][x] = blk_id
     return place_on_board
@@ -342,7 +343,9 @@ def print_board_info(board_name, board_meta):
     print("\nCLB/PE margin:", info["margin"])
 
 
-if __name__ == "__main__":
+def main():
+    use_vpr = False
+    use_cgra = False
     if len(sys.argv) < 2:
         print("Usage:", sys.argv[0], "[OPTION]", "<arch_file>",
               "\n[OPTION]: -vpr, -cgra", file=sys.stderr)
@@ -357,9 +360,6 @@ if __name__ == "__main__":
                 use_vpr = False
                 use_cgra = True
                 break
-    else:
-        use_vpr = False
-        use_cgra = False
     filename = sys.argv[1]
     if (not use_vpr) and (not use_cgra):
         _, ext = os.path.splitext(filename)
@@ -379,3 +379,7 @@ if __name__ == "__main__":
         exit(1)
     for board_name in meta:
         print_board_info(board_name, meta[board_name])
+
+
+if __name__ == "__main__":
+    main()

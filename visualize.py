@@ -43,5 +43,3 @@ def draw_cell(draw, pos, color, scale=None, width_frac=1):
     x, y = pos
     draw.rectangle((x * scale + 1, y * scale + 1, x * scale + width,
                     y * scale + size), fill=color)
-
-

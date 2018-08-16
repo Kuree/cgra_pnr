@@ -21,7 +21,7 @@ def detailed_placement(args):
     clusters, cells, netlist, board, blk_pos, fold_reg = args
     detailed = SADetailedPlacer(clusters, cells, netlist, board, blk_pos,
                                 fold_reg=fold_reg)
-    #detailed.steps = 10
+    # detailed.steps = 10
     detailed.anneal()
     return detailed.state
 
@@ -29,7 +29,7 @@ def detailed_placement(args):
 def deblock_placement(args):
     clusters, cells, netlist, board, blk_pos = args
     deblock = DeblockAnnealer(clusters, cells, netlist, blk_pos)
-    #deblock.steps = 100
+    # deblock.steps = 100
     deblock.anneal()
     return deblock.get_block_pos()
 
@@ -115,13 +115,13 @@ def main():
                                            fold_reg)
 
     # do a macro placement
-    #macro_result = macro_placement(board, board_pos, fixed_blk_pos, netlists,
+    # macro_result = macro_placement(board, board_pos, fixed_blk_pos, netlists,
     #                               is_cell_legal, board_meta)
-    #board_pos.update(macro_result)
+    # board_pos.update(macro_result)
 
     # only use deblock when we have lots of clusters
-    #if len(clusters) > 2:
-    #    board_pos = perform_deblock_placement(board, board_pos, fixed_blk_pos,
+    # if len(clusters) > 2:
+    #     board_pos = perform_deblock_placement(board, board_pos, fixed_blk_pos,
     #                                          netlists)
 
     for blk_id in board_pos:
@@ -275,11 +275,11 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                                              board_info=board_info,
                                              fold_reg=fold_reg)
             break
-        except ClusterException as ex:
+        except ClusterException as _:
             num_clusters -= 1
             factor = 4
 
-    #cluster_placer.steps = 2000
+    # cluster_placer.steps = 2000
     cluster_placer.anneal()
     cluster_cells, centroids = cluster_placer.squeeze()
     return centroids, cluster_cells, clusters

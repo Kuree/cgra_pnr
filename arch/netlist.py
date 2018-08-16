@@ -22,14 +22,13 @@ def group_reg_nets(netlists):
     # unfolded, we need to create a list of nets in order that's going to be
     # merged into the main net.
 
-    def squash_net(netlists, src_id):
+    def squash_net(nets, src_id):
         result = [src_id]
-        net = netlists[src_id][1:]
-        for blk_id, _ in net:
-            if blk_id[0] == "r":
+        for b_id, _ in nets[src_id][1:]:
+            if b_id[0] == "r":
                 # found another one
-                next_id = reg_srcs[blk_id]
-                result += squash_net(netlists, next_id)
+                next_id = reg_srcs[b_id]
+                result += squash_net(nets, next_id)
         return result
 
     resolved_net = set()

@@ -4,7 +4,6 @@ from util import compute_hpwl, manhattan_distance
 from util import reduce_cluster_graph, compute_centroids
 import numpy as np
 import random
-import math
 
 
 # main class to perform simulated annealing within each cluster
@@ -195,7 +194,7 @@ class SADetailedPlacer(Annealer):
 # main class to perform simulated annealing within each cluster
 class SAMacroPlacer(Annealer):
     def __init__(self, available_pos, netlists, board,
-                 board_pos, current_state, is_legal, multi_thread=False):
+                 board_pos, current_state, is_legal):
         self.available_pos = available_pos
         self.netlists = netlists
         self.board = board
@@ -207,8 +206,7 @@ class SAMacroPlacer(Annealer):
         rand.seed(0)
         state = current_state
 
-        Annealer.__init__(self, initial_state=state, multi_thread=multi_thread,
-                          rand=rand)
+        Annealer.__init__(self, initial_state=state, rand=rand)
 
     def move(self):
         target = self.random.sample(self.state.keys(), 1)[0]
@@ -268,7 +266,7 @@ class DeblockAnnealer(Annealer):
             # this one does not check whether the board is occupied or not
             self.is_legal = is_legal
         else:
-            self.is_legal = self.__is_legal
+            self.is_legal = lambda p, block_id: True
 
         self.exclude_list = exclude_list
 
@@ -278,8 +276,8 @@ class DeblockAnnealer(Annealer):
         Annealer.__init__(self, initial_state=state, rand=rand)
 
         # reduce the schedule
-        #self.Tmax = self.Tmin + 3
-        #self.steps /= 10
+        # self.Tmax = self.Tmin + 3
+        # self.steps /= 10
 
     def get_block_pos(self):
         block_pos = {}
@@ -289,20 +287,6 @@ class DeblockAnnealer(Annealer):
         ex = self.excluded_blocks.copy()
         block_pos.update(ex)
         return block_pos
-
-    def __is_legal(self, pos, block_id):
-        # notice that the default is very limited and disallow any special block
-        # movements. so if you want to move the complex blocks as well, you
-        # also need to provide `is_legal` in the constructor
-        if block_id[0] != "c":
-            return False
-        x, y = pos
-        if x < 1 or y < 1 or x > 58 or y > 58:
-            return False
-        if x in [2 + j * 8 for j in range(7)] \
-                or x in [6 + j * 8 for j in range(7)]:
-            return False
-        return True
 
     def move(self):
         pos1, pos2 = self.random.sample(self.available_pos, 2)
@@ -356,7 +340,7 @@ class SAClusterPlacer(Annealer):
         else:
             self.is_legal = is_legal
         if is_cell_legal is None:
-            self.is_cell_legal = self.__is_cell_legal
+            self.is_cell_legal = lambda p, cb: True
         else:
             self.is_cell_legal = is_cell_legal
 
@@ -379,8 +363,8 @@ class SAClusterPlacer(Annealer):
         self.netlists = reduce_cluster_graph(netlists, clusters, board_pos)
 
         # some scheduling stuff?
-        #self.Tmax = 10
-        #self.steps = 1000
+        # self.Tmax = 10
+        # self.steps = 1000
 
     def __is_legal(self, pos, cluster_id, state):
         """no more than 1/factor overlapping"""
@@ -412,7 +396,8 @@ class SAClusterPlacer(Annealer):
         else:
             return True
 
-    def __compute_overlap(self, pos1, bbox1, pos2, bbox2):
+    @staticmethod
+    def __compute_overlap(pos1, bbox1, pos2, bbox2):
         if pos2[0] >= pos1[0]:
             x = pos1[0] + bbox1[0] - pos2[0]
         else:
@@ -499,19 +484,6 @@ class SAClusterPlacer(Annealer):
             search_index += 1
         # search_index is the actual span on the board
         return search_index, square_size
-
-    def __is_cell_legal(self, pos, check_bound=True):
-        # This is only valid for my custom VPR board. You should
-        # always use the cell legal function generated from the
-        # architecture file
-        x, y = pos
-        if x in [2 + j * 8 for j in range(7)] \
-                or x in [6 + j * 8 for j in range(7)]:
-            return False
-        if check_bound:
-            if x < 1 or x > 59 - 1 or y < 1 or y > 59 - 1:
-                return False
-        return True
 
     def compute_center(self):
         result = {}
@@ -611,8 +583,8 @@ class SAClusterPlacer(Annealer):
                             continue
                         if (not board[y + i][x + j]) and board[y][x]:
                             p = (x + j, y + i)
-                        if (p is not None) and self.is_cell_legal(None, p,
-                                                                  self.clb_type):
+                        if (p is not None) and \
+                                self.is_cell_legal(None, p, self.clb_type):
                             result.add(p)
         for p in result:
             if board[p[1]][p[0]]:
@@ -622,12 +594,12 @@ class SAClusterPlacer(Annealer):
     def squeeze(self):
         # the idea is to pull every cell positions to the center of the board
 
-        def zigzag(width, height, corner_index):
+        def zigzag(width, height, c_index):
             # https://rosettacode.org/wiki/Zig-zag_matrix#Python
             # modified by Keyi
-            corners = [(0, 0), (width - 1, 0), (width - 1, height - 1),
-                       (0, height - 1)]
-            corner = corners[corner_index]
+            corner_entries = [(0, 0), (width - 1, 0), (width - 1, height - 1),
+                              (0, height - 1)]
+            corner = corner_entries[c_index]
             index_order = sorted(
                 ((x, y) for x in range(width) for y in range(height)),
                 key=lambda p: (manhattan_distance(p, corner)))
@@ -635,7 +607,6 @@ class SAClusterPlacer(Annealer):
             for n, index in enumerate(index_order):
                 result[n] = index
             return result
-            # return {index: n for n,index in enumerate(indexorder)}
 
         cluster_pos = self.state
         cluster_cells = {}
@@ -646,13 +617,13 @@ class SAClusterPlacer(Annealer):
             square_size = self.square_sizes[cluster_id]
             bbox = self.compute_bbox(pos, square_size)
             # find four corners and compare which one is closer
-            target = -1
             corners = [
                 pos,
                 [pos[0] + bbox[0], pos[1]],
                 [pos[0] + bbox[0], pos[1] + bbox[1]],
                 [pos[0], pos[1] + bbox[1]]]
-            dists = [manhattan_distance(p, self.center_of_board) for p in corners]
+            dists = [manhattan_distance(p, self.center_of_board)
+                     for p in corners]
             corner_index = np.argmin(dists)
             # we need to create a zig-zag index to maximize packing cells given
             # the bounding box
@@ -669,7 +640,6 @@ class SAClusterPlacer(Annealer):
                     count += 1
                 search_count += 1
             cluster_cells[cluster_id] = cells
-
 
         # now the fun part, lets squeeze more!
         # algorithm
@@ -736,7 +706,8 @@ class SAClusterPlacer(Annealer):
 
         return cluster_cells, centroids
 
-    def __get_bboard(self, cluster_cells, check=True):
+    @staticmethod
+    def __get_bboard(cluster_cells, check=True):
         bboard = np.zeros((60, 60), dtype=np.bool)
         for cluster_id in cluster_cells:
             for x, y in cluster_cells[cluster_id]:
@@ -756,13 +727,11 @@ class SAClusterPlacer(Annealer):
                                           bboard,
                                           max_dist=1, search_all=True)
         ext_set = list(ext_set)
-        ext_set.sort(key=
-                     lambda pos: manhattan_distance(pos,
-                                                    self.center_of_board
-                                                    ))
+        ext_set.sort(key=lambda pos: manhattan_distance(pos,
+                                                        self.center_of_board
+                                                        ))
         own_cells = list(cluster_cells[cluster_id])
-        own_cells.sort(key=
-                       lambda pos:
+        own_cells.sort(key=lambda pos:
                        manhattan_distance(pos, self.center_of_board),
                        reverse=True)
         num_moves = 0
@@ -798,7 +767,8 @@ class SAClusterPlacer(Annealer):
                     for x in range(bbox[0]):
                         new_cell = (x + j, y + i)
                         if (not bboard[new_cell[1]][new_cell[0]]) and \
-                                (self.is_cell_legal(None, new_cell, self.clb_type)):
+                                (self.is_cell_legal(None, new_cell,
+                                                    self.clb_type)):
                             cells.append(new_cell)
                 if len(cells) > num_cells:
                     # we are good
@@ -823,8 +793,8 @@ class SAClusterPlacer(Annealer):
             bboard = self.__get_bboard(cluster_cells, False)
             ext = self.__get_exterior_set(cluster_id, cluster_cells, bboard)
             ext_list = list(ext)
-            ext_list.sort(key=
-                          lambda p: manhattan_distance(p, self.center_of_board))
+            ext_list.sort(key=lambda p:
+                          manhattan_distance(p, self.center_of_board))
             for ex in ext_list:
                 if len(overlap_set) == 0:
                     break
@@ -843,4 +813,3 @@ class SAClusterPlacer(Annealer):
 class ClusterException(Exception):
     def __init__(self, num_clusters):
         self.num_clusters = num_clusters
-

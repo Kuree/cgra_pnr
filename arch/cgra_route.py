@@ -256,7 +256,7 @@ def main():
         exit(0)
     r = parse_routing_resource(sys.argv[1])
     simple_route_stats(r)
-    r = build_routing_resource(r)
+    build_routing_resource(r)
 
 
 if __name__ == "__main__":

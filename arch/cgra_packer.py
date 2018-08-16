@@ -10,8 +10,6 @@ import sys
 import json
 import os
 
-from . import group_reg_nets
-
 
 def convert2netlist(connections):
     netlists = []
@@ -101,7 +99,8 @@ def save_packing_result(netlist_filename, pack_filename, fold_reg=True):
         net_ids.sort(key=lambda x: int(x[1:]))
         for net_id in net_ids:
             f.write("{}: ".format(net_id))
-            f.write("\t".join([tuple_to_str(entry) for entry in netlists[net_id]]))
+            f.write("\t".join([tuple_to_str(entry)
+                               for entry in netlists[net_id]]))
 
             f.write("\n")
         f.write("\n")
@@ -142,9 +141,9 @@ def load_packed_file(pack_filename, load_track_mode=False):
             return str_val[:str_val.index("#")]
         return str_val.strip()
 
-    def convert_net(net):
+    def convert_net(net_entry):
         result = []
-        raw_net = net.split("\t")
+        raw_net = net_entry.split("\t")
         for entry in raw_net:
             entry = entry.strip()
             assert (entry[0] == "(" and entry[-1] == ")")
@@ -445,28 +444,10 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
                 # replace with new folded blocks
                 net[index] = folded_blocks[(blk_id, "out")]
 
-    # third-pass (if fold_reg)
     # Keyi:
-    # we don't want situation where src -> reg -> reg - > reg -> sink happens.
-    # these mega-nets will burn the entire available track since it's not
-    # allowed to switch tracks with register folding.
-    # *Solution:*
-    # whenever there is a reg-> reg -> reg -> ..., burn a PE tile for the second
-    # reg. Hence it will be src -> reg -> pe -> reg -> pe
-    # as a result, you should not expect a size-two reg net list in the routing
-    # stage
-    if fold_reg:
-        # re-do the change_pe
-        changed_pe.clear()
-        linked_nets, _ = group_reg_nets(raw_netlists)
-        for net_id in linked_nets:
-            reg_nets = linked_nets[net_id]
-            if len(reg_nets) > 1:
-                for i in range(0, len(reg_nets), 2):
-                    reg_net_id = reg_nets[i]
-                    reg_src = raw_netlists[reg_net_id][0][0]
-                    changed_pe.add(reg_src)
-        pass
+    # Improved routing so that we are able to allow src -> reg -> reg
+    # remove the code while keep it in the git history in case in the future
+    # we do need this kind of way to cope with long reg chains.
 
     for blk_id in changed_pe:
         print("Change", id_to_name[blk_id], "to a PE tile")
@@ -489,23 +470,12 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
             for index, (blk_id, port) in enumerate(net):
                 if blk_id[0] == "r" and blk_id not in changed_pe:
                     net[index] = (blk_id, "reg")
-                #elif blk_id[0] == "r" and blk_id in changed_pe and port == "out":
-                #    blk_id = "p" + blk_id[1:]
-                #    net[index] = (blk_id, "out")
     else:
         assert (len(changed_pe) == len(dont_absorb))
         for net_id in raw_netlists:
             net = raw_netlists[net_id]
             for blk_id, port in net:
                 assert (port != "reg")
-
-    # sanity check the fold_reg, making sure there is no reg -> reg -> reg
-    # situation
-    if fold_reg:
-        linked_nets, _ = group_reg_nets(raw_netlists)
-        for net_id in linked_nets:
-            reg_nets = linked_nets[net_id]
-            assert (len(reg_nets) == 1)
 
     return raw_netlists, folded_blocks, changed_pe
 

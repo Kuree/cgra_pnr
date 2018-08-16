@@ -335,6 +335,8 @@ class Router:
                 elif blk_id in reg_nets:
                     return 1
             return 2
+        netlist_ids.sort(key=lambda net_id: int(net_id[1:]))
+        # in-place sort
         netlist_ids.sort(key=lambda net_id: sort(netlist[net_id]))
         return netlist_ids
 
@@ -395,9 +397,21 @@ class Router:
             chan_resources = {}
             reg_route_path = {}
             for chan in range(self.channel_width):
+                # make sure that it won't route on top of reg net
+                if net_id in linked_nets:
+                    pos_set = set()
+                    for reg_net_id in linked_nets[net_id]:
+                        reg_net = self.netlists[reg_net_id]
+                        for blk_id, _ in reg_net:
+                            pos = self.placement[blk_id]
+                            pos_set.add(pos)
+                else:
+                    pos_set = None
+
                 path_len, final_path, routing_resource = \
                     self.route_net(bus, chan, net,
-                                   self.routing_resource)
+                                   self.routing_resource,
+                                   pos_set=pos_set)
                 chan_resources[chan] = routing_resource
                 route_path[chan] = final_path
                 route_length[chan] = path_len
@@ -438,7 +452,7 @@ class Router:
             self.routing_resource = chan_resources[min_chan]
 
     def route_net(self, bus, chan, net, routing_resource, final_path=None,
-                  is_src=True):
+                  is_src=True, pos_set=None):
         src_id, src_port = net[0]
         pin_port_set = determine_pin_ports(net,
                                            self.placement,
@@ -466,7 +480,8 @@ class Router:
         # we have a very complex net where there are lots of "semi-circles".
         # *Solution*
         # we can use pos_set to enforce the router won't go through it
-        pos_set = set()
+        if pos_set is None:
+            pos_set = set()
         for (p_id, _) in dst_set:
             pos_set.add(self.placement[p_id])
 
@@ -489,12 +504,6 @@ class Router:
 
                 if not available:
                     # failed to connect
-                    # give it a second try
-                    #link = self.amend_self_connect(src_pos, dst_port,
-                    #                               final_path, bus, chan,
-                    #                               pin_port_set,
-                    #                               routing_resource)
-                    #if (dst_pos, dst_port) not in link:
                     path_length = self.MAX_PATH_LENGTH
                     break
                 # just that it won't blow up the later logic
@@ -558,17 +567,9 @@ class Router:
         assert (path_length != 0)
         return path_length, final_path, routing_resource
 
-    def amend_self_connect(self, pos, dst_port, final_path, bus, chan,
-                           pin_ports, routing_resource):
-        """only useful when the out track has been used for previous routing"""
-        link = self.connect_two_points((pos, None), (pos, dst_port), bus, chan,
-                                       pin_ports, False, final_path, set(),
-                                       routing_resource)
-        return link
-
-
     @staticmethod
     def get_track_in_from_path(src_pos, path):
+        src_conn = None
         for i in range(len(path) - 1, -1, -1):
             if isinstance(path[i][-1], str):
                 continue
@@ -580,6 +581,7 @@ class Router:
             else:
                 raise Exception("Unknown path")
             if pos == src_pos:
+                assert (src_conn is not None)
                 if src_conn[1] == 0:
                     return src_conn
             assert conn[1] == 0    # it's actually coming in

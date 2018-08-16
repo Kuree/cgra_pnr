@@ -5,7 +5,6 @@ def get_alu_str(instance):
         return "add"
     elif op_type == 1:
         # FIXME
-        assert (False)
         return "sub"
     elif op_type == 4 and signed:
         return "sge"
