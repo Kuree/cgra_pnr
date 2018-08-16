@@ -10,7 +10,8 @@ TIMING_INFO = {
     "sb": 10,
     "cb": 5,
     "alu": 100,
-    "mem": 100
+    "mem": 100,
+    "reg": 20
 }
 
 
@@ -77,12 +78,13 @@ def compute_critical_delay(net_path, route_result, placement):
                 assert entry[0] == "sink"
                 if len(entry) == 4:
                     # one more sb sink (change direction)
-                    pos = entry[-1][0]
+                    pos, port = entry[-1]
                     if pos == dst_pos:
                         # we found the sink
                         found_sink = True
                         total_time["sb"] += TIMING_INFO["sb"]
                         total_time["cb"] += TIMING_INFO["cb"]
+                        assert (port != "reg")
                         break
                 elif len(entry) == 3:
                     # either reg or directly in sink
