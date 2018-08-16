@@ -353,7 +353,7 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
     for blk_id in id_to_name:
         if blk_id[0] == "i" and "io1_" in id_to_name[blk_id]:
             output_string += "\n\n#IO\n"
-            output_string += "Tx116_pad(out,1)\n"
+            output_string += "Tx136_pad(out,1)\n"
             break
 
     output_string += "\n\n#ROUTING\n"
