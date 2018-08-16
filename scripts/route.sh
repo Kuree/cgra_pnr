@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -xe
+set -e
 
 function print_usage() {
     echo "Usage: $0 [-no-reg-fold] <arch_file> <netlist.packed>" >&2

@@ -101,3 +101,43 @@ def compute_critical_delay(net_path, route_result, placement):
     return total_time
 
 
+def compute_total_wire(routing_result):
+    wire_length = {}
+    for net_id in routing_result:
+        path = routing_result[net_id]
+        length = 0
+        for entry in path:
+            if entry[0] == "link":
+                length += 1
+            elif entry[0] == "sink":
+                if len(entry) == 4:
+                    length += 1
+        wire_length[net_id] = length
+    return wire_length
+
+
+def compute_area_usage(placement, board_layout):
+    result = {}
+    for y in range(len(board_layout)):
+        for x in range(len(board_layout[0])):
+            blk_type = board_layout[y][x]
+            if blk_type is None:
+                continue
+            if blk_type not in result:
+                result[blk_type] = [0, 0]
+            result[blk_type][-1] += 1
+    pos_set = set()
+    for blk_id in placement:
+        pos = placement[blk_id]
+        if pos in pos_set:
+            continue
+        x, y = pos
+        blk_type = board_layout[y][x]
+        result[blk_type][0] += 1
+    return result
+
+
+def compute_routing_usage(routing_result, routing_resource):
+    used_resource = 0
+
+

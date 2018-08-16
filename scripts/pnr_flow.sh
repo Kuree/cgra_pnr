@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -xe
+set -e
 
 function print_usage() {
     echo "Usage: $0 [-no-reg-fold] <arch_file> <netlist.json>" >&2
@@ -38,3 +38,7 @@ $BASEDIR/bitstream.sh ${option} ${cgra} ${packed}
 
 result="${netlist%.json}.bsb"
 echo "save result to ${result}"
+
+echo "Analyzing timing..."
+route="${netlist%.json}.route"
+python $BASEDIR/../analyzer.py ${cgra} ${netlist} ${route}

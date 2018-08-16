@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -xe
+set -e
 file_dir=$(dirname "$(realpath $0)")
 root_dir=$(realpath $file_dir/../)
 
