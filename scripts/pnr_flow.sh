@@ -39,19 +39,19 @@ packed="${netlist%.json}.packed"
 
 # assume user already have the env activated
 # pack
-python $BASEDIR/../packer.py -n ${netlist} -o ${packed} ${option}
+python ${BASEDIR}/../packer.py -n ${netlist} -o ${packed} ${option}
 
 # place
-$BASEDIR/place.sh ${option} ${cgra} ${packed}
+${BASEDIR}/place.sh ${option} ${cgra} ${packed}
 # route
-$BASEDIR/route.sh ${option} ${cgra} ${packed}
+${BASEDIR}/route.sh ${option} ${cgra} ${packed}
 
 # produce bitstream
 echo "save result to ${bsb}"
-$BASEDIR/bitstream.sh ${option} ${cgra} ${packed} ${bsb}
+${BASEDIR}/bitstream.sh ${option} ${cgra} ${packed} ${bsb}
 
 
 
 echo "Analyzing timing..."
 route="${netlist%.json}.route"
-python $BASEDIR/../analyzer.py ${cgra} ${netlist} ${route}
+python ${BASEDIR}/../analyzer.py ${cgra} ${netlist} ${route}

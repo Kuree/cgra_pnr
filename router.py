@@ -66,6 +66,7 @@ class Router:
                 for entry in chans:
                     channel_set.add(entry[0][-1])
             self.channel_width = len(channel_set)
+        print("Using", self.channel_width, "channels to route")
 
     @staticmethod
     def manhattan_dist(p1, p2):
@@ -340,16 +341,17 @@ class Router:
     def sort_netlist_id_for_io(netlist, reg_nets):
         netlist_ids = list(netlist.keys())
 
-        def sort(nets):
-            for blk_id, _ in nets:
+        def sort(net_id):
+            net = netlist[net_id]
+            if net_id in reg_nets:
+                return 1
+            for blk_id, _ in net:
                 if blk_id[0] == "i":
                     return 0
-                elif blk_id in reg_nets:
-                    return 1
             return 2
         netlist_ids.sort(key=lambda net_id: int(net_id[1:]))
         # in-place sort
-        netlist_ids.sort(key=lambda net_id: sort(netlist[net_id]))
+        netlist_ids.sort(key=lambda net_id: sort(net_id))
         return netlist_ids
 
     @staticmethod
@@ -544,8 +546,14 @@ class Router:
             path = []
             while pp != src_pos:
                 path.append(link[pp])
+
+                pos_set.add(link[pp][0])
+                if len(link[pp]) == 2:
+                    pos_set.add(link[pp][1])
+                else:
+                    assert len(link[pp]) == 1
+
                 pp = link[pp][0][0]
-                pos_set.add(pp)
 
             path.reverse()
 
@@ -626,7 +634,7 @@ class Router:
                     # we have found it
                     reg_index = i
                     break
-        assert (reg_index != -1)
+        assert (reg_index != 0)
 
         # Keyi:
         # because of the way `route_net` works, if the entry is a src, it will
@@ -645,6 +653,7 @@ class Router:
         # `route_net` will handle the connection properly.
         # However, we need to be careful about cross over the old tiles
         tail_main_path = [main_path[reg_index - 1]]
+
         # sort the net first
         net = self.sort_net(net, self.placement)
         # route the wire
@@ -717,7 +726,8 @@ class Router:
                 else:
                     p, dir_out, dir_in = entry
                 if p in finished_set or entry in working_set or \
-                        p in pos_set:
+                        p in pos_set or (point, dir_out) in pos_set or \
+                        (p, dir_in) in pos_set:
                     # we have already explored this position
                     continue
                 # point backwards
@@ -759,11 +769,17 @@ class Router:
             if len(pin_info) == 1:
                 # this is src
                 p, port, dir_out, dir_in = pin_info[0]
-                if port != "reg":
-                    ports = routing_resource[p]["port"][port]
-                    ports.remove(dir_out)
-                else:
-                    assert self.fold_reg
+
+                # disable any out -> port or port -> out
+                for p_port in routing_resource[p]["port"]:
+                    ports = routing_resource[p]["port"][p_port]
+                    if dir_out in ports:
+                        ports.remove(dir_out)
+                # if port != "reg":
+                #     ports = routing_resource[p]["port"][port]
+                #     ports.remove(dir_out)
+                # else:
+                #    assert self.fold_reg
                 # also remove the routing resource
                 res = self.get_route_resource(self.board_meta,
                                               routing_resource,
@@ -826,21 +842,33 @@ class Router:
                 conn, pos, port = pin_info
                 if port == "reg":
                     assert self.fold_reg
-                    continue    # will be handled later
-                ports = routing_resource[pos]["port"][port]
-                if conn in ports:
-                    ports.remove(conn)
-                continue
+                else:
+                    ports = routing_resource[pos]["port"][port]
+                    if conn in ports:
+                        ports.remove(conn)
+                # disable any coming in connections
+                res = self.get_route_resource(self.board_meta,
+                                              routing_resource,
+                                              pos)
+                conn_remove = set()
+                for conn1, conn2 in res:
+                    if conn1 == conn:
+                        conn_remove.add((conn1, conn2))
+                for entry in conn_remove:
+                    res.remove(entry)
 
             elif len(pin_info) == 4:
                 # need to take care of the extra out
                 # [dir_in, conn, current_point, port]
+                dir_in = pin_info[0]
                 conn = pin_info[1]  # conn is out
                 pos = pin_info[2]
                 res = routing_resource[pos]["route_resource"]
                 conn_remove = set()
                 for conn1, conn2 in res:
                     if conn2 == conn:
+                        conn_remove.add((conn1, conn2))
+                    elif conn1 == dir_in:
                         conn_remove.add((conn1, conn2))
                 for entry in conn_remove:
                     res.remove(entry)
