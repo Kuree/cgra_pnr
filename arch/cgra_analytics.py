@@ -1,21 +1,163 @@
 from .graph import get_raw_connections
 from .graph import build_raw_graph
-from .cgra import load_packed_file
+from .cgra import load_packed_file, read_netlist_json
+from .cgra import get_tile_op
 import networkx as nx
+import six
+
 
 # FIXME
 # random numbers
-# don't judge me... I have no idea what I'm doing
 TIMING_INFO = {
-    "sb": 10,
-    "cb": 5,
-    "alu": 100,
-    "mem": 100,
-    "reg": 20
+    "sb": 50,
+    "cb": 0,
+    "alu": 200,
+    "mul": 1000,
+    "mem": 1000,
+    "reg": 0
 }
 
 
-def find_critical_path(netlist_json, packed_file):
+def deepcopy(obj_to_copy):
+    if isinstance(obj_to_copy, dict):
+        d = obj_to_copy.copy()  # shallow dict copy
+        for k, v in six.iteritems(d):
+            d[k] = deepcopy(v)
+    elif isinstance(obj_to_copy, list):
+        d = obj_to_copy[:]  # shallow list/tuple copy
+        i = len(d)
+        while i:
+            i -= 1
+            d[i] = deepcopy(d[i])
+    elif isinstance(obj_to_copy, set):
+        d = obj_to_copy.copy()
+    else:
+        # tuple is fine since we're not modifying tuples
+        d = obj_to_copy
+    return d
+
+
+def find_critical_path_delay(netlist_json, packed_file, route_result,
+                             placement):
+    _, instances = read_netlist_json(netlist_json)
+    netlists, folded_blocks, id_to_name, changed_pe = \
+        load_packed_file(packed_file)
+
+    def find_net_entry(net, pos, port):
+        for blk_id, blk_port in net:
+            blk_pos = placement[blk_id]
+            if blk_pos == pos and port == blk_port:
+                return blk_id, port
+        raise Exception("Unable to find " + str((pos, port)))
+
+    delay = {}
+    for net_id in netlists:
+        net = netlists[net_id][:]
+        # because every input port has a reg before it. We only need to compute
+        # the time from src to the port
+        path = route_result[net_id][:]
+        src_entry = path.pop(0)
+        delay_time = 0
+        assert(src_entry[0] == "src")
+        src_id, src_port = net.pop(0)
+        if src_port == "reg":
+            delay_time += TIMING_INFO["reg"]
+        else:
+            src_name = id_to_name[src_id]
+            op, _ = get_tile_op(instances[src_name], src_id, changed_pe,
+                                rename_op=False)
+            if op == "mul":
+                delay_time += TIMING_INFO["mul"]
+            elif op == "mem":
+                delay_time += TIMING_INFO["mem"]
+            elif op == "alu":
+                delay_time += TIMING_INFO["alu"]
+            else:
+                assert op is None
+        # traverse through the net
+        for path_entry in path:
+            if path_entry[0] == "link":
+                delay_time += TIMING_INFO["sb"]
+            else:
+                assert path_entry[0] == "sink"
+                if len(path_entry) == 3:
+                    _, _, (pos, port) = path_entry
+                    dst_id, dst_port = find_net_entry(net, pos, port)
+                    dst_pos = placement[dst_id]
+                    assert(dst_port == port and dst_pos == pos)
+                    delay[(dst_id, dst_port, net_id)] =\
+                        delay_time + TIMING_INFO["cb"]
+                    net.remove((dst_id, dst_port))
+                else:
+                    assert len(path_entry) == 4
+                    pos, port = path_entry[-1]
+                    dst_id, dst_port = find_net_entry(net, pos, port)
+                    dst_pos = placement[dst_id]
+                    assert (dst_pos == pos and dst_port == port)
+                    delay[(dst_id, dst_port, net_id)] = \
+                        delay_time + TIMING_INFO["sb"]
+                    net.remove((dst_id, dst_port))
+        assert len(net) == 0
+
+    max_delay = 0
+    max_entry = None
+    for entry in delay:
+        if delay[entry] > max_delay:
+            max_delay = delay[entry]
+            max_entry = entry
+
+    assert max_entry is not None
+
+    # recompute the delay to have detailed entries
+    dst_id, dst_port, net_id = max_entry
+    dst_pos = placement[dst_id]
+    net = netlists[net_id][:]
+    path = route_result[net_id][1:]
+    detailed_delay = {"sb": 0, "cb": 0}
+    # TODO: refactor this
+    src_id, src_port = net.pop(0)
+    if src_port == "reg":
+        detailed_delay["reg"] = TIMING_INFO["reg"]
+    else:
+        src_name = id_to_name[src_id]
+        op, _ = get_tile_op(instances[src_name], src_id, changed_pe,
+                            rename_op=False)
+        if op == "mul":
+            detailed_delay["mul"] = TIMING_INFO["mul"]
+        elif op == "mem":
+            detailed_delay["mem"] = TIMING_INFO["mem"]
+        elif op == "alu":
+            detailed_delay["alu"] = TIMING_INFO["alu"]
+        else:
+            assert op is None
+
+    for path_entry in path:
+        if path_entry[0] == "link":
+            detailed_delay["sb"] += TIMING_INFO["sb"]
+        else:
+            assert path_entry[0] == "sink"
+            if len(path_entry) == 3:
+                _, _, (pos, port) = path_entry
+                if pos == dst_pos and port == dst_port:
+                    detailed_delay["cb"] += TIMING_INFO["cb"]
+                    break
+            else:
+                pos, port = path_entry[-1]
+                if pos == dst_pos and port == dst_port:
+                    # one more switch box
+                    detailed_delay["sb"] += TIMING_INFO["sb"]
+                    detailed_delay["cb"] += TIMING_INFO["cb"]
+                    break
+
+    total_delay = sum([detailed_delay[x] for x in detailed_delay])
+    assert (total_delay == max_delay)
+    blk_name = id_to_name[max_entry[0]]
+    src_name = id_to_name[netlists[max_entry[-1]][0][0]]
+    max_entry = [src_name, blk_name, max_entry[1], max_entry[2]]
+    return max_entry, detailed_delay, max_delay
+
+
+def find_latency_path(netlist_json, packed_file):
     raw_connections = get_raw_connections(netlist_json)
     raw_graph = build_raw_graph(raw_connections)
     long_path = nx.dag_longest_path(raw_graph)
@@ -56,7 +198,7 @@ def find_critical_path(netlist_json, packed_file):
     return net_path
 
 
-def compute_critical_delay(net_path, route_result, placement):
+def compute_latency(net_path, route_result, placement):
     total_time = {"alu": 0, "sb": 0, "reg": 0, "mem": 0, "cb": 0}
     for net_id, src_id, dst_id in net_path:
         path = route_result[net_id]
@@ -134,10 +276,103 @@ def compute_area_usage(placement, board_layout):
         x, y = pos
         blk_type = board_layout[y][x]
         result[blk_type][0] += 1
+        pos_set.add(pos)
     return result
 
 
-def compute_routing_usage(routing_result, routing_resource):
-    used_resource = 0
+def compute_routing_usage(routing_result, routing_resource, board_layout):
+    route_resource = {}
+    for pos in routing_resource:
+        route_resource[pos] = routing_resource[pos]["route_resource"]
+    unused_route_resource = deepcopy(route_resource)
+    for net_id in routing_result:
+        path = routing_result[net_id]
+        track_in = None
+        for path_entry in path:
+            if path_entry[0] == "src":
+                (pos, _), (track_out, track_in) = path_entry[1:]
+                # update left resource
+                chans = route_resource[pos]
+                conn_to_remove = set()
+                for conn_in, conn_out in chans:
+                    if conn_out == track_out:
+                        conn_to_remove.add((conn_in, conn_out))
+                for entry in conn_to_remove:
+                    chans.remove(entry)
+            elif path_entry[0] == "link":
+                assert (track_in is not None)
+                p1, p2 = path_entry[1]
+                conn_out, conn_in = path_entry[2]
+                chans = route_resource[p1]
+                conn_to_remove = set()
+                for c_in, c_out in chans:
+                    if track_in == c_in:
+                        conn_to_remove.add((c_in, c_out))
+                for entry in conn_to_remove:
+                    chans.remove(entry)
+                chans = route_resource[p2]
+                conn_to_remove = set()
+                for c_in, c_out in chans:
+                    if conn_out == c_out:
+                        conn_to_remove.add((c_in, c_out))
+                for entry in conn_to_remove:
+                    chans.remove(entry)
+                track_in = conn_in
+            elif path_entry[0] == "sink":
+                if len(path_entry) == 3:
+                    _, conn_in, (pos, _) = path_entry
+                    chans = route_resource[pos]
+                    conn_to_remove = set()
+                    for c_in, c_out in chans:
+                        if conn_in == c_in:
+                            conn_to_remove.add((c_in, c_out))
+                    for entry in conn_to_remove:
+                        chans.remove(entry)
+                    track_in = conn_in
+                else:
+                    link_entry = path_entry[1]
+                    (pos, _), (conn_in, conn_out) = link_entry
+                    chans = route_resource[pos]
+                    conn_to_remove = set()
+                    for c_in, c_out in chans:
+                        if conn_in == c_in:
+                            conn_to_remove.add((c_in, c_out))
+                        if conn_out == c_out:
+                            conn_to_remove.add((c_in, c_out))
+                    for entry in conn_to_remove:
+                        chans.remove(entry)
+
+                    track_in = conn_in
+
+    # this is indexed by bus, then track
+    resource_usage = {}
+    total_bus = set()
+    total_chan = set()
+    for pos in route_resource:
+        x, y = pos
+        if board_layout[y][x] == "p" or board_layout[y][x] == "m":
+            resource_left = route_resource[(x, y)]
+            total_resource = unused_route_resource[(x, y)]
+            if len(total_bus) == 0:
+                for entry in total_resource:
+                    total_bus.add(entry[0][0])
+                    total_chan.add(entry[0][-1])
+            for bus in total_bus:
+                for chan in total_chan:
+                    left = 0
+                    total = 0
+                    for entry in resource_left:
+                        if entry[0][0] == bus and entry[0][-1] == chan:
+                            left += 1
+                    for entry in total_resource:
+                        if entry[0][0] == bus and entry[0][-1] == chan:
+                            total += 1
+
+                    if bus not in resource_usage:
+                        resource_usage[bus] = {}
+                    if chan not in resource_usage[bus]:
+                        resource_usage[bus][chan] = set()
+                    resource_usage[bus][chan].add((pos, left, total))
+    return resource_usage
 
 

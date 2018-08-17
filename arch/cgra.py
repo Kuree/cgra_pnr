@@ -625,7 +625,8 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
     return tuple(pins)
 
 
-def get_tile_op(instance, blk_id, changed_pe):
+def get_tile_op(instance, blk_id, changed_pe, rename_op=True):
+    """rename_op (False) is used to calculate delay"""
     if "genref" not in instance:
         assert ("modref" in instance)
         assert (instance["modref"] == "cgralib.BitIO")
@@ -634,11 +635,17 @@ def get_tile_op(instance, blk_id, changed_pe):
     if pe_type == "coreir.reg":
         # reg tile, reg in and reg out
         if blk_id in changed_pe:
-            return "add", 0
+            if rename_op:
+                return "add", 0
+            else:
+                return "alu", 0
         else:
             return None, None
     elif pe_type == "cgralib.Mem":
-        op = "mem_" + str(instance["modargs"]["depth"][-1])
+        if rename_op:
+            op = "mem_" + str(instance["modargs"]["depth"][-1])
+        else:
+            op = "mem"
         print_order = 3
     elif pe_type == "cgralib.IO":
         return None, None    # don't care yet
@@ -649,12 +656,17 @@ def get_tile_op(instance, blk_id, changed_pe):
             print_order = 0
             if lut_type == "3f":
                 print_order = 2
-            op = "lut" + lut_type.upper()
+            if rename_op:
+                op = "lut" + lut_type.upper()
+            else:
+                op = "alu"
         elif op == "alu" or op == "combined":
             if "alu_op_debug" in instance["modargs"]:
                 op = instance["modargs"]["alu_op_debug"][-1]
             else:
                 op = instance["modargs"]["alu_op"][-1]
+            if not rename_op:
+                op = "alu"
             print_order = 0
 
         else:

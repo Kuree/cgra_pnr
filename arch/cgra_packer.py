@@ -45,8 +45,8 @@ def convert2netlist(connections):
         # rearrange the net so that it's src -> sink
         net.sort(key=lambda p: sort_value(p))
         netlists.append(net)
-    print("INFO: before conversion connections", len(connections),
-          "after conversion netlists:", len(netlists))
+    # print("INFO: before conversion connections", len(connections),
+    #       "after conversion netlists:", len(netlists))
     return netlists
 
 

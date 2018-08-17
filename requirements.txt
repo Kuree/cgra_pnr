@@ -8,3 +8,5 @@ lxml
 pillow
 # for progress bar
 tqdm
+# should be installed with matplotlib; just in case
+six
