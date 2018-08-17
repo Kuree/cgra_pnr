@@ -19,7 +19,7 @@ class Router:
 
     def __init__(self, cgra_filename,
                  board_meta, packed_filename, placement_filename,
-                 avoid_congestion=True, fold_reg=True):
+                 use_tie_breaker=False, fold_reg=True, channel_width=None):
         self.board_meta = board_meta
         self.layout_board = board_meta[0]
         netlists, _, id_to_name, _, track_mode = load_packed_file(
@@ -38,8 +38,6 @@ class Router:
 
         # NOTE: it's width x height
         self.board_size = (width, height)
-        # TODO: fix this after parsing routing info from the arch
-        self.channel_width = 5
 
         # whether to fold registers when do routing
         self.fold_reg = fold_reg
@@ -51,11 +49,23 @@ class Router:
         r = parse_routing_resource(cgra_filename)
         self.routing_resource = build_routing_resource(r)
 
-        self.avoid_congestion = avoid_congestion
+        self.use_tie_breaker = use_tie_breaker
 
         base_filename = os.path.basename(packed_filename)
         design_name, _ = os.path.splitext(base_filename)
         self.design_name = design_name
+
+        if channel_width is not None:
+            self.channel_width = channel_width
+        else:
+            # loop through the routing resource to figure out the channel width
+            # automatically
+            channel_set = set()
+            for pos in self.routing_resource:
+                chans = self.routing_resource[pos]["route_resource"]
+                for entry in chans:
+                    channel_set.add(entry[0][-1])
+            self.channel_width = len(channel_set)
 
     @staticmethod
     def manhattan_dist(p1, p2):
@@ -93,21 +103,22 @@ class Router:
 
         return direction
 
-    def heuristic_dist(self, depth, pos, dst, bus):
+    def heuristic_dist(self, depth, pos, dst, src=None):
         if len(pos) == 3:
             pos, _, _ = pos
         x, y = pos
-        dist = abs(x - dst[0]) + abs(y - dst[1]) + depth[(x, y)]
-        if self.avoid_congestion and (y, x) in self.routing_resource:
-            route_resource = self.routing_resource[(y, x)]["route_resource"]
-            available_res_bus = len([x for x in route_resource if x[0][0] ==
-                                     bus])
-            if available_res_bus == 0:
-                extra = 100 # a large number
-            else:
-                extra = 20 / available_res_bus
-            extra = 0
-            dist += extra
+        dst_x, dst_y = dst
+        dist = abs(x - dst_x) + abs(y - dst_y) + depth[(x, y)]
+        if self.use_tie_breaker:
+            # http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#breaking-ties
+            assert (src is not None) and (len(src) == 2)
+            src_x, src_y = src
+            dx1 = x - dst_x
+            dy1 = y - dst_y
+            dx2 = x - src_x
+            dy2 = y - src_y
+            cross = abs(dx1 * dy2 + dx2 * dy1)
+            dist += cross * 0.001
         return dist
 
     def get_port_neighbors(self, routing_resource, bus, chan, pos, port):
@@ -678,7 +689,7 @@ class Router:
             # using manhattan distance as heuristics
             working_set.sort(
                 key=lambda pos: self.heuristic_dist(depth, pos,
-                                                    dst_pos, bus))
+                                                    dst_pos, src=src_pos),)
             point = working_set.pop(0)
             if len(point) == 3:
                 point, _, track_in = point
@@ -832,8 +843,8 @@ class Router:
                         conn_remove.add((conn1, conn2))
                 for entry in conn_remove:
                     res.remove(entry)
-                #ports = routing_resource[pos]["port"][pin_info[-1]]
-                #ports.remove(conn)
+                # ports = routing_resource[pos]["port"][pin_info[-1]]
+                # ports.remove(conn)
 
                 # disable any port output to it
                 for port in routing_resource[pos]["port"]:
@@ -850,9 +861,8 @@ class Router:
             for j in range(self.board_size[1]):
                 if \
                         (i in range(0, margin) or j in range(0, margin) or
-                                i in range(height - margin, height) or
-                                j in range(width - margin,
-                                           width)):  # IO is special:
+                         i in range(height - margin, height) or
+                         j in range(width - margin, width)):  # IO is special:
                     continue
                 else:
                     route_r = self.get_route_resource(self.board_meta,
@@ -910,7 +920,7 @@ class Router:
         print("Image saved to", output_path)
 
 
-if __name__ == "__main__":
+def main():
     options, argv = parse_args(sys.argv)
     if len(argv) != 4:
         print("Usage:", sys.argv[0], "[options] <arch_file> <netlist.packed>",
@@ -931,3 +941,6 @@ if __name__ == "__main__":
 
     save_routing_result(r.route_result, route_file)
 
+
+if __name__ == "__main__":
+    main()
