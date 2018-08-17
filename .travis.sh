@@ -5,14 +5,14 @@ declare -a design_files=("conv_1_2_mapped" "conv_2_1_mapped" "conv_3_1_mapped"
 
 
 echo "Downloading CGRA info"
-wget https://github.com/StanfordAHA/CGRAGenerator/raw/shortmem/hardware/generator_z/top/examples/cgra_info.txt.shortmem
+wget https://cdn.rawgit.com/StanfordAHA/CGRAGenerator/shortmem/hardware/generator_z/top/examples/cgra_info.txt.shortmem
 cgra="cgra_info.txt.shortmem"
 
 for file in "${design_files[@]}"
 do
     echo "Downloading $file"
     rm -f ${file}.json
-    wget "https://github.com/StanfordAHA/CGRAGenerator/raw/master/bitstream/bsbuilder/testdir/examples/${file}.json"
+    wget "https://cdn.rawgit.com/StanfordAHA/CGRAGenerator/master/bitstream/bsbuilder/testdir/examples/${file}.json"
     echo "Running PnR tools on ${file}"
     ./scripts/pnr_flow.sh $cgra $file.json
     echo "Running PnR tools on ${file} -no-reg-fold"

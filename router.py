@@ -925,7 +925,7 @@ if __name__ == "__main__":
     r.route()
     if vis_opt:
         r.vis_routing_resource()
-    r.compute_stats()
+    # r.compute_stats()
 
     route_file = argv[3].replace(".place", ".route")
 
