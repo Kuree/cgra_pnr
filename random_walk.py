@@ -1,11 +1,11 @@
 from __future__ import print_function
 import numpy as np
-import sys
+import tempfile
 import random
 import subprocess
 import os
 from tqdm import tqdm
-from util import parse_args
+from argparse import ArgumentParser
 from arch.cgra_packer import load_packed_file
 from arch.cgra import build_graph
 
@@ -146,6 +146,7 @@ def alias_setup(probs):
 
     return J, q
 
+
 def alias_draw(J, q):
     '''
     Draw sample from a non-uniform discrete distribution using alias sampling.
@@ -159,8 +160,8 @@ def alias_draw(J, q):
         return J[kk]
 
 
-def build_walks(netlist_filename):
-    netlists, _, _, _ = load_packed_file(netlist_filename)
+def build_walks(packed_filename, emb_name):
+    netlists, _, _, _ = load_packed_file(packed_filename)
     nx_g = build_graph(netlists)
     p = 0.6
     q = 1
@@ -171,33 +172,35 @@ def build_walks(netlist_filename):
     G.preprocess_transition_probs()
     # generate random walks
     walks = G.simulate_walks(num_walks, walk_length)
-    # output to a file that netlist2vec can read
-    output_name = netlist_filename.replace(".packed", ".n2v")
-    with open(output_name, "w+") as f:
+    basename = os.path.basename(packed_filename)
+    design_name, _ = os.path.splitext(basename)
+
+    with tempfile.NamedTemporaryFile(dir='/tmp', delete=False, mode="w+") as f:
+        output_name = f.name
         for walk in walks:
             for node_id in walk:
                 f.write("{} ".format(node_id))
             f.write("\n")
-    emb_name = netlist_filename.replace(".packed", ".emb")
     print("Using", NETLIST2VEC)
     cmd = [NETLIST2VEC, "-train", output_name, "-output", emb_name, "-size",
            str(num_dim), "-threads", str(1)]
     subprocess.call(cmd)
+    os.remove(output_name)
 
 
 if __name__ == "__main__":
-    options, argv = parse_args(sys.argv)
-    if len(argv) != 2:
-        print("Usage:", argv[0], "<netlist_filename>", file=sys.stderr)
-        exit(1)
-    filename = argv[1]
-    emb_file = filename.replace(".packed", ".emb")
-    if os.path.isfile(emb_file):
-        print("found", emb_file, "skipping", emb_file)
-        #exit(0)
-    print("processing", filename)
+    parser = ArgumentParser("Netlist embedding tool (node2vec based)")
+    parser.add_argument("-i", "--input", help="Packed netlist file, " +
+                        "e.g. harris.packed",
+                        required=True, action="store", dest="input")
+    parser.add_argument("-o", "--output", help="Output embedding file, " +
+                        "e.g. harris.emb",
+                        required=True, action="store", dest="output")
+    args = parser.parse_args()
     seed = 2
     random.seed(seed)
     np.random.seed(seed)
-    build_walks(filename)
+    input_file = args.input
+    output_file = args.output
+    build_walks(input_file, output_file)
     print()

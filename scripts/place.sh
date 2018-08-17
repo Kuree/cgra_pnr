@@ -2,7 +2,7 @@
 set -e
 
 function print_usage() {
-    echo "Usage: $0 [-no-reg-fold] <arch_file> <netlist.packed>" >&2
+    echo "Usage: $0 [--no-reg-fold] <arch_file> <netlist.packed>" >&2
     exit 1
 }
 
@@ -25,6 +25,7 @@ if ! [ -f ${cgra} ] || ! [ -f ${packed} ]; then
 fi
 
 # assume user already have the env activated
-python ${root_dir}/random_walk.py ${packed} -cgra ${option}
 emb="${packed%.packed}.emb"
-python ${root_dir}/place.py ${cgra} ${packed} ${emb} -no-vis -cgra ${option}
+place="${packed%.packed}.place"
+python ${root_dir}/random_walk.py -i ${packed} -o ${emb}
+python ${root_dir}/place.py --cgra ${cgra} -i ${packed} -e ${emb} -o ${place} --no-vis ${option}

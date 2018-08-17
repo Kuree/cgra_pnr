@@ -1,33 +1,52 @@
 from __future__ import print_function
-import sys
-from util import parse_args
+from argparse import ArgumentParser
 from arch.cgra import generate_bitstream
 
 
 def main():
-    options, argv = parse_args(sys.argv)
-    if len(argv) != 5:
-        print("Usage:", sys.argv[0], "[options]",
-              "<arch_file>", "<netlist_file>",
-              "<placement>", "<routing>", file=sys.stderr)
-        print("[options]:", "-no-reg-fold", file=sys.stderr)
-        exit(1)
-    arch_file = argv[1]
-    netlist_file = argv[2]
-    placement_file = argv[3]
-    routing_file = argv[4]
-    fold_reg = True
-    if "no-reg-fold" in options:
-        fold_reg = False
-    print("INFO:", "arch:", arch_file)
+    parser = ArgumentParser("CGRA Router")
+    parser.add_argument("-n", "--netlist", help="Mapped netlist file, " +
+                                                "e.g. harris.json",
+                        required=True, action="store", dest="netlist_file")
+    parser.add_argument("-i", "--input", help="Packed netlist file, " +
+                                              "e.g. harris.packed",
+                        required=True, action="store", dest="packed_filename")
+    parser.add_argument("-o", "--output",
+                        help="Bitstream result in bsb format"+
+                        ", e.g. harris.bsb",
+                        required=True, action="store",
+                        dest="output_filename")
+    parser.add_argument("-c", "--cgra", help="CGRA architecture file",
+                        required=True, action="store", dest="arch_filename")
+    parser.add_argument("-p", "--placement", help="Placement file",
+                        required=True, action="store",
+                        dest="placement_file")
+    parser.add_argument("-r", "--routing", help="Routing file",
+                        required=True, action="store",
+                        dest="routing_file")
+    parser.add_argument("--no-reg-fold", help="If set, the placer will treat " +
+                                              "registers as PE tiles",
+                        action="store_true",
+                        required=False, dest="no_reg_fold", default=False)
+    args = parser.parse_args()
+    arch_filename = args.arch_filename
+    netlist_file = args.netlist_file
+    packed_filename = args.packed_filename
+    placement_file = args.placement_file
+    routing_file = args.routing_file
+    output_filename = args.output_filename
+
+    fold_reg = not args.no_reg_fold
+
+    print("INFO:", "arch:", arch_filename)
     print("INFO:", "netlist:", netlist_file)
     print("INFO:", "placement:", placement_file)
     print("INFO:", "route:", routing_file)
     print("INFO:", "fold_reg:", fold_reg)
 
-    output_filename = netlist_file.replace(".packed", ".bsb")
-
-    generate_bitstream(arch_file, netlist_file, placement_file, routing_file,
+    generate_bitstream(arch_filename, netlist_file, packed_filename,
+                       placement_file,
+                       routing_file,
                        output_filename, fold_reg=fold_reg)
 
 

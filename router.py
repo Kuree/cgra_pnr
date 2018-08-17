@@ -5,13 +5,13 @@ from arch.cgra_packer import load_packed_file
 from arch.cgra import determine_pin_ports
 from arch.cgra_route import parse_routing_resource, build_routing_resource
 from arch import parse_cgra
-import sys
 import os
 import numpy as np
 from visualize import draw_board, draw_cell
 import matplotlib.pyplot as plt
-from util import parse_args, deepcopy
+from util import deepcopy
 from tqdm import tqdm
+from argparse import ArgumentParser
 
 
 class Router:
@@ -71,7 +71,8 @@ class Router:
     def manhattan_dist(p1, p2):
         return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
 
-    def compute_direction(self, src, dst):
+    @staticmethod
+    def compute_direction(src, dst):
         """ right -> 0 bottom -> 1 left -> 2 top -> 3 and mem is a special
             case"""
         assert (src != dst)
@@ -921,23 +922,43 @@ class Router:
 
 
 def main():
-    options, argv = parse_args(sys.argv)
-    if len(argv) != 4:
-        print("Usage:", sys.argv[0], "[options] <arch_file> <netlist.packed>",
-              "<netlist.place>", file=sys.stderr)
-        print("[options]: -no-vis", file=sys.stderr)
-        exit(1)
-    vis_opt = "no-vis" not in options
-    arch_file = argv[1]
-    fold_reg = "no-reg-fold" not in options
-    meta = parse_cgra(arch_file, fold_reg=fold_reg)["CGRA"]
-    r = Router(arch_file, meta, argv[2], argv[3])
+    parser = ArgumentParser("CGRA Router")
+    parser.add_argument("-i", "--input", help="Packed netlist file, " +
+                                              "e.g. harris.packed",
+                        required=True, action="store", dest="packed_filename")
+    parser.add_argument("-o", "--output", help="Routing result, " +
+                                               "e.g. harris.route",
+                        required=True, action="store",
+                        dest="route_file")
+    parser.add_argument("-c", "--cgra", help="CGRA architecture file",
+                        required=True, action="store", dest="arch_filename")
+    parser.add_argument("-p", "--placement", help="Placement file",
+                        required=True, action="store",
+                        dest="placement_filename")
+    parser.add_argument("--no-reg-fold", help="If set, the placer will treat " +
+                                              "registers as PE tiles",
+                        action="store_true",
+                        required=False, dest="no_reg_fold", default=False)
+    parser.add_argument("--no-vis", help="If set, the router won't show " +
+                        "visualization result for routing",
+                        action="store_true",
+                        required=False, dest="no_vis", default=False)
+    args = parser.parse_args()
+
+    arch_filename = args.arch_filename
+    packed_filename = args.packed_filename
+    route_file = args.route_file
+
+    vis_opt = not args.no_vis
+    fold_reg = not args.no_reg_fold
+
+    placement_filename = args.placement_filename
+    meta = parse_cgra(arch_filename, fold_reg=fold_reg)["CGRA"]
+    r = Router(arch_filename, meta,packed_filename, placement_filename)
     r.route()
     if vis_opt:
         r.vis_routing_resource()
     # r.compute_stats()
-
-    route_file = argv[3].replace(".place", ".route")
 
     save_routing_result(r.route_result, route_file)
 

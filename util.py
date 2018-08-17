@@ -127,14 +127,3 @@ def compute_centroid(cluster_cells):
         return pos_x, pos_y
     else:
         raise Exception("Unknown type: " + str(type(cluster_cells)))
-
-
-def parse_args(sys_argv):
-    options = set()
-    args = []
-    for i, value in enumerate(sys_argv):
-        if value[0] == "-":
-            options.add(value[1:])
-        else:
-            args.append(value)
-    return options, args

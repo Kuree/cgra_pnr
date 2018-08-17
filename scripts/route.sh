@@ -2,7 +2,7 @@
 set -e
 
 function print_usage() {
-    echo "Usage: $0 [-no-reg-fold] <arch_file> <netlist.packed>" >&2
+    echo "Usage: $0 [--no-reg-fold] <arch_file> <netlist.packed>" >&2
     exit 1
 }
 
@@ -34,4 +34,5 @@ if ! [ -f "$place" ] ; then
     exit 1
 fi
 
-python ${root_dir}/router.py ${option} ${cgra} ${packed} ${place} -no-vis
+route="${packed%.packed}.route"
+python ${root_dir}/router.py ${option} -c ${cgra} -i ${packed} -p ${place} -o ${route} --no-vis

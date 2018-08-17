@@ -192,7 +192,6 @@ class Annealer(object):
         # Find an initial guess for temperature
         T = 0.0
         E = self.energy()
-        self.update(step, T, E, None, None)
         while T == 0.0:
             step += 1
             self.move()
@@ -206,12 +205,10 @@ class Annealer(object):
             T = round_figures(T / 1.5, 2)
             E, acceptance, improvement = run(T, steps)
             step += steps
-            self.update(step, T, E, acceptance, improvement)
         while acceptance < 0.98:
             T = round_figures(T * 1.5, 2)
             E, acceptance, improvement = run(T, steps)
             step += steps
-            self.update(step, T, E, acceptance, improvement)
         Tmax = T
 
         # Search for Tmin - a temperature that gives 0% improvement
@@ -219,7 +216,6 @@ class Annealer(object):
             T = round_figures(T / 1.5, 2)
             E, acceptance, improvement = run(T, steps)
             step += steps
-            self.update(step, T, E, acceptance, improvement)
         Tmin = T
 
         # Calculate anneal duration
@@ -227,4 +223,5 @@ class Annealer(object):
         duration = round_figures(int(60.0 * minutes * step / elapsed), 2)
 
         # Don't perform anneal, just return params
-        return {'tmax': Tmax, 'tmin': Tmin, 'steps': duration, 'updates': self.updates}
+        return {'tmax': Tmax, 'tmin': Tmin, 'steps': duration, 'updates':
+                 self.updates}

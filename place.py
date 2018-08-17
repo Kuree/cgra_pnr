@@ -1,5 +1,6 @@
 from __future__ import print_function
-from util import reduce_cluster_graph, compute_centroid, parse_args
+from util import reduce_cluster_graph, compute_centroid
+from argparse import ArgumentParser
 from arch.parser import parse_emb
 from sa import SAClusterPlacer, SADetailedPlacer, DeblockAnnealer
 from sa import ClusterException, SAMacroPlacer
@@ -57,23 +58,40 @@ def macro_placement(board, board_pos, fixed_blk_pos, netlists, is_legal,
 
 
 def main():
-    options, argv = parse_args(sys.argv)
-    if len(argv) < 4:
-        print("Usage:", sys.argv[0], "[options] <arch_file> <packed_list>",
-              "<embedding>", file=sys.stderr)
-        print("[options]: -no-vis -no-reg-fold", file=sys.stderr)
-        exit(1)
+    parser = ArgumentParser("CGRA Placer")
+    parser.add_argument("-i", "--input", help="Packed netlist file, " +
+                                              "e.g. harris.packed",
+                        required=True, action="store", dest="packed_filename")
+    parser.add_argument("-e", "--embedding", help="Netlist embedding file, " +
+                        "e.g. harris.emb",
+                        required=True, action="store", dest="netlist_embedding")
+    parser.add_argument("-o", "--output", help="Placement result, " +
+                                               "e.g. harris.place",
+                        required=True, action="store",
+                        dest="placement_filename")
+    parser.add_argument("-c", "--cgra", help="CGRA architecture file",
+                        required=True, action="store", dest="arch_filename")
+    parser.add_argument("--no-reg-fold", help="If set, the placer will treat " +
+                                              "registers as PE tiles",
+                        action="store_true",
+                        required=False, dest="no_reg_fold", default=False)
+    parser.add_argument("--no-vis", help="If set, the placer won't show " +
+                        "visualization result for placement",
+                        action="store_true",
+                        required=False, dest="no_vis", default=False)
+    args = parser.parse_args()
     # force some internal library random sate
     random.seed(0)
     np.random.seed(0)
 
-    arch_filename = argv[1]
-    packed_filename = argv[2]
-    netlist_embedding = argv[3]
+    arch_filename = args.arch_filename
+    packed_filename = args.packed_filename
+    netlist_embedding = args.netlist_embedding
+    placement_filename = args.placement_filename
 
-    vis_opt = "no-vis" not in options
+    vis_opt = not args.no_vis
+    fold_reg = not args.no_reg_fold
 
-    fold_reg = "no-reg-fold" not in options
     board_meta = parse_cgra(arch_filename, fold_reg=fold_reg)
     board_name, board_meta = board_meta.popitem()
     print("INFO: Placing for", board_name)
@@ -130,7 +148,6 @@ def main():
         place_on_board(board, blk_id, pos)
 
     # save the placement file
-    placement_filename = packed_filename.replace(".packed", ".place")
     save_placement(board_pos, id_to_name, folded_blocks, placement_filename)
     basename_file = os.path.basename(placement_filename)
     design_name, _ = os.path.splitext(basename_file)

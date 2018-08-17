@@ -15,7 +15,7 @@ do
     wget "https://cdn.rawgit.com/StanfordAHA/CGRAGenerator/master/bitstream/bsbuilder/testdir/examples/${file}.json"
     echo "Running PnR tools on ${file}"
     ./scripts/pnr_flow.sh $cgra $file.json
-    echo "Running PnR tools on ${file} -no-reg-fold"
-    ./scripts/pnr_flow.sh -no-reg-fold $cgra $file.json
+    echo "Running PnR tools on ${file} with --no-reg-fold"
+    ./scripts/pnr_flow.sh --no-reg-fold $cgra $file.json
 done
 

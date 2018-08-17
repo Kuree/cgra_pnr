@@ -280,7 +280,8 @@ def parse_routing_result(routing_file):
     return result
 
 
-def generate_bitstream(board_filename, packed_filename, placement_filename,
+def generate_bitstream(board_filename, netlist_filename,
+                       packed_filename, placement_filename,
                        routing_filename, output_filename,
                        fold_reg=True):
     netlists, folded_blocks, id_to_name, changed_pe =\
@@ -291,8 +292,7 @@ def generate_bitstream(board_filename, packed_filename, placement_filename,
     route_result = parse_routing_result(routing_filename)
     tile_mapping = board_meta[-1]
     board_layout = board_meta[0]
-    # FIXME
-    netlist_filename = packed_filename.replace(".packed", ".json")
+
     connections, instances = read_netlist_json(netlist_filename)
 
     output_string = ""

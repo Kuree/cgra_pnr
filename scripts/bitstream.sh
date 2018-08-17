@@ -11,10 +11,23 @@ function print_usage() {
 if [ "$#" -eq 2 ]; then
     cgra=$1
     packed=$2
+    bsb="${packed%.packed}.bsb"
 elif [ "$#" -eq 3 ]; then
+    if [[ $1 == -* ]]; then
+        option=$1
+        cgra=$2
+        packed=$3
+        bsb="${packed%.packed}.bsb"
+    else
+        cgra=$1
+        packed=$2
+        bsb=$3
+    fi
+elif [ "$#" -eq 4 ]; then
     option=$1
     cgra=$2
     packed=$3
+    bsb=$4
 else
     print_usage
 fi
@@ -36,4 +49,6 @@ if ! [ -f "$route" ] ; then
     exit 1
 fi
 
-python ${root_dir}/bitstream.py ${option} ${cgra} ${packed} ${place} ${route}
+netlist="${packed%.packed}.json"
+python ${root_dir}/bitstream.py ${option} -c ${cgra} -n ${netlist} \
+                                -i ${packed} -p ${place} -r ${route} -o ${bsb}

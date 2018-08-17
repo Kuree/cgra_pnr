@@ -1,27 +1,20 @@
 from __future__ import print_function
 from arch.cgra_packer import save_packing_result
-from util import parse_args
-import sys
+from argparse import ArgumentParser
 
 if __name__ == "__main__":
-    options, argv = parse_args(sys.argv)
-    mode = None
-    if len(argv) != 2:
-        print("Usage:", argv[0], "<netlist_filename>", file=sys.stderr)
-        exit(1)
-    if "cgra" in options:
-        mode = "cgra"
-    elif "fpga" in options:
-        mode = "fpga"
-    else:
-        print("Please indicate either -cgra or -fpga", file=sys.stderr)
-        exit(1)
-
-    fold_reg = True
-    if "no-reg-fold" in options:
-        fold_reg = False
-    filename = argv[1]
-    if mode == "cgra":
-        packed = filename.replace(".json", ".packed")
-        save_packing_result(filename, packed, fold_reg=fold_reg)
-        print("saved to", packed)
+    parser = ArgumentParser("CGRA Packing tool")
+    parser.add_argument("-n", "--netlist", help="Mapped netlist file, " +
+                                                "e.g. harris.json",
+                        required=True, action="store", dest="input")
+    parser.add_argument("-o", "--output", help="Packed netlist file, " +
+                                               "e.g. harris.packed",
+                        required=True, action="store", dest="output")
+    parser.add_argument("--no-reg-fold", help="If set, the packer will turn " +
+                        "registers into PE tiles", action="store_true",
+                        required=False, dest="no_reg_fold", default=False)
+    args = parser.parse_args()
+    filename = args.input
+    packed = args.output
+    fold_reg = not args.no_reg_fold
+    save_packing_result(filename, packed, fold_reg=fold_reg)

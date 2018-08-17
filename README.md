@@ -12,9 +12,10 @@ $ pip install -r requirements.txt
 ```
 ### Usage
 ```
-$ ./scripts/pnr_flow.sh [-no-reg-fold] <cgra_info.txt> <mapped_design.json>
+$ ./scripts/pnr_flow.sh [--no-reg-fold] <cgra_info.txt> <mapped_design.json> [output.bsb]
 ```
-`-no-reg-fold` optimizes for the routing path as it turns some registers into PE tiles. Without using `-no-reg-fold` we will have about 15% area reduction, but it may have longer path, based on the current CGRA design. So given timing information as well as more flexible hardware generation in the future, this option needs to be used on a case by case basis.
+  - `--no-reg-fold` optimizes for the routing path as it turns some registers into PE tiles. Without using `--no-reg-fold` we will have about 15% area reduction, but it may have longer path, based on the current CGRA design. So given timing information as well as more flexible hardware generation in the future, this option needs to be used on a case by case basis.
+  - if `<output.bsb>` not specified, it will output `<mapped_design.bsb>` to the same directory as` <netlist.json>`
 
 Files created in the same directory as `<mapped_design.json>`:
 + `<mapped_design.n2v>`: random walk on the star-expanded netlist graph
