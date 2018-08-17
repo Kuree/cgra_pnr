@@ -43,12 +43,12 @@ def find_critical_path_delay(netlist_json, packed_file, route_result,
     netlists, folded_blocks, id_to_name, changed_pe = \
         load_packed_file(packed_file)
 
-    def find_net_entry(net, pos, port):
-        for blk_id, blk_port in net:
+    def find_net_entry(n, p, p_port):
+        for blk_id, blk_port in n:
             blk_pos = placement[blk_id]
-            if blk_pos == pos and port == blk_port:
-                return blk_id, port
-        raise Exception("Unable to find " + str((pos, port)))
+            if blk_pos == p and p_port == blk_port:
+                return blk_id, p_port
+        raise Exception("Unable to find " + str((p, p_port)))
 
     delay = {}
     for net_id in netlists:
@@ -374,5 +374,3 @@ def compute_routing_usage(routing_result, routing_resource, board_layout):
                         resource_usage[bus][chan] = set()
                     resource_usage[bus][chan].add((pos, left, total))
     return resource_usage
-
-

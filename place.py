@@ -8,7 +8,6 @@ from arch import make_board, parse_cgra, generate_place_on_board
 from arch import generate_is_cell_legal
 import numpy as np
 import os
-import sys
 import matplotlib.pyplot as plt
 from visualize import draw_board, draw_cell, color_palette
 from sklearn.cluster import KMeans
@@ -20,9 +19,9 @@ from arch.cgra_packer import load_packed_file
 
 
 def detailed_placement(args):
-    clusters, cells, netlist, board, blk_pos, fold_reg = args
+    clusters, cells, netlist, board, blk_pos, fold_reg, seed = args
     detailed = SADetailedPlacer(clusters, cells, netlist, board, blk_pos,
-                                fold_reg=fold_reg)
+                                fold_reg=fold_reg, seed=seed)
     # detailed.steps = 10
     detailed.anneal()
     return detailed.state
@@ -79,15 +78,22 @@ def main():
                         "visualization result for placement",
                         action="store_true",
                         required=False, dest="no_vis", default=False)
+    parser.add_argument("-s", "--seed", help="Seed for placement. " +
+                        "default is 0", type=int, default=0,
+                        required=False, action="store", dest="seed")
+
     args = parser.parse_args()
-    # force some internal library random sate
-    random.seed(0)
-    np.random.seed(0)
 
     arch_filename = args.arch_filename
     packed_filename = args.packed_filename
     netlist_embedding = args.netlist_embedding
     placement_filename = args.placement_filename
+
+    seed = args.seed
+    print("Using seed", seed, "for placement")
+    # just in case for some library
+    random.seed(seed)
+    np.random.seed(seed)
 
     vis_opt = not args.no_vis
     fold_reg = not args.no_reg_fold
@@ -125,13 +131,14 @@ def main():
 
     centroids, cluster_cells, clusters = perform_global_placement(
         blks, data_x, emb, fixed_blk_pos, netlists, board, is_cell_legal,
-        board_meta[-1], fold_reg=fold_reg, num_clusters=num_of_kernels)
+        board_meta[-1], fold_reg=fold_reg, num_clusters=num_of_kernels,
+        seed=seed)
 
     # anneal with each cluster
     board_pos = perform_detailed_placement(board, centroids,
                                            cluster_cells, clusters,
                                            fixed_blk_pos, netlists,
-                                           fold_reg)
+                                           fold_reg, seed)
 
     # do a macro placement
     # macro_result = macro_placement(board, board_pos, fixed_blk_pos, netlists,
@@ -262,7 +269,7 @@ def get_num_clusters(id_to_name):
 
 
 def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
-                             is_cell_legal, board_info, fold_reg,
+                             is_cell_legal, board_info, fold_reg, seed,
                              num_clusters=None):
     # simple heuristics to calculate the clusters
     if num_clusters is None or num_clusters == 0:
@@ -291,7 +298,8 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                                              fixed_blk_pos, place_factor=factor,
                                              is_cell_legal=is_cell_legal,
                                              board_info=board_info,
-                                             fold_reg=fold_reg)
+                                             fold_reg=fold_reg,
+                                             seed=seed)
             break
         except ClusterException as _:
             num_clusters -= 1
@@ -304,7 +312,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
 
 
 def perform_detailed_placement(board, centroids, cluster_cells, clusters,
-                               fixed_blk_pos, netlists, fold_reg):
+                               fixed_blk_pos, netlists, fold_reg, seed):
     board_pos = fixed_blk_pos.copy()
     map_args = []
     for c_id in cluster_cells:
@@ -319,7 +327,7 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
             pos = centroids[i]
             blk_pos[node_id] = pos
         map_args.append((clusters[c_id], cells, new_netlist, board, blk_pos,
-                         fold_reg))
+                         fold_reg, seed))
     num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
     pool = Pool(num_of_cpus)
     results = pool.map(detailed_placement, map_args)

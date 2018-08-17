@@ -196,8 +196,12 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="Output embedding file, " +
                         "e.g. harris.emb",
                         required=True, action="store", dest="output")
+    parser.add_argument("-s", "--seed", help="Seed for random walk. " +
+                        "default is 0", type=int, default=0,
+                        required=False, action="store", dest="seed")
     args = parser.parse_args()
-    seed = 2
+    seed = args.seed
+    print("Using seed", seed, "for random walk")
     random.seed(seed)
     np.random.seed(seed)
     input_file = args.input

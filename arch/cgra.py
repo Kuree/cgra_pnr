@@ -1,12 +1,11 @@
 from __future__ import print_function
 import arch
 import networkx as nx
-import random
 
 from . import load_packed_file, read_netlist_json
 
 
-def save_placement(board_pos, id_to_name, folded_blocks, place_file):
+def save_placement(board_pos, id_to_name, _, place_file):
     blk_keys = list(board_pos.keys())
     blk_keys.sort(key=lambda b: int(b[1:]))
     with open(place_file, "w+") as f:
@@ -19,9 +18,9 @@ def save_placement(board_pos, id_to_name, folded_blocks, place_file):
         for blk_id in blk_keys:
             x, y = board_pos[blk_id]
             f.write("{0}\t\t{1}\t{2}\t\t#{3}\n".format(id_to_name[blk_id],
-                                                          x,
-                                                          y,
-                                                          blk_id))
+                                                       x,
+                                                       y,
+                                                       blk_id))
 
 
 def parse_placement(placement_file):
@@ -66,7 +65,7 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
     output_io_locations = [(18, 2), (2, 18)]
 
     blks = list(blks)
-    blks.sort(key=lambda x: int(x[1:]))
+    blks.sort(key=lambda b: int(b[1:]))
 
     for blk_id in blks:
         if blk_id[0] == "i":
@@ -169,7 +168,6 @@ def parse_routing_result(routing_file):
     with open(routing_file) as f:
         lines = f.readlines()
     result = {}
-    net_id = -1
     total_lines = len(lines)
     line_num = 0
 
@@ -198,7 +196,6 @@ def parse_routing_result(routing_file):
             # read through the net
             conns = []
             # sanity check
-            has_src = False
             has_sink = False
             node_index = 0
             while True:
@@ -223,7 +220,6 @@ def parse_routing_result(routing_file):
 
                 if line[:6] == "SOURCE":
                     # source
-                    has_src = True
                     line = line[6:].strip()
                     assert ("->" in line)
                     assert (not self_connected_sink)
@@ -232,7 +228,7 @@ def parse_routing_result(routing_file):
                     src_pos = parse_conn(src_pos)
                     src_port = src_port.strip()
                     conn_in, conn_out = parse_conn(conn_in),\
-                                        parse_conn(conn_out)
+                        parse_conn(conn_out)
                     conns.append(("src", (src_pos, src_port),
                                   (conn_in, conn_out)))
                 elif line[:4] == "SINK":
@@ -407,7 +403,7 @@ def generate_bitstream(board_filename, netlist_filename,
         f.write(output_string)
 
 
-def make_track_string(pos, track, tile_mapping, board_layout, track_str=""):
+def make_track_string(pos, track, tile_mapping, _, track_str=""):
     bus, is_out, side, chan = track
     # if board_layout[pos[1]][pos[0]] is None:
     #     # TODO: USE MEM CAPACITY
@@ -455,7 +451,7 @@ def handle_reg_sink(entry, track_in, tile_mapping, board_layout):
     (dir_out, dir_in), (pos, port) = entry
     assert (port == "reg")
     result, _ = handle_link((pos, pos), (dir_out, dir_in), dir_in, tile_mapping,
-                         board_layout, track_str=" (r)")
+                            board_layout, track_str=" (r)")
     return result, track_in
 
 
@@ -487,9 +483,9 @@ def handle_sink(self_conn, conn, dst, track_in,
             blk_id, port = info
             pos = placement[blk_id]
             pos_port_set.add((pos, port))
-    #if dst in pos_port_set:
-    #    track_str = " (r)"
-    #else:
+    # if dst in pos_port_set:
+    #     track_str = " (r)"
+    # else:
     #    track_str = ""
     tile = tile_mapping[dst_pos]
     track = "" if conn[0] == 16 else "b"

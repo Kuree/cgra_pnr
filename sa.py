@@ -9,7 +9,7 @@ import random
 # main class to perform simulated annealing within each cluster
 class SADetailedPlacer(Annealer):
     def __init__(self, blocks, available_pos, netlists, board,
-                 board_pos, is_legal=None, fold_reg=True):
+                 board_pos, is_legal=None, fold_reg=True, seed=0):
         """Please notice that netlists has to be prepared already, i.e., replace
         the remote partition with a pseudo block.
         Also assumes that available_pos is the same size as blocks. If not,
@@ -52,7 +52,7 @@ class SADetailedPlacer(Annealer):
                                 self.reg_no_pos[blk].add(bb)
 
         rand = random.Random()
-        rand.seed(0)
+        rand.seed(seed)
         state = self.__init_placement()
 
         Annealer.__init__(self, initial_state=state, rand=rand)
@@ -326,7 +326,8 @@ class DeblockAnnealer(Annealer):
 class SAClusterPlacer(Annealer):
     def __init__(self, clusters, netlists, board, board_pos, board_info,
                  is_legal=None, is_cell_legal=None, place_factor=6,
-                 fold_reg=True):
+                 fold_reg=True,
+                 seed=0):
         """Notice that each clusters has to be a condensed node in a networkx graph
         whose edge denotes how many intra-cluster connections.
         """
@@ -348,7 +349,7 @@ class SAClusterPlacer(Annealer):
         self.clb_margin = board_info["margin"]
 
         rand = random.Random()
-        rand.seed(0)
+        rand.seed(seed)
 
         self.squeeze_iter = 5
         self.place_factor = place_factor

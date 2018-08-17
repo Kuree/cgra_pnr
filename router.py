@@ -180,7 +180,7 @@ class Router:
         return results
 
     @staticmethod
-    def get_route_resource(board_meta, routing_resource, pos):
+    def get_route_resource(_, routing_resource, pos):
         # FIXME: use height for searching
         if pos not in routing_resource:
             # # FIXME: use height for searching
@@ -192,7 +192,7 @@ class Router:
             return routing_resource[pos]["route_resource"]
 
     @staticmethod
-    def get_port_resource(board_meta, routing_resource, pos):
+    def get_port_resource(_, routing_resource, pos):
         # FIXME: use height for searching
         if pos not in routing_resource:
             # # FIXME: use height for searching
@@ -304,10 +304,11 @@ class Router:
                                 if entry[-1] == chan]
 
             route_resource = [entry for entry in route_resource
-                                  if entry[-1][-1] == chan and \
-                                  entry[-1][0] == bus]
+                              if entry[-1][-1] == chan and
+                              entry[-1][0] == bus]
 
-            # if self.layout_board[current_point[1]][current_point[0]] == "m" and \
+            # if self.layout_board[current_point[1]][current_point[0]]
+            #  == "m" and \
             #         dir_in[2] == 1:
             #     # make the dir in as dir_out from the bottom tile
             #    dir_in = (bus, 1, 7, chan)
@@ -316,7 +317,7 @@ class Router:
 
             # need to determine if we can connect to a out bus
             # that is, in_sxtx -> out_sxtx
-            #          out_sxts -> op
+            #          out_sxtx -> op
             for conn in operand_channels:
                 # the format in operand_channels is out -> in
                 conn_chan = (dir_in, conn)
@@ -982,7 +983,7 @@ def main():
 
     placement_filename = args.placement_filename
     meta = parse_cgra(arch_filename, fold_reg=fold_reg)["CGRA"]
-    r = Router(arch_filename, meta,packed_filename, placement_filename)
+    r = Router(arch_filename, meta, packed_filename, placement_filename)
     r.route()
     if vis_opt:
         r.vis_routing_resource()
