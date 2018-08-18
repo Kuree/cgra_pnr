@@ -63,21 +63,18 @@ def main():
     print("Total wire:", total_wire)
 
     print("-" * cols)
-    (src_name, blk_name, _, _), detailed_delay, total_delay = \
-        find_critical_path_delay(netlist, packed_file, routing_result,
-                                 placement)
+    total_delay, detailed_delay = find_critical_path_delay(netlist,
+                                                           packed_file,
+                                                           routing_result,
+                                                           placement)
     print("Critical Path:")
-    s = "{0} -> {1}".format(src_name, blk_name)
-    if len(s) > cols:
-        print(src_name)
-        print("\t->", blk_name)
-    else:
-        print(src_name, "->", blk_name)
     clock_speed = 1e6 / total_delay
     total_delay_formatted = "{:.2f} ns".format(total_delay / 1000)
     print("Delay:", total_delay_formatted, "Max Clock Speed:",
           "{0:.2f} MHz".format(clock_speed))
-    for entry in detailed_delay:
+    delay_keys = list(detailed_delay.keys())
+    delay_keys.sort(key=lambda x: detailed_delay[x], reverse=True)
+    for entry in delay_keys:
         percentage = detailed_delay[entry] / total_delay * 100
         num_bar = int(percentage / 100 * scale)
         print("{0:4s} {1} {2} {3:.2f}%".format(entry.upper(),

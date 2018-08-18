@@ -37,11 +37,72 @@ def deepcopy(obj_to_copy):
     return d
 
 
-def find_critical_path_delay(netlist_json, packed_file, route_result,
-                             placement):
-    _, instances = read_netlist_json(netlist_json)
-    netlists, folded_blocks, id_to_name, changed_pe = \
-        load_packed_file(packed_file)
+def find_all_timed_path(g, name_to_id):
+    nodes = g.nodes()
+    timed_elements = set()
+
+    for node in nodes:
+        if ("reg" in node or "mem" in node or "io" in node) and \
+           ("lut" not in node and "cnst" not in node and
+           name_to_id[node][0] != "b"):
+            timed_elements.add(node)
+
+    def find_path(start_node):
+        """recursive function to get all path starting from the start_node"""
+        result = []
+        nei = list(nx.neighbors(g, start_node))
+        for n in nei:
+            if n in timed_elements:
+                result.append([start_node, n])
+            else:
+                r = find_path(n)
+                for nn in r:
+                    result.append([start_node] + nn)
+        return result
+
+    paths = []
+    for node in timed_elements:
+        path = find_path(node)
+        for node_path in path:
+            if len(node_path) > 1:
+                paths.append(node_path)
+
+    return paths
+
+
+def convert_timed_path(timed_paths, netlists, folded_blocks, name_to_id):
+    # building indexes
+    blk_to_net = {}
+    for net_id in netlists:
+        blk_id = netlists[net_id][0][0]
+        blk_to_net[blk_id] = net_id
+
+    result = []
+    for path in timed_paths:
+        path_entry = []
+        for index, entry_name in enumerate(path):
+            blk_id = name_to_id[entry_name]
+            if (blk_id, "out") in folded_blocks:
+                blk_id = folded_blocks[(blk_id, "out")][0]
+            if blk_id not in blk_to_net:
+                assert (blk_id[0] == "i") and index == len(path) - 1
+                path_entry.append((blk_id, None))
+            else:
+                net_id = blk_to_net[blk_id]
+                # the last one is the end
+                path_entry.append((blk_id, net_id))
+
+        result.append(path_entry)
+
+    return result
+
+
+def calculate_delay(net_path, route_result, placement, netlists, id_to_name,
+                    instances, changed_pe):
+    # result entry setup
+    result = {}
+    for entry in TIMING_INFO:
+        result[entry] = 0
 
     def find_net_entry(n, p, p_port):
         for blk_id, blk_port in n:
@@ -50,111 +111,81 @@ def find_critical_path_delay(netlist_json, packed_file, route_result,
                 return blk_id, p_port
         raise Exception("Unable to find " + str((p, p_port)))
 
-    delay = {}
-    for net_id in netlists:
+    for i in range(len(net_path) - 1):
+        src_id, net_id = net_path[i]
+        dst_id, _ = net_path[i + 1]
+        end_pos = placement[dst_id]
+
         net = netlists[net_id][:]
-        # because every input port has a reg before it. We only need to compute
-        # the time from src to the port
         path = route_result[net_id][:]
         src_entry = path.pop(0)
-        delay_time = 0
-        assert(src_entry[0] == "src")
+        assert (src_entry[0] == "src")
         src_id, src_port = net.pop(0)
         if src_port == "reg":
-            delay_time += TIMING_INFO["reg"]
+            result["reg"] += TIMING_INFO["reg"]
         else:
             src_name = id_to_name[src_id]
-            op, _ = get_tile_op(instances[src_name], src_id, changed_pe,
-                                rename_op=False)
-            if op == "mul":
-                delay_time += TIMING_INFO["mul"]
-            elif op == "mem":
-                delay_time += TIMING_INFO["mem"]
-            elif op == "alu":
-                delay_time += TIMING_INFO["alu"]
+            # FIXME
+            if "mul" == src_name[:3]:
+                op = "mul"
             else:
-                assert op is None
+                op, _ = get_tile_op(instances[src_name], src_id, changed_pe,
+                                    rename_op=False)
+            if op is not None:
+                result[op] += TIMING_INFO[op]
         # traverse through the net
         for path_entry in path:
             if path_entry[0] == "link":
-                delay_time += TIMING_INFO["sb"]
+                result["sb"] += TIMING_INFO["sb"]
             else:
                 assert path_entry[0] == "sink"
                 if len(path_entry) == 3:
                     _, _, (pos, port) = path_entry
                     dst_id, dst_port = find_net_entry(net, pos, port)
                     dst_pos = placement[dst_id]
-                    assert(dst_port == port and dst_pos == pos)
-                    delay[(dst_id, dst_port, net_id)] =\
-                        delay_time + TIMING_INFO["cb"]
+                    assert (dst_port == port and dst_pos == pos)
+                    result["cb"] += TIMING_INFO["cb"]
                     net.remove((dst_id, dst_port))
+                    if pos == end_pos:
+                        break
                 else:
                     assert len(path_entry) == 4
                     pos, port = path_entry[-1]
                     dst_id, dst_port = find_net_entry(net, pos, port)
                     dst_pos = placement[dst_id]
                     assert (dst_pos == pos and dst_port == port)
-                    delay[(dst_id, dst_port, net_id)] = \
-                        delay_time + TIMING_INFO["sb"]
+                    result["sb"] += TIMING_INFO["sb"]
                     net.remove((dst_id, dst_port))
-        assert len(net) == 0
+                    if pos == end_pos:
+                        break
 
-    max_delay = 0
-    max_entry = None
-    for entry in delay:
-        if delay[entry] > max_delay:
-            max_delay = delay[entry]
-            max_entry = entry
+    total_time = sum([result[x] for x in result])
+    return total_time, result
 
-    assert max_entry is not None
 
-    # recompute the delay to have detailed entries
-    dst_id, dst_port, net_id = max_entry
-    dst_pos = placement[dst_id]
-    net = netlists[net_id][:]
-    path = route_result[net_id][1:]
-    detailed_delay = {"sb": 0, "cb": 0}
-    # TODO: refactor this
-    src_id, src_port = net.pop(0)
-    if src_port == "reg":
-        detailed_delay["reg"] = TIMING_INFO["reg"]
-    else:
-        src_name = id_to_name[src_id]
-        op, _ = get_tile_op(instances[src_name], src_id, changed_pe,
-                            rename_op=False)
-        if op == "mul":
-            detailed_delay["mul"] = TIMING_INFO["mul"]
-        elif op == "mem":
-            detailed_delay["mem"] = TIMING_INFO["mem"]
-        elif op == "alu":
-            detailed_delay["alu"] = TIMING_INFO["alu"]
-        else:
-            assert op is None
+def find_critical_path_delay(netlist_json, packed_file, route_result,
+                             placement):
+    connections, instances = read_netlist_json(netlist_json)
+    netlists, folded_blocks, id_to_name, changed_pe = \
+        load_packed_file(packed_file)
 
-    for path_entry in path:
-        if path_entry[0] == "link":
-            detailed_delay["sb"] += TIMING_INFO["sb"]
-        else:
-            assert path_entry[0] == "sink"
-            if len(path_entry) == 3:
-                _, _, (pos, port) = path_entry
-                if pos == dst_pos and port == dst_port:
-                    detailed_delay["cb"] += TIMING_INFO["cb"]
-                    break
-            else:
-                pos, port = path_entry[-1]
-                if pos == dst_pos and port == dst_port:
-                    # one more switch box
-                    detailed_delay["sb"] += TIMING_INFO["sb"]
-                    detailed_delay["cb"] += TIMING_INFO["cb"]
-                    break
+    name_to_id = {}
+    for blk_id in id_to_name:
+        name_to_id[id_to_name[blk_id]] = blk_id
 
-    total_delay = sum([detailed_delay[x] for x in detailed_delay])
-    assert (total_delay == max_delay)
-    blk_name = id_to_name[max_entry[0]]
-    src_name = id_to_name[netlists[max_entry[-1]][0][0]]
-    max_entry = [src_name, blk_name, max_entry[1], max_entry[2]]
-    return max_entry, detailed_delay, max_delay
+    timed_paths = \
+        find_all_timed_path(build_raw_graph(get_raw_connections(netlist_json)),
+                            name_to_id)
+    delay_paths = convert_timed_path(timed_paths, netlists, folded_blocks,
+                                     name_to_id)
+
+    delays = [calculate_delay(net_path, route_result, placement, netlists,
+                              id_to_name, instances, changed_pe)
+              for net_path in delay_paths]
+
+    delays.sort(key=lambda x: x[0], reverse=True)
+
+    return delays[0]
 
 
 def find_latency_path(netlist_json, packed_file):
@@ -165,7 +196,7 @@ def find_latency_path(netlist_json, packed_file):
 
     name_to_id = {}
     for blk_id in id_to_name:
-        name_to_id[id_to_name[blk_id]] = blk_id
+        name_to_id[id_to_name[blk_id].encode("ascii", "ignore")] = blk_id
 
     blk_ids = []
     for pin in long_path:
