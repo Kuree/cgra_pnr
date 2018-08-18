@@ -25,6 +25,40 @@ Files created in the same directory as `<mapped_design.json>`:
 + `<mapped_design.route>`, routing result. Each section is the route for a single net. More details see the header section in the result file
 + `<mapped_design.bsb`, bsbuilder files can be compiled to bitstream via `bsbuilder.py` in `CGRAGenerator`
 
+### Analysis Tool
+The toolchain has a tool to produce post-PnR report on area usage, route channel usage, and timing. Here is an example on harris:
+```
+Area Usage:
+I    █                                                                   2.94%
+P    ██████████████████████████                                          39.58%
+M    ██████████                                                          15.62%
+--------------------------------------------------------------------------------
+Total wire: 530
+--------------------------------------------------------------------------------
+Critical Path:
+Delay: 9.75 ns Max Clock Speed: 102.56 MHz
+MUL  ███████████████████████████                                         41.03%
+SB   █████████████████████                                               32.31%
+ALU  ██████████████████                                                  26.67%
+CB                                                                       0.00%
+MEM                                                                      0.00%
+REG                                                                      0.00%
+--------------------------------------------------------------------------------
+BUS: 16
+TRACK 0 ████████████████                                                 24.38%
+TRACK 1 █████████████                                                    20.44%
+TRACK 2 █████████                                                        14.10%
+TRACK 3 ████████                                                         12.47%
+TRACK 4                                                                  0.85%
+BUS: 1
+TRACK 0 █████                                                            8.56%
+TRACK 1 █                                                                1.92%
+TRACK 2                                                                  0.00%
+TRACK 3                                                                  0.00%
+TRACK 4                                                                  0.00%
+
+```
+
 #### FPGA
 ~~It currently can place FPGA based on a custom format designed for VPR. I will release the modified VPR soon. It uses a different format than the packed CGRA file.~~
 
