@@ -1,6 +1,6 @@
 CGRA PnR [![Build Status](https://travis-ci.org/Kuree/cgra_pnr.svg?branch=master)](https://travis-ci.org/Kuree/cgra_pnr)
 ---
-Generic place and route tool for CGRA/FPGA.
+Generic place and route tool for CGRA.
 ## Getting started
 ### Prerequisites
 + GCC 4.0.x and above
@@ -59,7 +59,7 @@ TRACK 4                                                                  0.00%
 
 ```
 
-#### FPGA
+### FPGA
 ~~It currently can place FPGA based on a custom format designed for VPR. I will release the modified VPR soon. It uses a different format than the packed CGRA file.~~
 
 Due to the recent changes to the initial placement as well as annealing movement change, I've decided to drop suuport of FPGA in the `master` branch. FPGA code is still accessible in older branches.

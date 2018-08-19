@@ -390,6 +390,31 @@ class Router:
         assert(len(net) == len(new_net))
         return new_net
 
+    @staticmethod
+    def dis_allow_chan(pos, port, bus, chan, route_resource, pos_set):
+        if port == "reg":
+            pos_set.add(pos)
+        else:
+            port_operands = route_resource[pos]["port"][port]
+            port_operands = [x for x in port_operands if x[0] == bus
+                             and x[-1] == chan]
+            for conn in port_operands:
+                pos_set.add((pos, conn))
+
+    @staticmethod
+    def allow_chan(pos, pos_set):
+        if pos in pos_set:
+            pos_set.remove(pos)
+        entry_to_remove = set()
+        for entry in pos_set:
+            if len(entry) == 2 and not isinstance(entry[-1], int):
+                assert (isinstance(entry[1], tuple))
+                entry_pos = entry[0]
+                if pos == entry_pos:
+                    entry_to_remove.add(entry)
+        for entry in entry_to_remove:
+            pos_set.remove(entry)
+
     def route(self):
         print("INFO: Performing greedy BFS/A* routing")
         if self.fold_reg:
@@ -417,9 +442,11 @@ class Router:
                     pos_set = set()
                     for reg_net_id in linked_nets[net_id]:
                         reg_net = self.netlists[reg_net_id]
-                        for blk_id, _ in reg_net:
+                        for blk_id, port in reg_net:
                             pos = self.placement[blk_id]
-                            pos_set.add(pos)
+                            self.dis_allow_chan(pos, port, bus, chan,
+                                                self.routing_resource,
+                                                pos_set)
                 else:
                     pos_set = None
 
@@ -504,7 +531,7 @@ class Router:
             dst_point = dst_set.pop(0)
             dst_id, dst_port = dst_point
             dst_pos = self.placement[dst_id]
-            pos_set.remove(dst_pos)
+            self.allow_chan(dst_pos, pos_set)
 
             # self loop prevention
             # this will happen if two operands share the same input

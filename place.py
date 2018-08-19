@@ -19,8 +19,10 @@ from arch.cgra_packer import load_packed_file
 
 
 def detailed_placement(args):
-    clusters, cells, netlist, board, blk_pos, fold_reg, seed = args
-    detailed = SADetailedPlacer(clusters, cells, netlist, board, blk_pos,
+    clusters, cells, netlist, raw_netlist,\
+                board, blk_pos, fold_reg, seed = args
+    detailed = SADetailedPlacer(clusters, cells, netlist, raw_netlist,
+                                board, blk_pos,
                                 fold_reg=fold_reg, seed=seed)
     # detailed.steps = 10
     detailed.anneal()
@@ -113,7 +115,7 @@ def main():
     netlists = prune_netlist(raw_netlist)
     special_blocks = set()
     for blk_id in raw_emb:
-        if blk_id[0] != "p" and blk_id[0] != "r":
+        if blk_id[0] == "i":
             special_blocks.add(blk_id)
         else:
             emb[blk_id] = raw_emb[blk_id]
@@ -131,13 +133,14 @@ def main():
 
     centroids, cluster_cells, clusters = perform_global_placement(
         blks, data_x, emb, fixed_blk_pos, netlists, board, is_cell_legal,
-        board_meta[-1], fold_reg=fold_reg, num_clusters=num_of_kernels,
+        board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
         seed=seed)
 
     # anneal with each cluster
     board_pos = perform_detailed_placement(board, centroids,
                                            cluster_cells, clusters,
                                            fixed_blk_pos, netlists,
+                                           raw_netlist,
                                            fold_reg, seed)
 
     # do a macro placement
@@ -269,7 +272,7 @@ def get_num_clusters(id_to_name):
 
 
 def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
-                             is_cell_legal, board_info, fold_reg, seed,
+                             is_cell_legal, board_meta, fold_reg, seed,
                              num_clusters=None):
     # simple heuristics to calculate the clusters
     if num_clusters is None or num_clusters == 0:
@@ -297,7 +300,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
             cluster_placer = SAClusterPlacer(clusters, netlists, board,
                                              fixed_blk_pos, place_factor=factor,
                                              is_cell_legal=is_cell_legal,
-                                             board_info=board_info,
+                                             board_meta=board_meta,
                                              fold_reg=fold_reg,
                                              seed=seed)
             break
@@ -305,14 +308,15 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
             num_clusters -= 1
             factor = 4
 
-    # cluster_placer.steps = 2000
+    # cluster_placer.steps = 200
     cluster_placer.anneal()
     cluster_cells, centroids = cluster_placer.squeeze()
     return centroids, cluster_cells, clusters
 
 
 def perform_detailed_placement(board, centroids, cluster_cells, clusters,
-                               fixed_blk_pos, netlists, fold_reg, seed):
+                               fixed_blk_pos, netlists, raw_netlist,
+                               fold_reg, seed):
     board_pos = fixed_blk_pos.copy()
     map_args = []
     for c_id in cluster_cells:
@@ -326,10 +330,12 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
             node_id = "x" + str(i)
             pos = centroids[i]
             blk_pos[node_id] = pos
-        map_args.append((clusters[c_id], cells, new_netlist, board, blk_pos,
+        map_args.append((clusters[c_id], cells, new_netlist, raw_netlist,
+                         board, blk_pos,
                          fold_reg, seed))
     num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
     pool = Pool(num_of_cpus)
+    # detailed_placement(map_args[0])
     results = pool.map(detailed_placement, map_args)
     pool.close()
     pool.join()

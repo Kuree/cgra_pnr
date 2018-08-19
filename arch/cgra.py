@@ -44,9 +44,7 @@ def parse_placement(placement_file):
 def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
                          place_on_board):
     # put IO in fixed blocks
-    # TODO: fix 1bit IO
     io_count = 0
-    mem_count = 0
 
     # find ports
     io_mapping = {}
@@ -61,6 +59,7 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
                     raise Exception("Unknown port: " + port + " for IO: " +
                                     blk_id)
 
+    # TODO obtain this info from board meta
     input_io_locations = [(1, 2), (2, 1)]
     output_io_locations = [(18, 2), (2, 18)]
 
@@ -86,14 +85,6 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
             io_count += 1
-        elif blk_id[0] == "m":
-            # just evenly distributed
-            x = 5 + (mem_count % 3) * 4
-            y = 2 + (mem_count // 3) * 4
-            pos = (x, y)
-            place_on_board(board, blk_id, pos)
-            board_pos[blk_id] = pos
-            mem_count += 1
         else:
             raise Exception("Unknown block type", blk_id)
 

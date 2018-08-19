@@ -1,14 +1,15 @@
 from __future__ import division, print_function
 from simanneal import Annealer
-from util import compute_hpwl, manhattan_distance
+from util import compute_hpwl, manhattan_distance, deepcopy
 from util import reduce_cluster_graph, compute_centroids
+from arch.netlist import group_reg_nets
 import numpy as np
 import random
 
 
 # main class to perform simulated annealing within each cluster
 class SADetailedPlacer(Annealer):
-    def __init__(self, blocks, available_pos, netlists, board,
+    def __init__(self, blocks, total_cells, netlists, raw_netlist, board,
                  board_pos, is_legal=None, fold_reg=True, seed=0):
         """Please notice that netlists has to be prepared already, i.e., replace
         the remote partition with a pseudo block.
@@ -17,6 +18,10 @@ class SADetailedPlacer(Annealer):
         The board can be an empty board.
         """
         self.blocks = blocks
+        # TODO:
+        # switch every thing into dictionary based
+        available_pos = total_cells["p"]
+        self.total_cells = total_cells
         self.available_pos = available_pos
         self.netlists = netlists
         self.blk_pos = board_pos
@@ -38,8 +43,13 @@ class SADetailedPlacer(Annealer):
 
         self.reg_no_pos = {}
         if fold_reg:
+            linked_nets, _ = group_reg_nets(raw_netlist)
             for net_id in netlists:
                 net = netlists[net_id]
+                if net_id in linked_nets:
+                    for reg_net_id in linked_nets[net_id]:
+                        if reg_net_id in netlists:
+                            net += netlists[reg_net_id]
                 for blk in net:
                     # we only care about the wire it's driving
                     if blk[0] == "r" and blk in self.blocks:
@@ -53,23 +63,25 @@ class SADetailedPlacer(Annealer):
 
         rand = random.Random()
         rand.seed(seed)
-        state = self.__init_placement()
+        state = self.__init_placement(rand)
 
         Annealer.__init__(self, initial_state=state, rand=rand)
 
-    def __init_placement(self):
+    def __init_placement(self, rand):
         # filling in PE tiles first
         pos = list(self.available_pos)
         num_pos = len(pos)
         state = {}
         pe_blocks = [b for b in self.blocks if b[0] == "p"]
         pe_blocks.sort(key=lambda x: int(x[1:]))
-        reg_blocks = [b for b in self.blocks if b not in pe_blocks]
+        reg_blocks = [b for b in self.blocks if b[0] == "r"]
         reg_blocks.sort(key=lambda x: int(x[1:]))
+        special_blocks = [b for b in self.blocks if b not in pe_blocks and
+                          b not in reg_blocks]
         # make sure there is enough space
         assert (max(len(pe_blocks), len(reg_blocks) < len(pos)))
         total_blocks = pe_blocks + reg_blocks
-        assert (len(total_blocks) == len(self.blocks))
+
         board = {}
         pos_index = 0
         index = 0
@@ -105,6 +117,19 @@ class SADetailedPlacer(Annealer):
                 board[new_pos].append(blk_id)
                 state[blk_id] = new_pos
                 index += 1
+
+        # place special blocks
+        special_cells = deepcopy(self.total_cells)
+        for blk_type in special_cells:
+            blks = [b for b in special_blocks if b[0] == blk_type]
+            if len(blks) == 0:
+                continue
+            # random pick up some blocks
+            available_cells = special_cells[blk_type]
+            cells = rand.sample(available_cells, len(blks))
+            for i in range(len(blks)):
+                state[blks[i]] = cells[i]
+
         return state
 
     def __reg_net(self, pos, blk, board):
@@ -138,17 +163,40 @@ class SADetailedPlacer(Annealer):
         return self.__reg_net(pos, blk, board)
 
     def move(self):
+        available_ids = list(self.state.keys())
+        available_ids.sort(key=lambda x: int(x[1:]))
+        available_pos = list(self.available_pos)
+
+        board = {}
+        for blk_id in self.state:
+            b_pos = self.state[blk_id]
+            if b_pos not in board:
+                board[b_pos] = []
+            board[b_pos].append(blk_id)
+
+        blk = self.random.choice(available_ids)
+        blk_pos = self.state[blk]
+
+        # if blk is a special block
+        blk_type = blk[0]
+        # TODO: fix this
+        if blk_type != "p" and blk_type != "r":
+            # special blocks
+            # pick up a random pos
+            next_pos = self.random.sample(self.total_cells[blk_type], 1)[0]
+            if next_pos not in board or len(board[next_pos]) == 0:
+                # an empty spot
+                self.state[blk] = next_pos
+            else:
+                # swap
+                assert len(board[next_pos]) == 1
+                next_blk = board[next_pos][0]
+                self.state[next_blk] = blk_pos
+                self.state[blk] = next_pos
+            return
+
         if self.fold_reg:
-            board = {}
-            for blk_id in self.state:
-                b_pos = self.state[blk_id]
-                if b_pos not in board:
-                    board[b_pos] = []
-                board[b_pos].append(blk_id)
-            available_ids = list(self.state.keys())
-            available_pos = list(self.available_pos)
-            blk = self.random.choice(available_ids)
-            blk_pos = self.state[blk]
+
             pos = self.random.choice(available_pos)
             if pos != blk_pos:
                 if self.is_legal(pos, blk, board):
@@ -165,17 +213,13 @@ class SADetailedPlacer(Annealer):
                             self.state[blk_swap] = blk_pos
 
         else:
-            ids = list(self.state.keys())
-            ids.sort(key=lambda x: int(x[1:]))
-            a = self.random.choice(ids)
-            b = self.random.choice(ids)
-            pos_a = self.state[a]
+            b = self.random.choice(available_ids)
             pos_b = self.state[b]
-            if self.is_legal(pos_a, b, self.board) and \
-                    self.is_legal(pos_b, a, self.board):
+            if self.is_legal(blk_pos, b, self.board) and \
+                    self.is_legal(pos_b, blk, self.board):
                 # swap
-                self.state[a] = pos_b
-                self.state[b] = pos_a
+                self.state[blk] = pos_b
+                self.state[b] = blk_pos
 
     def energy(self):
         """we use HPWL as the cost function"""
@@ -324,7 +368,7 @@ class DeblockAnnealer(Annealer):
 
 # main class to perform simulated annealing on each cluster
 class SAClusterPlacer(Annealer):
-    def __init__(self, clusters, netlists, board, board_pos, board_info,
+    def __init__(self, clusters, netlists, board, board_pos, board_meta,
                  is_legal=None, is_cell_legal=None, place_factor=6,
                  fold_reg=True,
                  seed=0):
@@ -344,7 +388,8 @@ class SAClusterPlacer(Annealer):
             self.is_cell_legal = lambda p, cb: True
         else:
             self.is_cell_legal = is_cell_legal
-
+        board_info = board_meta[-1]
+        self.board_layout = board_meta[0]
         self.clb_type = board_info["clb_type"]
         self.clb_margin = board_info["margin"]
 
@@ -611,6 +656,8 @@ class SAClusterPlacer(Annealer):
 
         cluster_pos = self.state
         cluster_cells = {}
+        used_special_blocks_pos = set()
+        special_cells = {}
         # make each position sets
         for cluster_id in cluster_pos:
             pos = cluster_pos[cluster_id]
@@ -641,6 +688,11 @@ class SAClusterPlacer(Annealer):
                     count += 1
                 search_count += 1
             cluster_cells[cluster_id] = cells
+
+            extra_cells = self.assign_special_blocks(
+                self.clusters[cluster_id], cluster_pos[cluster_id], bbox,
+                self.board_layout, used_special_blocks_pos)
+            special_cells[cluster_id] = extra_cells
 
         # now the fun part, lets squeeze more!
         # algorithm
@@ -702,10 +754,72 @@ class SAClusterPlacer(Annealer):
                 if num_moves <= 5:
                     break
 
-        # return centroids as well
-        centroids = compute_centroids(cluster_cells)
+        # merge them into per blk_type
+        result_cells = {}
+        for cluster_id in cluster_cells:
+            result_cells[cluster_id] = {"p": cluster_cells[cluster_id]}
 
-        return cluster_cells, centroids
+        # add special cells to the final position
+        for cluster_id in special_cells:
+            result_cells[cluster_id].update(special_cells[cluster_id])
+
+        # return centroids as well
+        centroids = compute_centroids(result_cells)
+
+        return result_cells, centroids
+
+    @staticmethod
+    def assign_special_blocks(cluster, cluster_pos, bbox, board_layout,
+                              used_spots):
+        special_blks = {}
+        cells = {}
+        for blk_id in cluster:
+            blk_type = blk_id[0]
+            if blk_type != "p" and blk_type != "r" and blk_type != "i":
+                if blk_type not in special_blks:
+                    special_blks[blk_type] = 0
+                special_blks[blk_type] += 1
+
+        pos_x, pos_y = cluster_pos
+        width, height = bbox
+        centroid = pos_x + width // 2, pos_y + height / 2
+        for x in range(pos_x, pos_x + width):
+            for y in range(pos_y, pos_y + width):
+                blk_type = board_layout[y][x]
+                pos = (x, y)
+                if blk_type in special_blks and pos not in used_spots:
+                    # we found one
+                    if blk_type not in cells:
+                        cells[blk_type] = set()
+                    cells[blk_type].add(pos)
+                    used_spots.add(pos)
+                    if special_blks[blk_type] > 0:
+                        special_blks[blk_type] -= 1
+
+        # here is the difficult part. if we still have blocks left to assign,
+        # we need to do an brute force search
+        available_pos = {}
+        for blk_type in special_blks:
+            available_pos[blk_type] = []
+        for y in range(len(board_layout)):
+            for x in range(len(board_layout[y])):
+                pos = (x, y)
+                blk_type = board_layout[y][x]
+                if pos not in used_spots and blk_type in special_blks:
+                    available_pos[blk_type].append(pos)
+        for blk_type in special_blks:
+            num_blocks = special_blks[blk_type]
+            pos_list = available_pos[blk_type]
+            if len(pos_list) < num_blocks:
+                raise Exception("Not enough blocks left for type: " + blk_type)
+            pos_list.sort(key=lambda p: manhattan_distance(p, centroid))
+            for i in range(num_blocks):
+                if blk_type not in cells:
+                    cells[blk_type] = set()
+                cells[blk_type].add(pos_list[i])
+                used_spots.add(pos_list[i])
+
+        return cells
 
     @staticmethod
     def __get_bboard(cluster_cells, check=True):
