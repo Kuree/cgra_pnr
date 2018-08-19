@@ -166,6 +166,8 @@ class SADetailedPlacer(Annealer):
         available_ids = list(self.state.keys())
         available_ids.sort(key=lambda x: int(x[1:]))
         available_pos = list(self.available_pos)
+        available_pe_ids = [x for x in list(self.state.keys()) if x[0] == "p"]
+        available_pe_ids.sort(key=lambda x: int(x[1:]))
 
         board = {}
         for blk_id in self.state:
@@ -196,7 +198,6 @@ class SADetailedPlacer(Annealer):
             return
 
         if self.fold_reg:
-
             pos = self.random.choice(available_pos)
             if pos != blk_pos:
                 if self.is_legal(pos, blk, board):
@@ -213,7 +214,7 @@ class SADetailedPlacer(Annealer):
                             self.state[blk_swap] = blk_pos
 
         else:
-            b = self.random.choice(available_ids)
+            b = self.random.choice(available_pe_ids)
             pos_b = self.state[b]
             if self.is_legal(blk_pos, b, self.board) and \
                     self.is_legal(pos_b, blk, self.board):
