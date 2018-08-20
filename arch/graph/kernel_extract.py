@@ -2,6 +2,7 @@ from __future__ import print_function
 import json
 import numpy as np
 import sys
+import os.path
 import networkx as nx
 from sklearn.cluster import KMeans
 
@@ -303,10 +304,9 @@ def lb_clustering(connections, raw_names):
 
 
 def visualize(g, lb_set):
-    if __name__ == "__main__":
-        from os import sys, path
-        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-        from visualize import color_palette
+    sys.path.append(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__)))))
+    from visualize import color_palette
 
     def to_hex(color):
         return "#{0:02X}{1:02X}{2:02X}".format(color[0], color[1], color[2])
@@ -323,10 +323,12 @@ def visualize(g, lb_set):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage:", sys.argv[0], "<netlist.json>", file=sys.stderr)
+    if len(sys.argv) != 3:
+        print("Usage:", sys.argv[0], "<netlist.json> <output.png>",
+              file=sys.stderr)
         exit(1)
     filename = sys.argv[1]
+    output_filename = sys.argv[2]
     connections, raw_names = parse_connections(filename)
     #lb_clustering(connections, raw_names)
     #traverse_clustering(connections, raw_names)
@@ -334,8 +336,8 @@ def main():
 
     raw_connections = get_raw_connections(filename)
     raw_graph = build_raw_graph(raw_connections)
-    visualize_raw_graph(raw_graph, clusters)
-    handle_emb_clustering(filename, raw_names)
+    visualize_raw_graph(raw_graph, clusters, output_filename)
+    # handle_emb_clustering(filename, raw_names)
 
 
 if __name__ == "__main__":

@@ -121,8 +121,12 @@ cgra_info.txt
 serpent.log*
 *.bsb
 *.route
+*.packed
 dataset
 *.xml
 
 # other folders
 figures
+
+# images
+*.png
