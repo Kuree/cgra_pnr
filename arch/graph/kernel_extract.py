@@ -6,14 +6,22 @@ import os.path
 import networkx as nx
 from sklearn.cluster import KMeans
 
+if __name__ == '__main__':
+    # handle import
+    sys.path.append(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))
+    from netlist import is_conn_out
+else:
+    from ..netlist import is_conn_out
+
 
 def build_raw_graph(raw_connections):
     g = nx.DiGraph()
     for conn1, conn2 in raw_connections:
         port1 = conn1.split(".")[1:]
         port2 = conn2.split(".")[1:]
-        conn1_out = "out" in port1 or "rdata" in conn1
-        conn2_out = "out" in port2 or "rdata" in conn2
+        conn1_out = is_conn_out(port1)
+        conn2_out = is_conn_out(port2)
         conn1_name = conn1.split(".")[0]
         conn2_name = conn2.split(".")[0]
         assert (conn1_out ^ conn2_out)
@@ -101,14 +109,13 @@ def parse_connections(filename):
             conn1_index = conn1.index("$")
         else:
             conn1_index = conn1.index(".")
-        conn1_port = conn1[conn1_index:]
-        conn1_out = "out" in conn1_port or "rdata" in conn1_port
+        conn1_out = is_conn_out(conn1)
         if "$" in conn2 and "const" not in conn2:
             conn2_index = conn2.index("$")
         else:
             conn2_index = conn2.index(".")
-        conn2_port = conn2[conn2_index:]
-        conn2_out = "out" in conn2_port or "rdata" in conn2_port
+        conn2_out = is_conn_out(conn2)
+        print(conn1, conn2, conn1_out, conn2_out)
         assert (conn1_out ^ conn2_out)
         conn1_name = conn1[:conn1_index]
         conn2_name = conn2[:conn2_index]
@@ -327,6 +334,7 @@ def main():
         print("Usage:", sys.argv[0], "<netlist.json> <output.png>",
               file=sys.stderr)
         exit(1)
+
     filename = sys.argv[1]
     output_filename = sys.argv[2]
     connections, raw_names = parse_connections(filename)

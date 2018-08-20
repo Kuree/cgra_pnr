@@ -1,3 +1,6 @@
+import six
+
+
 def group_reg_nets(netlists):
     net_id_to_remove = set()
     linked_nets = {}
@@ -55,3 +58,27 @@ def group_reg_nets(netlists):
     assert(len(resolved_net) == len(net_id_to_remove))
 
     return linked_nets, net_id_to_remove
+
+
+def is_conn_out(raw_name):
+    port_names = ["out", "valid", "rdata"]
+    if isinstance(raw_name, six.text_type):
+        raw_name = raw_name.split(".")
+    if len(raw_name) > 1:
+        raw_name = raw_name[1:]
+    for name in port_names:
+        if name in raw_name:
+            return True
+    return False
+
+
+def is_conn_in(raw_name):
+    port_names = ["in", "wen", "cg_en", "ren", "wdata"]
+    if isinstance(raw_name, six.text_type):
+        raw_name = raw_name.split(".")
+    if len(raw_name) > 1:
+        raw_name = raw_name[1:]
+    for name in port_names:
+        if name in raw_name:
+            return True
+    return False

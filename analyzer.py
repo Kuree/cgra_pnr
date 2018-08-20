@@ -11,7 +11,7 @@ from arch.cgra_route import parse_routing_resource, build_routing_resource
 
 def main():
     if len(sys.argv) != 4:
-        print("Usage:", sys.argv[0], "<cgra_info.txt", "<netlist.json>",
+        print("Usage:", sys.argv[0], "<cgra_info.txt>", "<netlist.json>",
               "<netlist.route>",
               file=sys.stderr)
         exit(1)

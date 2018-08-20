@@ -173,7 +173,7 @@ def build_routing_resource(parsed_resource):
                               "port": operands}
             continue
         # build operand connection
-        operands = {"out": set(), "rdata": set()}
+        operands = {"out": set(), "rdata": set(), "valid": set()}
         connections = {}
         for bus in entry["cb"]:
             for sink in entry["cb"][bus]:
@@ -199,11 +199,15 @@ def build_routing_resource(parsed_resource):
                         operands["out"].add(sink_wire)
                     elif wire == "rdata":
                         operands["rdata"].add(sink_wire)
+                    elif wire == "valid":
+                        operands["valid"].add(sink_wire)
 
         if len(operands["out"]) == 0:
             operands.pop("out", None)
         if len(operands["rdata"]) == 0:
             operands.pop("rdata", None)
+        if len(operands["valid"]) == 0:
+            operands.pop("valid", None)
 
         # build real routing resources on the chip
         route_resource = set()

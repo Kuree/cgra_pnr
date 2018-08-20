@@ -9,6 +9,7 @@ from __future__ import print_function
 import sys
 import json
 import os
+from .netlist import is_conn_out, is_conn_in
 
 
 def convert2netlist(connections):
@@ -36,14 +37,16 @@ def convert2netlist(connections):
 
         def sort_value(key):
             raw_splits = key.split(".")
-            if "in" in raw_splits:
+            if is_conn_in(raw_splits):
                 return 2
-            elif "out" in raw_splits:
+            elif is_conn_out(raw_splits):
                 return 0
             else:
                 return 1
         # rearrange the net so that it's src -> sink
         net.sort(key=lambda p: sort_value(p))
+        # sanity check to make sure that the first one is indeed an out
+        assert (is_conn_out(net[0]))
         netlists.append(net)
     # print("INFO: before conversion connections", len(connections),
     #       "after conversion netlists:", len(netlists))
@@ -305,7 +308,6 @@ def generate_netlists(connections, instances):
             # FIXME: don't care about these so far
             if port == "ren" or port == "cg_en":
                 continue
-
             if port == "data.in.0":
                 port = "data0"
             elif port == "data.in.1":
@@ -328,6 +330,8 @@ def generate_netlists(connections, instances):
                 port = "wdata"
             elif "out" in port:
                 port = "out"
+            elif "valid" in port:
+                port = "valid"
             else:
                 raise Exception("Unrecognized port " + port)
             hyper_edge.append((blk_id, port))
