@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division
 import arch
 import networkx as nx
 
@@ -42,7 +42,7 @@ def parse_placement(placement_file):
 
 
 def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
-                         place_on_board):
+                         place_on_board, board_meta):
     # put IO in fixed blocks
     io_count = 0
 
@@ -59,9 +59,19 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
                     raise Exception("Unknown port: " + port + " for IO: " +
                                     blk_id)
 
-    # TODO obtain this info from board meta
-    input_io_locations = [(1, 2), (2, 1)]
-    output_io_locations = [(18, 2), (2, 18)]
+    board_info = board_meta[-1]
+    io_locations = board_info["io"]
+    io_locations.sort(key=lambda x: x[0] + x[1])
+    # input_io_locations = [(1, 2), (2, 1)]
+    # output_io_locations = [(18, 2), (2, 18)]
+    input_io_locations = io_locations[:len(io_locations) // 2]
+    output_io_locations = io_locations[len(io_locations) // 2:]
+
+    # Keyi:
+    # sort the io location lists so that it will produce result consistent
+    # with the simulator
+    input_io_locations.sort(key=lambda x: x[0])
+    output_io_locations.sort(key=lambda x: x[1])
 
     blks = list(blks)
     blks.sort(key=lambda b: int(b[1:]))

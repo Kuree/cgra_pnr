@@ -122,7 +122,8 @@ def main():
     # place the spacial blocks first
     place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
                          id_to_name,
-                         place_on_board)
+                         place_on_board,
+                         board_meta)
 
     data_x = np.zeros((len(emb), num_dim))
     blks = list(emb.keys())
