@@ -466,7 +466,8 @@ class Router:
                         reg_length, reg_path, routing_resource = \
                             self.route_reg_net(reg_net, bus, chan,
                                                routing_resource,
-                                               reg_path)
+                                               reg_path,
+                                               pos_set)
                         route_length[chan] += reg_length
                         if route_length[chan] >= self.MAX_PATH_LENGTH:
                             break   # just terminate without proceeding next
@@ -522,10 +523,15 @@ class Router:
         # we have a very complex net where there are lots of "semi-circles".
         # *Solution*
         # we can use pos_set to enforce the router won't go through it
+        # Update:
+        # need to relax so that we can still route though it, but not using
+        # the wires required to connected to operands.
         if pos_set is None:
             pos_set = set()
-        for (p_id, _) in dst_set:
-            pos_set.add(self.placement[p_id])
+        for (p_id, p_port) in dst_set:
+            p_pos = self.placement[p_id]
+            self.dis_allow_chan(p_pos, p_port, bus, chan, routing_resource,
+                                pos_set)
 
         while len(dst_set) > 0:
             dst_point = dst_set.pop(0)
@@ -641,7 +647,7 @@ class Router:
         return isinstance(path_entry[-1], str)
 
     def route_reg_net(self, net, bus, chan, routing_resource,
-                      main_path):
+                      main_path, pos_set):
         # obtain the out direction of the reg from main path
         # notice that is is possible the reg is the last sink. If so,
         # pick up any
@@ -687,7 +693,8 @@ class Router:
         # route the wire
         path_length, final_path, routing_resource = \
             self.route_net(bus, chan, net, routing_resource, is_src=False,
-                           final_path=tail_main_path)
+                           final_path=tail_main_path,
+                           pos_set=pos_set)
         if path_length == self.MAX_PATH_LENGTH:
             # not routable
             # just return that and the rest of the logic is going to handle

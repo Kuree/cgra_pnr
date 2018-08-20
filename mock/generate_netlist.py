@@ -120,7 +120,7 @@ def create_kernel(kernel_size, num_mem, num_reg, const_rate, reg_reg_rate,
     for i in range(kernel_size):
         names.append("{}${}".format(random_name(), kernel_num + i))
     kernel_num += kernel_size
-    working_set = names.copy()
+    working_set = names[:]
     mems = []
     regs = []
     wens = []
