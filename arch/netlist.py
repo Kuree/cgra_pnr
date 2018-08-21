@@ -57,6 +57,24 @@ def group_reg_nets(netlists):
     # make sure we've merged every nets
     assert(len(resolved_net) == len(net_id_to_remove))
 
+    # last pass to ensure the order of the linked nets is correct
+    for net_id in linked_nets:
+        reg_nets = linked_nets[net_id]
+        reg_net_index = {}
+        index = 0
+        working_set = [net_id]
+        while len(working_set) > 0:
+            n_id = working_set.pop(0)
+            for blk, _ in netlists[n_id][1:]:
+                if blk[0] == "r":
+                    # find the reg_net that has it as src
+                    for reg_net_id in reg_nets:
+                        if netlists[reg_net_id][0][0] == blk:
+                            working_set.append(reg_net_id)
+                            reg_net_index[reg_net_id] = index
+                            index += 1
+        reg_nets.sort(key=lambda x: reg_net_index[x])
+
     return linked_nets, net_id_to_remove
 
 

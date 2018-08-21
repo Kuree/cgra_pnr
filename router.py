@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from util import deepcopy
 from tqdm import tqdm
 from argparse import ArgumentParser
+import sys
 
 
 class Router:
@@ -659,8 +660,9 @@ class Router:
         reg_index = -1
         for i in range(len(main_path) - 1, -1, -1):
             entry = main_path[i]
-            # cannot be source
-            assert (len(entry) != 1)
+            # it can't be the src
+            if len(entry) == 1:
+                raise Exception("reg cannot be src twice")
             # it has to be a direct sink
             if len(entry) == 3:
                 conn, pos, port = entry
@@ -668,7 +670,7 @@ class Router:
                     # we have found it
                     reg_index = i
                     break
-        assert (reg_index != 0)
+        assert (reg_index != 0 and reg_index != -1)
 
         # Keyi:
         # because of the way `route_net` works, if the entry is a src, it will

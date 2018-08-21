@@ -161,11 +161,11 @@ def create_kernel(kernel_size, num_mem, num_reg, const_rate, reg_reg_rate,
     # so we do an in-place sort
 
     def reverse_topo_sort(x):
-        if "lb" in x:
+        if "lb" == x[:2]:
             return 0
-        if "lut" in x:
+        if "lut" in x[:3]:
             return 1
-        elif "reg" in x:
+        elif "reg" in x[:3]:
             return 2
         else:
             return 3
@@ -211,11 +211,11 @@ def create_kernel(kernel_size, num_mem, num_reg, const_rate, reg_reg_rate,
     for i in range(len(names) - 2, -1, -1):
         # working backwards so that the DAG only has one input and one output
         current_name = names[i]
-        if "lb" in current_name:
+        if "lb" == current_name[:2]:
             out_port = "rdata"
-        elif "reg" in current_name:
+        elif "reg" == current_name[:3]:
             out_port = "out"
-        elif "lut" in current_name:
+        elif "lut" == current_name[:3]:
             continue
         else:
             out_port = "data.out"
@@ -225,7 +225,7 @@ def create_kernel(kernel_size, num_mem, num_reg, const_rate, reg_reg_rate,
 
             # trying to make connections
             in_name = names[j]
-            if "lb" in in_name or "lut" in in_name:
+            if "lb" == in_name[:2] or "lut" == in_name[:3]:
                 # we have taken care of this one
                 continue
             if "reg" in in_name:
@@ -262,7 +262,7 @@ def create_kernel(kernel_size, num_mem, num_reg, const_rate, reg_reg_rate,
         in_index = names.index(in_name)
 
         # chance to have a const connection!
-        if "reg" not in in_name:
+        if "reg" != in_name[:3]:
             if random.random() < const_rate:
                 # yay!
                 new_name = "const_" + str(kernel_num) + "_" + random_name() +\
@@ -275,7 +275,7 @@ def create_kernel(kernel_size, num_mem, num_reg, const_rate, reg_reg_rate,
 
         out_name_index = random.randrange(0, in_index)
         out_name = names[out_name_index]
-        if "lut" in out_name:
+        if "lut" == out_name[:3]:
             # put it back in
             available_ports.append((in_name, in_port))
             continue
@@ -313,7 +313,7 @@ def main():
                         "reg to reg chain", default=0.2, action="store",
                         dest="reg_reg_rate")
     parser.add_argument("--num_kernel", help="Number of kernels",
-                        default=5, action="store", dest="num_kernel")
+                        default=5, type=int, action="store", dest="num_kernel")
     parser.add_argument("--kernel_size", help="Expected kernel size",
                         default=20, action="store", dest="kernel_size")
     parser.add_argument("--kernel_size_variance",
@@ -519,18 +519,18 @@ def create_random_alu():
 def create_design_top(names, connections):
     instances = {}
     for name in names:
-        if "lb" in name:
+        op = name.split("_")[0]
+        if "lb" == op:
             entry = create_mem(random.randrange(100, 200))
-        elif "lut" in name:
+        elif "lut" == op:
             entry = create_lut(random.randrange(10, 100))
-        elif "const" in name:
+        elif "const" == op:
             entry = create_const(random.randrange(0, 100))
-        elif "reg" in name:
+        elif "reg" == op:
             entry = create_reg()
-        elif "io" in name:
+        elif "io" == op:
             entry = create_io()
         else:
-            op = name.split("_")[0]
             assert op in alu_types_16
             entry = create_alu(op)
         instances[name] = entry

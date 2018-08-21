@@ -127,6 +127,7 @@ dataset
 
 # other folders
 figures
+test_dataset
 
 # images
 *.png
