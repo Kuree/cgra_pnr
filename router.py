@@ -129,7 +129,9 @@ class Router:
                                                              routing_resource,
                                                              pos)
         if port not in routing_resource[pos]["port"]:
-            assert (self.fold_reg and port == "reg")
+            if not self.fold_reg or port != "reg":
+                raise Exception("Unexpected port " + port +
+                                " in reg folding mode")
             port_chan = set()
             for _, conn_out in route_resource_current_pos:
                 if conn_out[-1] == chan and conn_out[0] == bus:

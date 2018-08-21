@@ -90,6 +90,7 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
                     assert (2, 18) in output_io_locations
                     pos = (2, 18)
                     output_io_locations.remove(pos)
+                    # pos = output_io_locations.pop(0)
                 else:
                     pos = output_io_locations.pop(0)
             place_on_board(board, blk_id, pos)

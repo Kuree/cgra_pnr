@@ -281,9 +281,11 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
     # extra careful
     num_clusters = min(num_clusters, len(blks))
     factor = 6
+    clusters = {}
     while True:     # this just enforce we can actually place it
         if num_clusters == 0:
-            raise Exception("Cannot fit into the board")
+            cluster_placer = None
+            break
         print("Trying: num of clusters", num_clusters)
         kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(data_x)
         cluster_ids = kmeans.labels_
@@ -308,10 +310,47 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
         except ClusterException as _:
             num_clusters -= 1
             factor = 4
+    if num_clusters > 0:
+        # cluster_placer.steps = 200
+        cluster_placer.anneal()
+        cluster_cells, centroids = cluster_placer.squeeze()
+    else:
+        # it exceeds the algorithm's limit
+        # fall back to full-size annealing
+        print("Netlist too big. Fall back to full-board annealing")
+        clusters = {0: blks}
+        # put there one by one
+        cluster_cells = {0: {}}
+        available_cells = []
+        board_layout = board_meta[0]
+        mem_cells = set()
+        for y in range(len(board_layout)):
+            for x in range(len(board_layout[y])):
+                if board_layout[y][x] == "p":
+                    available_cells.append((x, y))
+                elif board_layout[y][x] == "m":
+                    mem_cells.add((x, y))
+        p_blks = [b for b in blks if b[0] == "p"]
+        m_blks = [b for b in blks if b[0] == "m"]
+        if len(available_cells) < len(p_blks):
+            raise Exception("We have " + str(len(available_cells)) +
+                            " PE tiles, but the netlist needs " +
+                            str(len(p_blks)))
+        else:
+            print("Using", len(p_blks), "out of", len(available_cells),
+                  "available PE tiles")
+        cluster_cells[0]["p"] = set(available_cells[:len(p_blks)])
+        # handle memory
+        if len(mem_cells) < len(m_blks):
+            raise Exception("We have " + str(len(mem_cells)) +
+                            " MEM tiles, but the netlist needs " +
+                            str(len(m_blks)))
+        else:
+            print("Using", len(m_blks), "out of", len(mem_cells),
+                  "available PE tiles")
+        cluster_cells[0]["m"] = mem_cells
+        centroids = {0: (len(board_layout[0]) // 2, len(board_layout) // 2)}
 
-    # cluster_placer.steps = 200
-    cluster_placer.anneal()
-    cluster_cells, centroids = cluster_placer.squeeze()
     return centroids, cluster_cells, clusters
 
 
