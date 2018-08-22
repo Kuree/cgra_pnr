@@ -43,7 +43,7 @@ class SADetailedPlacer(Annealer):
 
         self.reg_no_pos = {}
         if fold_reg:
-            linked_nets, _ = group_reg_nets(raw_netlist)
+            linked_nets, _, _ = group_reg_nets(raw_netlist)
             for net_id in netlists:
                 net = netlists[net_id]
                 if net_id in linked_nets:

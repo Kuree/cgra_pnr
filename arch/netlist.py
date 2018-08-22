@@ -58,6 +58,7 @@ def group_reg_nets(netlists):
     assert(len(resolved_net) == len(net_id_to_remove))
 
     # last pass to ensure the order of the linked nets is correct
+    reg_net_order = {}
     for net_id in linked_nets:
         reg_nets = linked_nets[net_id]
         reg_net_index = {}
@@ -73,9 +74,10 @@ def group_reg_nets(netlists):
                             working_set.append(reg_net_id)
                             reg_net_index[reg_net_id] = index
                             index += 1
+                            reg_net_order[reg_net_id] = n_id
         reg_nets.sort(key=lambda x: reg_net_index[x])
 
-    return linked_nets, net_id_to_remove
+    return linked_nets, net_id_to_remove, reg_net_order
 
 
 def is_conn_out(raw_name):

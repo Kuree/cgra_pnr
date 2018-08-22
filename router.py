@@ -420,10 +420,11 @@ class Router:
     def route(self):
         print("INFO: Performing greedy BFS/A* routing")
         if self.fold_reg:
-            linked_nets, reg_nets = group_reg_nets(self.netlists)
+            linked_nets, reg_nets, reg_net_order = group_reg_nets(self.netlists)
         else:
             linked_nets = {}
             reg_nets = set()
+            reg_net_order = {}
         net_list_ids = self.sort_netlist_id_for_io(self.netlists, reg_nets)
         for net_id in tqdm(net_list_ids):
             if net_id in reg_nets:
@@ -462,8 +463,12 @@ class Router:
                 if path_len >= self.MAX_PATH_LENGTH:
                     continue    # don't even bother
                 if net_id in linked_nets:
-                    reg_path = final_path
+                    if chan not in reg_route_path:
+                        reg_route_path[chan] = {}
+                    reg_route_path[chan][net_id] = final_path
                     for reg_net_id in linked_nets[net_id]:
+                        parent_net_id = reg_net_order[reg_net_id]
+                        reg_path = reg_route_path[chan][parent_net_id]
                         reg_net = self.netlists[reg_net_id]
                         reg_length, reg_path, routing_resource = \
                             self.route_reg_net(reg_net, bus, chan,
@@ -473,8 +478,6 @@ class Router:
                         route_length[chan] += reg_length
                         if route_length[chan] >= self.MAX_PATH_LENGTH:
                             break   # just terminate without proceeding next
-                        if chan not in reg_route_path:
-                            reg_route_path[chan] = {}
                         reg_route_path[chan][reg_net_id] = reg_path
                         chan_resources[chan] = routing_resource
 

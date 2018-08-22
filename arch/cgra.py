@@ -452,6 +452,7 @@ def handle_sink_entry(entry, track_in, tile_mapping, board_layout,
 
 
 def handle_reg_sink(entry, track_in, tile_mapping, board_layout):
+    print(entry)
     (dir_out, dir_in), (pos, port) = entry
     assert (port == "reg")
     result, _ = handle_link((pos, pos), (dir_out, dir_in), dir_in, tile_mapping,

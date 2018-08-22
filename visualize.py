@@ -137,10 +137,44 @@ def visualize_routing(cgra_filename, board_meta, packed_filename,
     router.vis_routing_resource()
 
 
+def visualize_board(cgra_file):
+    from arch import parse_cgra
+    color_index = "imopr"
+    board_meta = parse_cgra(cgra_file)["CGRA"]
+    board_layout = board_meta[0]
+    scale = 30
+    board_info = board_meta[-1]
+    height, width = board_info["height"], board_info["width"]
+    im, draw = draw_board(width, height, scale)
+    for y in range(height):
+        for x in range(width):
+            blk_type = board_layout[y][x]
+            if blk_type is not None:
+                index = color_index.index(blk_type)
+                color = color_palette[index]
+                draw_cell(draw, (x, y), color, scale)
+    plt.imshow(im)
+    plt.show()
+
+    basename = os.path.basename(cgra_file)
+    design_name, ext = os.path.splitext(basename)
+    file_dir = os.path.dirname(os.path.realpath(__file__))
+    output_dir = os.path.join(file_dir, "figures")
+    if os.path.isdir(output_dir):
+        output_png = design_name + "_cgra.png"
+        output_path = os.path.join(output_dir, output_png)
+        im.save(output_path)
+        print("Image saved to", output_path)
+
+
 def main():
+    if len(sys.argv) == 2:
+        cgra_info = sys.argv[1]
+        visualize_board(cgra_info)
+        return
     if len(sys.argv) != 4:
         print("[Usage]:", sys.argv[0], "<cgra_info>",
-              "<design.packed>", "<design.place|design.route>",
+              "[<design.packed>", "<design.place|design.route>]",
               file=sys.stderr)
         exit(1)
     cgra_info = sys.argv[1]
