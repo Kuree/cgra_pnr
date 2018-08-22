@@ -24,6 +24,8 @@ def save_placement(board_pos, id_to_name, _, place_file):
 
 
 def parse_placement(placement_file):
+    if len(placement_file) == 0:
+        return {}, {}
     with open(placement_file) as f:
         lines = f.readlines()
     lines = lines[2:]

@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from util import deepcopy
 from tqdm import tqdm
 from argparse import ArgumentParser
-import sys
 
 
 class Router:
@@ -983,9 +982,11 @@ class Router:
         plt.show()
         file_dir = os.path.dirname(os.path.realpath(__file__))
         output_png = self.design_name + "_route.png"
-        output_path = os.path.join(file_dir, "figures", output_png)
-        im.save(output_path)
-        print("Image saved to", output_path)
+        output_dir = os.path.join(file_dir, "figures")
+        if os.path.isdir(output_dir):
+            output_path = os.path.join(output_dir, output_png)
+            im.save(output_path)
+            print("Image saved to", output_path)
 
 
 def main():

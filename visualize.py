@@ -78,10 +78,63 @@ def visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe):
     plt.show()
 
     file_dir = os.path.dirname(os.path.realpath(__file__))
-    output_png = design_name + "_place.png"
-    output_path = os.path.join(file_dir, "figures", output_png)
-    im.save(output_path)
-    print("Image saved to", output_path)
+    output_dir = os.path.join(file_dir, "figures")
+    if os.path.isdir(output_dir):
+        output_png = design_name + "_place.png"
+        output_path = os.path.join(output_dir, output_png)
+        im.save(output_path)
+        print("Image saved to", output_path)
+
+
+def visualize_routing(cgra_filename, board_meta, packed_filename,
+                      routing_result, fold_reg):
+    from router import Router
+    router = Router(cgra_filename, board_meta, packed_filename,
+                    "", fold_reg=fold_reg)
+    # update routing resource
+    for net_id in routing_result:
+        path = routing_result[net_id]
+        # update it by hand because the format is different from
+        # the one in
+        track_in = None
+        entry_to_remove = set()
+        for entry in path:
+            entry_type = entry[0]
+            if entry_type == "src":
+                (pos,_), (track_in, track_out) = entry[1:]
+                entry_to_remove.add((pos, track_out))
+            elif entry_type == "link":
+                assert track_in is not None
+                (src_pos, dst_pos), (conn_out, conn_in) = entry[1:]
+                entry_to_remove.add((src_pos, conn_out))
+                entry_to_remove.add((src_pos, track_in))
+                track_in = conn_in
+            elif entry_type == "sink":
+                if len(entry[1:]) == 3:
+                    (_, (conn_in, conn_out)), _, (pos, _) = entry[1:]
+                    entry_to_remove.add((pos, conn_out))
+                    entry_to_remove.add((pos, conn_in))
+                    track_in = conn_in
+                else:
+                    conn, (dst_pos, _) = entry[1:]
+                    if len(conn) == 2:
+                        conn_in, conn_out = conn
+                        entry_to_remove.add((dst_pos, conn_in))
+                        entry_to_remove.add((dst_pos, conn_out))
+                        track_in = conn_in
+                    else:
+                        entry_to_remove.add((dst_pos, conn))
+                        track_in = conn
+        for pos, conn in entry_to_remove:
+            resource = router.routing_resource[pos]["route_resource"]
+            remove_set = set()
+            for conn1, conn2 in resource:
+                if conn1 == conn or conn2 == conn:
+                    remove_set.add((conn1, conn2))
+            for entry in remove_set:
+                resource.remove(entry)
+
+    router.vis_routing_resource()
 
 
 def main():
@@ -105,7 +158,10 @@ def main():
         board_pos, _ = parse_placement(input_file)
         visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe)
     elif ext == ".route":
-        print("Not yet refactor from router")
+        from arch import parse_routing_result
+        routing_result = parse_routing_result(input_file)
+        visualize_routing(cgra_info, board_meta, packed_file, routing_result,
+                          fold_reg=fold_reg)
 
 
 if __name__ == '__main__':
