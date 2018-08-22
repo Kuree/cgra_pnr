@@ -8,8 +8,7 @@ from arch import make_board, parse_cgra, generate_place_on_board
 from arch import generate_is_cell_legal
 import numpy as np
 import os
-import matplotlib.pyplot as plt
-from visualize import draw_board, draw_cell, color_palette
+from visualize import visualize_placement_cgra
 from sklearn.cluster import KMeans
 import random
 from multiprocessing import Pool
@@ -20,10 +19,12 @@ from arch.cgra_packer import load_packed_file
 
 def detailed_placement(args):
     clusters, cells, netlist, raw_netlist,\
-                board, blk_pos, fold_reg, seed = args
+                board, blk_pos, fold_reg, seed, fallback = args
     detailed = SADetailedPlacer(clusters, cells, netlist, raw_netlist,
                                 board, blk_pos,
                                 fold_reg=fold_reg, seed=seed)
+    if fallback:
+        detailed.steps *= 3
     # detailed.steps = 10
     detailed.anneal()
     return detailed.state
@@ -132,7 +133,7 @@ def main():
 
     num_of_kernels = get_num_clusters(id_to_name)
 
-    centroids, cluster_cells, clusters = perform_global_placement(
+    centroids, cluster_cells, clusters, fallback = perform_global_placement(
         blks, data_x, emb, fixed_blk_pos, netlists, board, is_cell_legal,
         board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
         seed=seed)
@@ -142,7 +143,7 @@ def main():
                                            cluster_cells, clusters,
                                            fixed_blk_pos, netlists,
                                            raw_netlist,
-                                           fold_reg, seed)
+                                           fold_reg, seed, fallback)
 
     # do a macro placement
     # macro_result = macro_placement(board, board_pos, fixed_blk_pos, netlists,
@@ -163,39 +164,7 @@ def main():
     basename_file = os.path.basename(placement_filename)
     design_name, _ = os.path.splitext(basename_file)
     if vis_opt:
-        visualize_placement_cgra(board_pos, design_name, changed_pe)
-
-
-def visualize_placement_cgra(board_pos, design_name, changed_pe):
-    color_index = "imopr"
-    scale = 30
-    im, draw = draw_board(20, 20, scale)
-    pos_set = set()
-    blk_id_list = list(board_pos.keys())
-    blk_id_list.sort(key=lambda x: 1 if x[0] == "r" else 0)
-    for blk_id in blk_id_list:
-        pos = board_pos[blk_id]
-        index = color_index.index(blk_id[0])
-        color = color_palette[index]
-        if blk_id in changed_pe:
-            color = color_palette[color_index.index("r")]
-        if blk_id[0] == "r":
-            assert pos not in pos_set
-            pos_set.add(pos)
-            pos = pos[0] + 0.5, pos[1]
-            width_frac = 0.5
-        else:
-            width_frac = 1
-        draw_cell(draw, pos, color, scale, width_frac=width_frac)
-
-    plt.imshow(im)
-    plt.show()
-
-    file_dir = os.path.dirname(os.path.realpath(__file__))
-    output_png = design_name + "_place.png"
-    output_path = os.path.join(file_dir, "figures", output_png)
-    im.save(output_path)
-    print("Image saved to", output_path)
+        visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe)
 
 
 def perform_deblock_placement(board, board_pos, fixed_blk_pos, netlists):
@@ -314,6 +283,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
         # cluster_placer.steps = 200
         cluster_placer.anneal()
         cluster_cells, centroids = cluster_placer.squeeze()
+        fallback = False
     else:
         # it exceeds the algorithm's limit
         # fall back to full-size annealing
@@ -347,16 +317,17 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                             str(len(m_blks)))
         else:
             print("Using", len(m_blks), "out of", len(mem_cells),
-                  "available PE tiles")
+                  "available MEM tiles")
         cluster_cells[0]["m"] = mem_cells
         centroids = {0: (len(board_layout[0]) // 2, len(board_layout) // 2)}
+        fallback = True
 
-    return centroids, cluster_cells, clusters
+    return centroids, cluster_cells, clusters, fallback
 
 
 def perform_detailed_placement(board, centroids, cluster_cells, clusters,
                                fixed_blk_pos, netlists, raw_netlist,
-                               fold_reg, seed):
+                               fold_reg, seed, fallback):
     board_pos = fixed_blk_pos.copy()
     map_args = []
     for c_id in cluster_cells:
@@ -372,7 +343,7 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
             blk_pos[node_id] = pos
         map_args.append((clusters[c_id], cells, new_netlist, raw_netlist,
                          board, blk_pos,
-                         fold_reg, seed))
+                         fold_reg, seed, fallback))
     num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
     pool = Pool(num_of_cpus)
     # detailed_placement(map_args[0])

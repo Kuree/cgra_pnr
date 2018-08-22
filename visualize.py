@@ -1,4 +1,9 @@
+from __future__ import print_function
+import os
 from PIL import Image, ImageDraw
+import sys
+
+from matplotlib import pyplot as plt
 
 SCALE_FACTOR = 10
 
@@ -43,3 +48,65 @@ def draw_cell(draw, pos, color, scale=None, width_frac=1):
     x, y = pos
     draw.rectangle((x * scale + 1, y * scale + 1, x * scale + width,
                     y * scale + size), fill=color)
+
+
+def visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe):
+    color_index = "imopr"
+    scale = 30
+    board_info = board_meta[-1]
+    height, width = board_info["height"], board_info["width"]
+    im, draw = draw_board(width, height, scale)
+    pos_set = set()
+    blk_id_list = list(board_pos.keys())
+    blk_id_list.sort(key=lambda x: 1 if x[0] == "r" else 0)
+    for blk_id in blk_id_list:
+        pos = board_pos[blk_id]
+        index = color_index.index(blk_id[0])
+        color = color_palette[index]
+        if blk_id in changed_pe:
+            color = color_palette[color_index.index("r")]
+        if blk_id[0] == "r":
+            assert pos not in pos_set
+            pos_set.add(pos)
+            pos = pos[0] + 0.5, pos[1]
+            width_frac = 0.5
+        else:
+            width_frac = 1
+        draw_cell(draw, pos, color, scale, width_frac=width_frac)
+
+    plt.imshow(im)
+    plt.show()
+
+    file_dir = os.path.dirname(os.path.realpath(__file__))
+    output_png = design_name + "_place.png"
+    output_path = os.path.join(file_dir, "figures", output_png)
+    im.save(output_path)
+    print("Image saved to", output_path)
+
+
+def main():
+    if len(sys.argv) != 4:
+        print("[Usage]:", sys.argv[0], "<cgra_info>",
+              "<design.packed>", "<design.place|design.route>",
+              file=sys.stderr)
+        exit(1)
+    cgra_info = sys.argv[1]
+    packed_file = sys.argv[2]
+    input_file = sys.argv[3]
+    basename = os.path.basename(input_file)
+    design_name, ext = os.path.splitext(basename)
+    from arch import parse_cgra
+    from arch import load_packed_file
+    _, _, _, changed_pe = load_packed_file(packed_file)
+    fold_reg = len(changed_pe) == 0
+    board_meta = parse_cgra(cgra_info, fold_reg=fold_reg)["CGRA"]
+    if ext == ".place":
+        from arch import parse_placement
+        board_pos, _ = parse_placement(input_file)
+        visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe)
+    elif ext == ".route":
+        print("Not yet refactor from router")
+
+
+if __name__ == '__main__':
+    main()
