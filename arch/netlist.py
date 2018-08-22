@@ -52,7 +52,10 @@ def group_reg_nets(netlists):
                     merged_nets = squash_net(netlists, r_net_id)
                     for m_id in merged_nets:
                         resolved_net.add(m_id)
-                    linked_nets[net_id] = merged_nets
+                    if net_id in linked_nets:
+                        linked_nets[net_id] += merged_nets
+                    else:
+                        linked_nets[net_id] = merged_nets
 
     # make sure we've merged every nets
     assert(len(resolved_net) == len(net_id_to_remove))
