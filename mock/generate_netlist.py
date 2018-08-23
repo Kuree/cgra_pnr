@@ -1,3 +1,4 @@
+from __future__ import division
 import json
 import random
 import string
@@ -96,9 +97,10 @@ def create_lut(lut_value):
 def open_ports(names, used_ports):
     result = set()
     for name in names:
-        if "lb" in name or "lut" in name:
+        op = name.split("_")[0]
+        if "lb" == op or "lut" == op:
             continue
-        if "reg" in name:
+        if "reg" == op:
             if (name, "in") not in used_ports:
                 result.add((name, "in"))
         else:
@@ -348,7 +350,9 @@ def main():
     num_kernels = args.num_kernel
     expected_kernel_size = args.kernel_size
     num_kernel_variance = args.num_kernel_variance
-    expected_num_reg = args.expected_num_reg
+    # we have two places to connect to reg, so divide this by 2 to approximate
+    # the actual reg usage.
+    expected_num_reg = args.expected_num_reg // 2
     num_reg_variance = args.num_reg_variance
     expected_num_mem = args.expected_num_mem
     num_mem_variance = args.num_mem_variance
@@ -480,7 +484,7 @@ def main():
     result = create_design_top(result_names, result_connections)
 
     with open(output_file, "w+") as f:
-        json.dump(result, f, indent=1, separators=(',', ':'))
+        json.dump(result, f, separators=(',', ': '))
 
 
 def direct_connect_kernel(extra_connections, out_index, in_index,
@@ -497,14 +501,14 @@ def direct_connect_kernel(extra_connections, out_index, in_index,
 
 
 def get_out_port(out_name):
-    if "lb" in out_name:
+    op = out_name.split("_")[0]
+    if "lb" == op:
         out_port = "rdata"
-    elif "reg" in out_name:
+    elif "reg" == op:
         out_port = "out"
-    elif "lut" in out_name:
+    elif "lut" == op:
         out_port = "out"
     else:
-        op = out_name.split("_")[0]
         assert op in alu_types_16
         out_port = "data.out"
     return out_port

@@ -621,7 +621,8 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
 
     # sanity check
     for pin in pins:
-        assert (pin is not None)
+        if pin is None:
+            raise Exception("pin is none for blk_id: " + blk_id)
 
     return tuple(pins)
 
