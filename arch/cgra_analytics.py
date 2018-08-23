@@ -37,7 +37,7 @@ def deepcopy(obj_to_copy):
     return d
 
 
-def find_all_timed_path(g, name_to_id):
+def find_all_timed_path(g, name_to_id, id_to_name, changed_pe):
     nodes = g.nodes()
     timed_elements = set()
 
@@ -46,6 +46,9 @@ def find_all_timed_path(g, name_to_id):
            ("lut" not in node and "cnst" not in node and
            name_to_id[node][0] != "b"):
             timed_elements.add(node)
+    # in case of reg folding
+    for node in changed_pe:
+        timed_elements.add(id_to_name[node])
 
     def find_path(start_node):
         """recursive function to get all path starting from the start_node"""
@@ -175,7 +178,7 @@ def find_critical_path_delay(netlist_json, packed_file, route_result,
 
     timed_paths = \
         find_all_timed_path(build_raw_graph(get_raw_connections(netlist_json)),
-                            name_to_id)
+                            name_to_id, id_to_name, changed_pe)
     delay_paths = convert_timed_path(timed_paths, netlists, folded_blocks,
                                      name_to_id)
 

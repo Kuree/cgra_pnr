@@ -4,7 +4,7 @@ file_dir=$(dirname "$(realpath $0)")
 root_dir=$(realpath $file_dir/../)
 
 function print_usage() {
-    echo "Usage: $0 [-no-reg-fold] <arch_file> <netlist.packed>" >&2
+    echo "Usage: $0 [--no-reg-fold] <arch_file> <netlist.packed>" >&2
     exit 1
 }
 
