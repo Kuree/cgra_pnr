@@ -615,7 +615,11 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
         else:
             raise Exception("Unknown folded block data " + str(entry_data))
         if b_id == blk_id:
-            index = int(port[-1])
+            # mux is very special
+            if port == "bit0" and op == "mux":
+                index = 2
+            else:
+                index = int(port[-1])
             assert(pin_name is not None)
             pins[index] = pin_name
     if blk_id in changed_pe:
