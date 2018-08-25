@@ -452,7 +452,6 @@ def handle_sink_entry(entry, track_in, tile_mapping, board_layout,
 
 
 def handle_reg_sink(entry, track_in, tile_mapping, board_layout):
-    print(entry)
     (dir_out, dir_in), (pos, port) = entry
     assert (port == "reg")
     result, _ = handle_link((pos, pos), (dir_out, dir_in), dir_in, tile_mapping,
@@ -582,6 +581,8 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
         lut_pins = get_lut_pins(instances[instance_name])
         pins = ["const{0}_{0}".format(i) for i in lut_pins]
         assert len(pins) == 3
+    elif op[:3] == "mux":
+        pins = [None, None, None]
     else:
         pins = [None, None]
 
@@ -591,13 +592,15 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
             pin_name = conn.split(".")[0]
             pin_port = ".".join(conn.split(".")[1:])
             if pin_name == instance_name and "out" not in pin_port:
-                if pin_port != "in":
+                if op == "mux" and "bit.in.0" == pin_port:
+                    index = 2
+                elif pin_port != "in":
                     index = int(pin_port[-1])
                 else:
                     index = 0
                 pins[index] = "wire"
 
-    # third pass to determine the
+    # third pass to determine the consts/regs
     for entry in folded_block:
         entry_data = folded_block[entry]
         if len(entry_data) == 2:

@@ -120,6 +120,7 @@ word2vec
 cgra_info.txt
 serpent.log*
 *.bsb
+*.bsa
 *.route
 *.packed
 dataset
@@ -128,6 +129,9 @@ dataset
 # other folders
 figures
 test_dataset
+tmp
+test_dataset
 
 # images
 *.png
+*.pdf
