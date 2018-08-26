@@ -24,12 +24,23 @@ def build_raw_graph(raw_connections):
         conn2_out = is_conn_out(port2)
         conn1_name = conn1.split(".")[0]
         conn2_name = conn2.split(".")[0]
-        assert (conn1_out ^ conn2_out)
+        if not (conn1_out ^ conn2_out):
+            conn1_out, _ = conn_heuristics(conn1, conn2)
         if conn1_out:
             g.add_edge(conn1_name, conn2_name)
         else:
             g.add_edge(conn2_name, conn1_name)
     return g
+
+
+def conn_heuristics(conn1, conn2):
+    if "in" in conn1 or "out" in conn2:
+        conn1_out = False
+        conn2_out = True
+    elif "in" in conn2 or "in" in conn1:
+        conn1_out = True
+        conn2_out = False
+    return conn1_out, conn2_out
 
 
 def cluster_on_embedding(embedding_file):
@@ -115,8 +126,12 @@ def parse_connections(filename):
         else:
             conn2_index = conn2.index(".")
         conn2_out = is_conn_out(conn2)
-        print(conn1, conn2, conn1_out, conn2_out)
-        assert (conn1_out ^ conn2_out)
+
+        if not conn1_out ^ conn2_out:
+            print(conn1, conn2, conn1_out, conn2_out)
+            print("Apply heuristics")
+            conn1_out, conn2_out = conn_heuristics(conn1, conn2)
+            assert (conn1_out ^ conn2_out)
         conn1_name = conn1[:conn1_index]
         conn2_name = conn2[:conn2_index]
         if conn1_name == conn2_name:
