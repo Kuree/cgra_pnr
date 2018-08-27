@@ -367,14 +367,14 @@ class Router:
                 if not isinstance(path_entry[-1], str) and \
                         len(path_entry[0][0]) == 2:
                     pos1 = path_entry[0][0]
-                    if pos1 != pos:
+                    if Router.manhattan_dist(pos1, pos) == 1:
                         return pos1
                 continue
             pos1 = path_entry[0][0]
             pos2 = path_entry[1][0]
-            if pos2 != pos:
+            if Router.manhattan_dist(pos2, pos) == 1:
                 return pos2
-            if pos1 != pos:
+            if Router.manhattan_dist(pos1, pos) == 1:
                 return pos1
         raise Exception("Unable to find pre pos for pos " + str(pos))
 
@@ -418,7 +418,7 @@ class Router:
             pos_set.remove(entry)
 
     def route(self):
-        print("INFO: Performing greedy BFS/A* routing")
+        print("INFO: Performing MST/A* routing")
         if self.fold_reg:
             linked_nets, reg_nets, reg_net_order = group_reg_nets(self.netlists)
         else:
@@ -499,6 +499,33 @@ class Router:
             # self-loop is fixed up
             self.routing_resource = chan_resources[min_chan]
 
+    @staticmethod
+    def find_closet_src(pos, final_path):
+        distance = {}
+
+        for conn in final_path:
+            p = None
+            if len(conn) == 1:
+                # src
+                p, _, _, _ = conn[0]
+
+            elif len(conn) == 2:
+                # passing through
+                p, _ = conn[0]
+            elif len(conn) == 3:
+                # direct sink
+                _, p, _ = conn
+            elif len(conn) == 4:
+                # self-connection sink
+                _, _, p, _ = conn
+            assert (p is not None)
+            if p not in distance:
+                distance[p] = Router.manhattan_dist(pos, p)
+        keys = list(distance.keys())
+        keys.sort(key=lambda x: distance[x])
+
+        return keys[0]
+
     def route_net(self, bus, chan, net, routing_resource, final_path=None,
                   is_src=True, pos_set=None):
         src_id, src_port = net[0]
@@ -544,6 +571,11 @@ class Router:
             dst_pos = self.placement[dst_id]
             self.allow_chan(dst_pos, pos_set)
 
+            # get the new src position from the path we've already routed
+            # > 1 because we don't want to interfere with reg net routing
+            if len(final_path) > 1:
+                src_pos = self.find_closet_src(dst_pos, final_path)
+
             # self loop prevention
             # this will happen if two operands share the same input
             # in a single block
@@ -581,7 +613,7 @@ class Router:
                 break
             # merge the search path to channel path
             pp = dst_pos
-            pos_set.add(pp)
+            # pos_set.add(pp)
             path = []
             while pp != src_pos:
                 path.append(link[pp])
@@ -610,8 +642,6 @@ class Router:
                 # skip the first one since src and dst overlap
                 final_path = final_path + path
 
-            # move along the hyper edge
-            src_pos = dst_pos
             # disable the src since we're moving along the net
             is_src = False
         # update the routing info
@@ -640,11 +670,17 @@ class Router:
             else:
                 raise Exception("Unknown path")
             if pos == src_pos:
-                assert (src_conn is not None)
-                if src_conn[1] == 0:
-                    return src_conn
+                if src_conn is None:
+                    # we tried but couldn't find any. which means it has to be
+                    # at the very beginning of the path
+                    first_pos = path[0][0][0]
+                    assert (src_pos == first_pos)
+                    return False, None
+                else:
+                    if src_conn[1] == 0:
+                        return True, src_conn
             assert conn[1] == 0    # it's actually coming in
-            return conn
+            return True, conn
         raise Exception("Unable to find track in")
 
     @staticmethod
@@ -754,12 +790,21 @@ class Router:
                     # sink to sink
                     # need to figure out the last track in
                     assert len(final_path) > 0
-                    track_in = self.get_track_in_from_path(src_pos, final_path)
                     # get previous track in
-                points = self.get_neighbors(routing_resource,
-                                            bus, chan, point, track_in,
-                                            pin_ports,
-                                            force_connect=force_connect)
+                    found, track_in = self.get_track_in_from_path(src_pos,
+                                                                  final_path)
+                    if found:
+                        assert track_in is not None
+                if track_in is None:
+                    points = self.get_port_neighbors(routing_resource, bus,
+                                                     chan,
+                                                     point, src_port)
+                    is_src = True
+                else:
+                    points = self.get_neighbors(routing_resource,
+                                                bus, chan, point, track_in,
+                                                pin_ports,
+                                                force_connect=force_connect)
                 force_connect = False
             for entry in points:
                 if is_src:

@@ -412,7 +412,12 @@ def generate_bitstream(board_filename, netlist_filename,
                                          fold_reg=fold_reg)
                 output_string += s
             else:
-                if path_type == "link":
+                if path_type == "src":
+                    s, track_in = handle_src(entry[1], entry[2], tile_mapping,
+                                             board_layout,
+                                             fold_reg=fold_reg)
+                    output_string += s
+                elif path_type == "link":
                     s, track_in = handle_link(entry[1], entry[2],
                                               track_in,
                                               tile_mapping,

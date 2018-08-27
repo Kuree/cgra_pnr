@@ -34,12 +34,15 @@ def build_raw_graph(raw_connections):
 
 
 def conn_heuristics(conn1, conn2):
+    conn1_out = False
+    conn2_out = False
     if "in" in conn1 or "out" in conn2:
         conn1_out = False
         conn2_out = True
     elif "in" in conn2 or "in" in conn1:
         conn1_out = True
         conn2_out = False
+    assert conn1_out ^ conn2_out
     return conn1_out, conn2_out
 
 
