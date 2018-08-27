@@ -81,14 +81,19 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
     for blk_id in blks:
         if blk_id[0] == "i":
             is_input = io_mapping[blk_id]
+            io_name = id_to_name[blk_id]
+            # FIXME
+            # Hard-code position since Steve's simulation only handles
             if is_input:
-                pos = input_io_locations.pop(0)
+                if "io16" not in io_name:
+                    assert (2, 1) in input_io_locations
+                    pos = (2, 1)
+                    input_io_locations.remove(pos)
+                else:
+                    pos = input_io_locations.pop(0)
             else:
-                # FIXME
-                # Hard-code position since Steve's simulation only handles
                 # pad_S1_T0 1-bit output
-                io_name = id_to_name[blk_id]
-                if "io1_" in io_name:
+                if "io16" not in io_name:
                     assert (2, 18) in output_io_locations
                     pos = (2, 18)
                     output_io_locations.remove(pos)
@@ -350,11 +355,16 @@ def generate_bitstream(board_filename, netlist_filename,
                                                          id_to_name[blk_id])
 
     # FIXME 1-bit IO hack
+    io_strings = []
     for blk_id in id_to_name:
         if blk_id[0] == "i" and "io1_" in id_to_name[blk_id]:
-            output_string += "\n\n#IO\n"
-            output_string += "Tx136_pad(out,1)\n"
-            break
+            io_strings.append("Tx136_pad(out,1)")
+        elif blk_id[0] == "i" and "io1in" in id_to_name[blk_id]:
+            io_strings.append("Tx15_pad(in,1)")
+
+    if len(io_strings) > 0:
+        output_string += "\n\n#IO\n"
+        output_string += "\n".join(io_strings)
 
     output_string += "\n\n#ROUTING\n"
     net_id_list = list(route_result.keys())

@@ -125,6 +125,7 @@ serpent.log*
 *.packed
 dataset
 *.xml
+*.raw
 
 # other folders
 figures
