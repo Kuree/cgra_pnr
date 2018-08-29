@@ -24,7 +24,7 @@ def detailed_placement(args):
                                 board, blk_pos,
                                 fold_reg=fold_reg, seed=seed)
     if fallback:
-        detailed.steps *= 3
+        detailed.steps *= 5
     # detailed.steps = 10
     detailed.anneal()
     return detailed.state
