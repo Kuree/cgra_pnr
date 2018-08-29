@@ -15,7 +15,6 @@ def main():
         data = json.load(f)
         f.seek(0, 0)
         raw_lines = f.readlines()
-    print(len(raw_lines))
     connections = \
         data["namespaces"]["global"]["modules"]["DesignTop"]["connections"]
     instances = data["namespaces"]["global"]["modules"]["DesignTop"][
