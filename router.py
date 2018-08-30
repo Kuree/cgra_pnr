@@ -500,10 +500,15 @@ class Router:
             self.routing_resource = chan_resources[min_chan]
 
     @staticmethod
-    def find_closet_src(pos, final_path):
+    def find_closet_src(pos, final_path, is_reg_net=False):
+        # Keyi:
+        # reg_net introduces some complications on where to find the closest
+        # src points
         distance = {}
 
-        for conn in final_path:
+        for index, conn in enumerate(final_path):
+            if is_reg_net and index == 0:
+                continue
             p = None
             if len(conn) == 1:
                 # src
@@ -527,7 +532,7 @@ class Router:
         return keys[0]
 
     def route_net(self, bus, chan, net, routing_resource, final_path=None,
-                  is_src=True, pos_set=None):
+                  is_src=True, pos_set=None, is_reg_net=False):
         src_id, src_port = net[0]
         pin_port_set = determine_pin_ports(net,
                                            self.placement,
@@ -574,7 +579,7 @@ class Router:
             # get the new src position from the path we've already routed
             # > 1 because we don't want to interfere with reg net routing
             if len(final_path) > 1:
-                src_pos = self.find_closet_src(dst_pos, final_path)
+                src_pos = self.find_closet_src(dst_pos, final_path, is_reg_net)
 
             # self loop prevention
             # this will happen if two operands share the same input
@@ -701,8 +706,8 @@ class Router:
         for i in range(len(main_path) - 1, -1, -1):
             entry = main_path[i]
             # it can't be the src
-            if len(entry) == 1:
-                raise Exception("reg cannot be src twice")
+            # if len(entry) == 1:
+            #    raise Exception("reg cannot be src twice")
             # it has to be a direct sink
             if len(entry) == 3:
                 conn, pos, port = entry
@@ -736,7 +741,8 @@ class Router:
         path_length, final_path, routing_resource = \
             self.route_net(bus, chan, net, routing_resource, is_src=False,
                            final_path=tail_main_path,
-                           pos_set=pos_set)
+                           pos_set=pos_set,
+                           is_reg_net=True)
         if path_length == self.MAX_PATH_LENGTH:
             # not routable
             # just return that and the rest of the logic is going to handle
