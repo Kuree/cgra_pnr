@@ -403,7 +403,26 @@ class SAClusterPlacer(Annealer):
 
         self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)
 
-        state = self.__init_placement(rand)
+        # Keyi:
+        # because the way it's designed, we can actually shuffle clusters
+        # so that there is a chance it will fit after re-ordering
+        # set a limit how much shuffling we are going to do
+        cluster_ids = list(clusters.keys())
+        # determine loop range
+        if len(cluster_ids) > 1:
+            loop_range = len(cluster_ids) * (len(cluster_ids) - 1)
+        else:
+            loop_range = 1
+        state = None
+        for i in range(loop_range):
+            try:
+                state = self.__init_placement(cluster_ids, rand)
+                break
+            except ClusterException as _:
+                state = None
+                rand.shuffle(cluster_ids)
+        if state is None:
+            raise ClusterException(len(cluster_ids))
 
         Annealer.__init__(self, initial_state=state, rand=rand)
 
@@ -466,14 +485,14 @@ class SAClusterPlacer(Annealer):
         else:
             return len(cluster)
 
-    def __init_placement(self, rand):
+    def __init_placement(self, cluster_ids, rand):
         state = {}
         initial_x = self.clb_margin
         x, y = initial_x, self.clb_margin
         rows = []
         current_rows = []
         col = 0
-        for cluster_id in self.clusters:
+        for cluster_id in cluster_ids:
             cluster = self.clusters[cluster_id]
             cluster_size = self.get_cluster_size(cluster)
             square_size = int(np.ceil(cluster_size ** 0.5))
