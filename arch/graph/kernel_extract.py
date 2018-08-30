@@ -216,7 +216,7 @@ def visualize_raw_graph(graph, clusters, filename="kernel_partition.png"):
         return "#{0:02X}{1:02X}{2:02X}".format(color[0], color[1], color[2])
     for cluster_id in clusters:
         for node in clusters[cluster_id]:
-            color = color_palette[cluster_id]
+            color = color_palette[cluster_id % len(color_palette)]
             graph.nodes[node]["fillcolor"] = to_hex(color)
             graph.nodes[node]["color"] = to_hex(color)
             graph.nodes[node]["style"] = "filled"
@@ -334,10 +334,11 @@ def visualize(g, lb_set):
         return "#{0:02X}{1:02X}{2:02X}".format(color[0], color[1], color[2])
 
     for index, lb in enumerate(lb_set):
-        g.node[lb]["color"] = to_hex(color_palette[index])
+        color = to_hex(color_palette[index % (len(color_palette))])
+        g.node[lb]["color"] = color
         for node in lb_set[lb]:
-            g.node[node]["color"] = to_hex(color_palette[index])
-            g.node[node]["fillcolor"] = to_hex(color_palette[index])
+            g.node[node]["color"] = color
+            g.node[node]["fillcolor"] = color
             g.node[node]["style"] = "filled"
     A = nx.nx_agraph.to_agraph(g)
     A.layout(prog='dot')
