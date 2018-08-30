@@ -470,6 +470,9 @@ class Router:
                         parent_net_id = reg_net_order[reg_net_id]
                         reg_path = reg_route_path[chan][parent_net_id]
                         reg_net = self.netlists[reg_net_id]
+                        # because routing resource has been updated, we don't
+                        # need to keep track of old ones
+                        pos_set = set()
                         reg_length, reg_path, routing_resource = \
                             self.route_reg_net(reg_net, bus, chan,
                                                routing_resource,
@@ -504,10 +507,16 @@ class Router:
         # Keyi:
         # reg_net introduces some complications on where to find the closest
         # src points
+        reg_pos = None
         distance = {}
 
         for index, conn in enumerate(final_path):
             if is_reg_net and index == 0:
+                if len(final_path[index]) != 2:
+                    assert (len(final_path[index + 1]) == 2)
+                    reg_pos = final_path[index + 1][-1][0]
+                else:
+                    reg_pos = final_path[index][-1][0]
                 continue
             p = None
             if len(conn) == 1:
@@ -527,6 +536,9 @@ class Router:
             if p not in distance:
                 distance[p] = Router.manhattan_dist(pos, p)
         keys = list(distance.keys())
+        if reg_pos is not None:
+            assert (reg_pos in keys)
+            keys.remove(reg_pos)
         keys.sort(key=lambda x: distance[x])
 
         return keys[0]
