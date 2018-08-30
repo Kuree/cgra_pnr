@@ -6,3 +6,10 @@ This folder contains scripts that attempt to fix mapped JSON files produced by C
 2. `fix_const.py`: fix CoreIR Mapper not be able to duplicate constants:
     - currently it will remove all the formatting in the json file. I will fix it later
 3. `fix_smax.py`: fix op debug string error. The CGRA Mapper will try to use `max` instead of `smax` in all cases, which is incorrect.
+
+
+`fix_all.sh` is a simple script that fixes all the bugs in the netlist file. To see the usage, simply:
+```
+./fix_all.sh
+Usage: ./fix_all.sh <mapped_netlist.json> <fixed_netlist.json>
+```
