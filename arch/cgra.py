@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import arch
 import networkx as nx
+import json
 
 from . import load_packed_file, read_netlist_json
 
@@ -288,6 +289,7 @@ def parse_routing_result(routing_file):
 def generate_bitstream(board_filename, netlist_filename,
                        packed_filename, placement_filename,
                        routing_filename, output_filename,
+                       io_json,
                        fold_reg=True):
     netlists, folded_blocks, id_to_name, changed_pe =\
         load_packed_file(packed_filename)
@@ -356,11 +358,32 @@ def generate_bitstream(board_filename, netlist_filename,
 
     # FIXME 1-bit IO hack
     io_strings = []
+    io_pad_info = {}
     for blk_id in id_to_name:
         if blk_id[0] == "i" and "io1_" in id_to_name[blk_id]:
             io_strings.append("Tx136_pad(out,1)")
+            io_pad_info[id_to_name[blk_id]] = {"bits": {"0": "pad_S1_T0"},
+                                               "mode": "out",
+                                               "width": 1}
         elif blk_id[0] == "i" and "io1in" in id_to_name[blk_id]:
-            io_strings.append("Tx15_pad(in,1)")
+            io_strings.append("Tx2_pad(in,1)")
+            io_pad_info[id_to_name[blk_id]] = {"bits": {"0": "pad_S3_T0"},
+                                               "mode": "in",
+                                               "width": 1}
+        elif blk_id[0] == "i" and "io16_out" in id_to_name[blk_id]:
+            io_pad_info[id_to_name[blk_id]] = {"bits": {},
+                                               "mode": "out",
+                                               "width": 16}
+            for i in range(16):
+                io_pad_info[id_to_name[blk_id]]["bits"][str(i)] = \
+                    "pad_S2_T{}".format(i)
+        elif blk_id[0] == "i" and "io16in" in id_to_name[blk_id]:
+            io_pad_info[id_to_name[blk_id]] = {"bits": {},
+                                               "mode": "in",
+                                               "width": 16}
+            for i in range(16):
+                io_pad_info[id_to_name[blk_id]]["bits"][str(i)] = \
+                    "pad_S0_T{}".format(i)
 
     if len(io_strings) > 0:
         output_string += "\n\n#IO\n"
@@ -415,6 +438,9 @@ def generate_bitstream(board_filename, netlist_filename,
 
     with open(output_filename, "w+") as f:
         f.write(output_string)
+
+    with open(io_json, "w+") as f:
+        json.dump(io_pad_info, f, indent=2, separators=(',', ': '))
 
 
 def make_track_string(pos, track, tile_mapping, _, track_str=""):

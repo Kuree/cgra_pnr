@@ -12,7 +12,7 @@ def main():
                                               "e.g. harris.packed",
                         required=True, action="store", dest="packed_filename")
     parser.add_argument("-o", "--output",
-                        help="Bitstream result in bsb format"+
+                        help="Bitstream result in bsb format" +
                         ", e.g. harris.bsb",
                         required=True, action="store",
                         dest="output_filename")
@@ -28,6 +28,11 @@ def main():
                                               "registers as PE tiles",
                         action="store_true",
                         required=False, dest="no_reg_fold", default=False)
+    parser.add_argument("--io_json", help="File name for IO json that " +
+                                          "specifies IO pads. Default is"
+                                          "<output.json>",
+                        required=False, action="store", dest="io_json",
+                        default="")
     args = parser.parse_args()
     arch_filename = args.arch_filename
     netlist_file = args.netlist_file
@@ -35,6 +40,10 @@ def main():
     placement_file = args.placement_file
     routing_file = args.routing_file
     output_filename = args.output_filename
+    if len(args.io_json) > 0:
+        io_json = args.io_json
+    else:
+        io_json = output_filename + ".json"
 
     fold_reg = not args.no_reg_fold
 
@@ -43,11 +52,13 @@ def main():
     print("INFO:", "placement:", placement_file)
     print("INFO:", "route:", routing_file)
     print("INFO:", "fold_reg:", fold_reg)
+    print("INFO:", "io_json:", io_json)
 
     generate_bitstream(arch_filename, netlist_file, packed_filename,
                        placement_file,
                        routing_file,
-                       output_filename, fold_reg=fold_reg)
+                       output_filename, io_json,
+                       fold_reg=fold_reg)
 
 
 if __name__ == "__main__":

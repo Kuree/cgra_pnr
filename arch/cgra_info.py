@@ -6,6 +6,8 @@ def get_alu_str(instance):
     elif op_type == 1:
         # FIXME
         return "sub"
+    elif op_type == 3:
+        return"abs"
     elif op_type == 4 and signed:
         return "sge"
     elif op_type == 4 and not signed:
