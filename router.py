@@ -366,13 +366,16 @@ class Router:
         for i in range(len(path) - 1, 0, -1):
             path_entry = path[i]
             if len(path_entry) == 2:
-                if path_entry[0][0] == pos:
-                    return path_entry[0][1]
+                if path_entry[1][0] == pos:
+                    assert path_entry[1][1][1] == 0
+                    return path_entry[1][1]
             elif len(path_entry) == 3:
                 if path_entry[1] == pos:
+                    assert path_entry[0][1] == 0
                     return path_entry[0]
             elif len(path_entry) == 4:
                 if path_entry[2] == pos:
+                    assert path_entry[0][1] == 0
                     return path_entry[0]
         raise Exception("Unable to find pre pos for pos " + str(pos))
 
@@ -681,30 +684,43 @@ class Router:
         return path_length, final_path, routing_resource
 
     @staticmethod
-    def get_track_in_from_path(src_pos, path):
-        src_conn = None
-        for i in range(len(path) - 1, -1, -1):
-            if isinstance(path[i][-1], str):
-                continue
+    def get_track_in_from_path(src_pos, src_port, path):
+        for i in range(len(path)):
             if len(path[i]) == 1:
-                pos, _, _, conn = path[i][0]
+                continue
             elif len(path[i]) == 2:
-                pos, conn = path[i][-1]
-                src_pp, src_conn = path[i][0]
+                pos, src_conn = path[i][-1]
+                # src_pp, src_conn = path[i][0]
+            elif len(path[i]) == 3:
+                src_conn, pos, _ = path[i]
+            elif len(path[i]) == 4:
+                src_conn, _, pos, _ = path[i]
             else:
                 raise Exception("Unknown path")
             if pos == src_pos:
-                if src_conn is None:
-                    # we tried but couldn't find any. which means it has to be
-                    # at the very beginning of the path
-                    first_pos = path[0][0][0]
-                    assert (src_pos == first_pos)
+                assert (src_conn[1] == 0)
+                return True, src_conn
+        # couldn't find it
+        # going forwards to see if it comes directly from a src
+        for i in range(len(path) - 1):
+            if len(path[i]) == 1:
+                pos = path[i][0][0]
+                if pos == src_pos:
                     return False, None
-                else:
-                    if src_conn[1] == 0:
+                if len(path[i + 1]) == 2:
+                    pos, _ = path[i + 1][0]
+                    if pos == src_pos:
+                        _, _, _, src_conn = path[i][0]
+                        assert (src_conn[1] == 0)
                         return True, src_conn
-            assert conn[1] == 0    # it's actually coming in
-            return True, conn
+        # last resort:
+        # if it's a reg net and coming directly from a port
+        if src_port == "reg":
+            assert len(path) == 1
+            pos, _, _, src_conn = path[0][0]
+            assert Router.manhattan_dist(pos, src_pos) == 1
+            assert (src_conn[1] == 0)
+            return True, src_conn
         raise Exception("Unable to find track in")
 
     @staticmethod
@@ -840,6 +856,7 @@ class Router:
                     assert len(final_path) > 0
                     # get previous track in
                     found, track_in = self.get_track_in_from_path(src_pos,
+                                                                  src_port,
                                                                   final_path)
                     if found:
                         assert track_in is not None

@@ -399,45 +399,37 @@ def generate_bitstream(board_filename, netlist_filename,
         for p in netlist:
             output_string += "# {}: {}::{}\n".format(p[0], id_to_name[p[0]],
                                                      p[1])
-        track_in = None
+
         for index, entry in enumerate(path):
-            if index == len(path) - 1:
-                # sink
-                break
             path_type = entry[0]
             if index == 0:
                 assert (path_type == "src")
-                s, track_in = handle_src(entry[1], entry[2], tile_mapping,
-                                         board_layout,
-                                         fold_reg=fold_reg)
+                s = handle_src(entry[1], entry[2], tile_mapping,
+                               board_layout,
+                               fold_reg=fold_reg)
                 output_string += s
             else:
                 if path_type == "src":
-                    s, track_in = handle_src(entry[1], entry[2], tile_mapping,
-                                             board_layout,
-                                             fold_reg=fold_reg)
+                    s = handle_src(entry[1], entry[2], tile_mapping,
+                                   board_layout,
+                                   fold_reg=fold_reg)
                     output_string += s
                 elif path_type == "link":
-                    s, track_in = handle_link(entry[1], entry[2],
-                                              track_in,
-                                              tile_mapping,
-                                              board_layout)
+                    track_in = find_track_in(entry[1][0], path[:index + 1])
+                    s = handle_link(entry[1], entry[2],
+                                    track_in,
+                                    tile_mapping,
+                                    board_layout)
                     output_string += s
                 elif path_type == "sink":
-                    s, track_in = handle_sink_entry(entry, track_in,
-                                                    tile_mapping, board_layout,
-                                                    folded_blocks, placement,
-                                                    fold_reg=fold_reg)
+                    track_in = find_track_in(entry[-1][0], path[:index + 1])
+                    s = handle_sink_entry(entry, track_in,
+                                          tile_mapping, board_layout,
+                                          folded_blocks, placement,
+                                          fold_reg=fold_reg)
                     output_string += s
                 else:
                     raise Exception("Unknown stage: " + path_type)
-
-        entry = path[-1]
-        s, _ = handle_sink_entry(entry, track_in,
-                                 tile_mapping, board_layout,
-                                 folded_blocks, placement,
-                                 fold_reg=fold_reg)
-        output_string += s
 
         output_string += "\n"
 
@@ -446,6 +438,45 @@ def generate_bitstream(board_filename, netlist_filename,
 
     with open(io_json, "w+") as f:
         json.dump(io_pad_info, f, indent=2, separators=(',', ': '))
+
+
+def find_track_in(src_pos, path):
+    # similar logic used in the router
+    for i in range(len(path) - 1, -1, -1):
+        entry = path[i]
+        if entry[0] == "src":
+            continue
+        elif entry[0] == "link":
+            (_, pos), (_, src_conn) = entry[1:]
+            if pos == src_pos:
+                assert src_conn[1] == 0
+                return src_conn
+        else:
+            if len(entry) == 3:
+                if entry[-1][-1] == "reg":
+                    _, (_, src_conn), (pos, _) = entry
+                else:
+                    _, src_conn, (pos, _) = entry
+                if pos == src_pos:
+                    assert src_conn[1] == 0
+                    return src_conn
+            elif len(entry) == 4:
+                (pos, _), (src_conn, _) = entry[1]
+                if pos == src_pos:
+                    assert src_conn[1] == 0
+                    return src_conn
+
+    # second pass if it comes directly from a port
+    for i in range(len(path) - 1):
+        entry = path[i]
+        if entry[0] == "src":
+            next_pos = path[i + 1][1][0]
+            if next_pos == src_pos:
+                src_conn = entry[-1][-1]
+                assert src_conn[1] == 0
+                return src_conn
+
+    raise Exception("Unknown path")
 
 
 def make_track_string(pos, track, tile_mapping, _, track_str=""):
@@ -469,35 +500,34 @@ def make_track_string(pos, track, tile_mapping, _, track_str=""):
 def handle_sink_entry(entry, track_in, tile_mapping, board_layout,
                       folded_blocks, placement, fold_reg=True):
     if len(entry) == 4:
-        s, track_in = handle_sink(entry[1], entry[2], entry[3],
-                                  track_in,
-                                  tile_mapping,
-                                  board_layout,
-                                  folded_blocks,
-                                  placement)
+        s = handle_sink(entry[1], entry[2], entry[3],
+                        track_in,
+                        tile_mapping,
+                        board_layout,
+                        folded_blocks,
+                        placement)
     elif len(entry) == 3:
         if entry[-1][-1] == "reg":
             assert fold_reg
-            s, track_in = handle_reg_sink(entry[1:], track_in, tile_mapping,
-                                          board_layout)
+            s = handle_reg_sink(entry[1:], tile_mapping, board_layout)
         else:
-            s, track_in = handle_sink(None, entry[1], entry[2],
-                                      track_in,
-                                      tile_mapping,
-                                      board_layout,
-                                      folded_blocks,
-                                      placement)
+            s = handle_sink(None, entry[1], entry[2],
+                            track_in,
+                            tile_mapping,
+                            board_layout,
+                            folded_blocks,
+                            placement)
     else:
         raise Exception("Unknown entry " + str(entry))
-    return s, track_in
+    return s
 
 
-def handle_reg_sink(entry, track_in, tile_mapping, board_layout):
+def handle_reg_sink(entry, tile_mapping, board_layout):
     (dir_out, dir_in), (pos, port) = entry
     assert (port == "reg")
-    result, _ = handle_link((pos, pos), (dir_out, dir_in), dir_in, tile_mapping,
+    result = handle_link((pos, pos), (dir_out, dir_in), dir_in, tile_mapping,
                             board_layout, track_str=" (r)")
-    return result, track_in
+    return result
 
 
 def handle_sink(self_conn, conn, dst, track_in,
@@ -545,7 +575,7 @@ def handle_sink(self_conn, conn, dst, track_in,
     # current bsbuilder doesn't like IO stuff
     if board_layout[dst_pos[1]][dst_pos[0]] == "i":
         result = ""
-    return result, track_in
+    return result
 
 
 def handle_link(conn1, conn2, pre_in, tile_mapping, board_layout, track_str=""):
@@ -554,7 +584,7 @@ def handle_link(conn1, conn2, pre_in, tile_mapping, board_layout, track_str=""):
     start = make_track_string(src_pos, pre_in, tile_mapping, board_layout)
     end = make_track_string(src_pos, track_out, tile_mapping, board_layout)
     result = start + " -> " + end + track_str + "\n"
-    return result, track_in
+    return result
 
 
 def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
@@ -565,7 +595,7 @@ def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
         src_port = "pe_out"
     elif src_port == "reg":
         assert fold_reg
-        return "", conn[1]
+        return ""
     track = "" if conn[0][0] == 16 else "b"
     start = "T{}_{}{}".format(tile, src_port, track)
     end = make_track_string(src_pos, conn[0], tile_mapping, board_layout)
@@ -575,7 +605,7 @@ def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
     # use board_layout to leave that black
     if board_layout[src_pos[1]][src_pos[0]] == "i":
         result = ""
-    return result, conn[1]
+    return result
 
 
 def get_const_value(instance):
