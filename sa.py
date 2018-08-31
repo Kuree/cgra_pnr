@@ -5,6 +5,7 @@ from util import reduce_cluster_graph, compute_centroids
 from arch.netlist import group_reg_nets
 import numpy as np
 import random
+import math
 
 
 # main class to perform simulated annealing within each cluster
@@ -409,10 +410,12 @@ class SAClusterPlacer(Annealer):
         # set a limit how much shuffling we are going to do
         cluster_ids = list(clusters.keys())
         # determine loop range
-        if len(cluster_ids) > 1:
-            loop_range = len(cluster_ids) * (len(cluster_ids) - 1)
-        else:
+        if len(cluster_ids) < 2:
             loop_range = 1
+        elif len(cluster_ids) <= 6:
+            loop_range = math.factorial(len(cluster_ids))
+        else:
+            loop_range = len(cluster_ids) * (len(cluster_ids) - 1)
         state = None
         for i in range(loop_range):
             try:
