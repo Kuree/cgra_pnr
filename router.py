@@ -542,7 +542,7 @@ class Router:
         return keys[0]
 
     def route_net(self, bus, chan, net, routing_resource, final_path=None,
-                  is_src=True, pos_set=None, is_reg_net=False):
+                  is_src=True, pos_set=None, reg_pos=None):
         src_id, src_port = net[0]
         pin_port_set = determine_pin_ports(net,
                                            self.placement,
@@ -575,6 +575,13 @@ class Router:
         # the wires required to connected to operands.
         if pos_set is None:
             pos_set = set()
+        # reg_net's logic is different
+        if reg_pos is None:
+            is_reg_net = False
+        else:
+            is_reg_net = True
+            pos_set.add(reg_pos)
+
         for (p_id, p_port) in dst_set:
             p_pos = self.placement[p_id]
             self.dis_allow_chan(p_pos, p_port, bus, chan, routing_resource,
@@ -754,7 +761,7 @@ class Router:
             self.route_net(bus, chan, net, routing_resource, is_src=False,
                            final_path=tail_main_path,
                            pos_set=pos_set,
-                           is_reg_net=True)
+                           reg_pos=src_pos)
         if path_length == self.MAX_PATH_LENGTH:
             # not routable
             # just return that and the rest of the logic is going to handle
@@ -770,10 +777,33 @@ class Router:
         # if the reg is the same position as the connected blocks
         # things will get very very tricky.
         assert (not self.is_sink(final_path[0]))
-        (p, dir_out), (_, conn_in) = final_path[0]
+        (p, dir_out), (next_pos, conn_in) = final_path[0]
         # rewrite the first entry as the src format
-        final_path[0] = [(pos, port, dir_out, conn_in)]
+        reg_src_entry = [(pos, port, dir_out, conn_in)]
+        final_path[0] = reg_src_entry
         assert(p == pos)
+        # Keyi:
+        # More complications here
+        # insert src entry if any of the reg net reuse the reg src
+        # also we may keep inserting things, so a conventional loop
+        # doesn't work here
+        terminated = False
+        start_index = 2
+        while not terminated:
+            index = len(final_path)
+            for index in range(start_index, len(final_path)):
+                entry = final_path[index]
+                if len(entry) == 2:
+                    # it's a link
+                    if entry[0][0] == next_pos:
+                        # we need to insert
+                        break
+            if index == len(final_path) - 1:
+                terminated = True
+            else:
+                final_path.insert(index, reg_src_entry)
+                start_index = index + 2
+
         main_path[reg_index] = (dir_in, pos, dir_out)
 
         return path_length, final_path, routing_resource
