@@ -286,10 +286,14 @@ class Router:
                          pre_point, current_point, port, bus, chan,
                          is_self_connection=False):
         """returns True/False, [connection list + port]"""
-        direction = self.compute_direction(current_point, pre_point)
-        # test if we have direct connection to the operand
-        # that is, in -> op
-        dir_in = (bus, 0, direction, chan)
+        if len(pre_point) == 2:
+            direction = self.compute_direction(current_point, pre_point)
+            # test if we have direct connection to the operand
+            # that is, in -> op
+            dir_in = (bus, 0, direction, chan)
+        else:
+            assert len(pre_point) == 4
+            dir_in = pre_point
         route_resource = routing_resource[current_point]["route_resource"]
         sink_resource = routing_resource[current_point]["port"]
         if port not in sink_resource:
@@ -358,24 +362,18 @@ class Router:
         return netlist_ids
 
     @staticmethod
-    def find_pre_pos(pos, path):
-        for i in range(len(path) - 1, -1, -1):
+    def find_pre_track_in(pos, path):
+        for i in range(len(path) - 1, 0, -1):
             path_entry = path[i]
-            # TODO: FIXME
-            if isinstance(path_entry, list):
-                # it could be src
-                if not isinstance(path_entry[-1], str) and \
-                        len(path_entry[0][0]) == 2:
-                    pos1 = path_entry[0][0]
-                    if Router.manhattan_dist(pos1, pos) == 1:
-                        return pos1
-                continue
-            pos1 = path_entry[0][0]
-            pos2 = path_entry[1][0]
-            if Router.manhattan_dist(pos2, pos) == 1:
-                return pos2
-            if Router.manhattan_dist(pos1, pos) == 1:
-                return pos1
+            if len(path_entry) == 2:
+                if path_entry[0][0] == pos:
+                    return path_entry[0][1]
+            elif len(path_entry) == 3:
+                if path_entry[1] == pos:
+                    return path_entry[0]
+            elif len(path_entry) == 4:
+                if path_entry[2] == pos:
+                    return path_entry[0]
         raise Exception("Unable to find pre pos for pos " + str(pos))
 
     @staticmethod
@@ -472,7 +470,7 @@ class Router:
                         reg_net = self.netlists[reg_net_id]
                         # because routing resource has been updated, we don't
                         # need to keep track of old ones
-                        pos_set = set()
+                        # pos_set = set()
                         reg_length, reg_path, routing_resource = \
                             self.route_reg_net(reg_net, bus, chan,
                                                routing_resource,
@@ -597,7 +595,7 @@ class Router:
             # this will happen if two operands share the same input
             # in a single block
             if dst_pos == src_pos:
-                pre_pos = self.find_pre_pos(dst_pos, final_path)
+                pre_pos = self.find_pre_track_in(dst_pos, final_path)
                 available, pin_info = \
                     self.is_pin_available(routing_resource,
                                           pre_pos, dst_pos, dst_port,
