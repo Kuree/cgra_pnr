@@ -590,6 +590,8 @@ class Router:
             # > 1 because we don't want to interfere with reg net routing
             if len(final_path) > 1:
                 src_pos = self.find_closet_src(dst_pos, final_path, is_reg_net)
+                if src_pos == self.placement[src_id]:
+                    is_src = True
 
             # self loop prevention
             # this will happen if two operands share the same input
