@@ -117,7 +117,19 @@ def calculate_delay(net_path, route_result, placement, netlists, id_to_name,
     for i in range(len(net_path) - 1):
         src_id, net_id = net_path[i]
         dst_id, _ = net_path[i + 1]
+        src_pos = placement[src_id]
         end_pos = placement[dst_id]
+
+        path_result = {}
+        link = {}
+
+        def add_time(p_pos, conn_type, time):
+            if p_pos not in path_result:
+                path_result[p_pos] = {}
+                for e in TIMING_INFO:
+                    path_result[p_pos][e] = 0
+            if len(conn_type) > 0:
+                path_result[p_pos][conn_type] += time
 
         net = netlists[net_id][:]
         path = route_result[net_id][:]
@@ -125,7 +137,7 @@ def calculate_delay(net_path, route_result, placement, netlists, id_to_name,
         assert (src_entry[0] == "src")
         src_id, src_port = net.pop(0)
         if src_port == "reg":
-            result["reg"] += TIMING_INFO["reg"]
+            add_time(src_pos, "reg", TIMING_INFO["reg"])
         else:
             src_name = id_to_name[src_id]
             # FIXME
@@ -135,21 +147,38 @@ def calculate_delay(net_path, route_result, placement, netlists, id_to_name,
                 op, _ = get_tile_op(instances[src_name], src_id, changed_pe,
                                     rename_op=False)
             if op is not None:
-                result[op] += TIMING_INFO[op]
+                add_time(src_pos, op, TIMING_INFO[op])
+            else:
+                add_time(src_pos, "", 0)
+        pre_pos = src_pos
         # traverse through the net
         for path_entry in path:
             if path_entry[0] == "link":
-                result["sb"] += TIMING_INFO["sb"]
+                current_pos = path_entry[0][0]
+                if current_pos in link:
+                    pre_pos = current_pos
+                    continue
+                else:
+                    add_time(current_pos, "sb", TIMING_INFO["sb"])
+                    link[current_pos] = pre_pos
+                    pre_pos = current_pos
             else:
-                assert path_entry[0] == "sink"
+                if path_entry[0] != "sink":
+                    assert (path_entry[0] == "src")
+                    pre_pos = src_pos
+                    continue
                 if len(path_entry) == 3:
                     _, _, (pos, port) = path_entry
                     dst_id, dst_port = find_net_entry(net, pos, port)
                     dst_pos = placement[dst_id]
                     assert (dst_port == port and dst_pos == pos)
-                    result["cb"] += TIMING_INFO["cb"]
                     net.remove((dst_id, dst_port))
+                    if pos not in link:
+                        link[pos] = pre_pos
+                    pre_pos = pos
+                    add_time(pos, "sb", TIMING_INFO["sb"])
                     if pos == end_pos:
+                        add_time(pos, "cb", TIMING_INFO["cb"])
                         break
                 else:
                     assert len(path_entry) == 4
@@ -157,10 +186,22 @@ def calculate_delay(net_path, route_result, placement, netlists, id_to_name,
                     dst_id, dst_port = find_net_entry(net, pos, port)
                     dst_pos = placement[dst_id]
                     assert (dst_pos == pos and dst_port == port)
-                    result["sb"] += TIMING_INFO["sb"]
                     net.remove((dst_id, dst_port))
+                    if pos not in link:
+                        link[pos] = pre_pos
+                    pre_pos = pos
+                    add_time(pos, "sb", TIMING_INFO["sb"])
                     if pos == end_pos:
                         break
+        # reconstruct the path to compute the delay
+        current_pos = end_pos
+        while current_pos in link:
+            for entry in path_result[current_pos]:
+                result[entry] += path_result[current_pos][entry]
+            current_pos = link[current_pos]
+        assert current_pos == src_pos
+        for entry in path_result[current_pos]:
+            result[entry] += path_result[current_pos][entry]
 
     total_time = sum([result[x] for x in result])
     return total_time, result
