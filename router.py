@@ -441,6 +441,12 @@ class Router:
             chan_resources = {}
             reg_route_path = {}
             for chan in range(self.channel_width):
+                # FIXME: force to use channel one
+                # need to fix it after IO is re-worked
+                if net[0][0][0] == "i":
+                    if chan != 0:
+                        route_length[chan] = self.MAX_PATH_LENGTH
+                        continue
                 # make sure that it won't route on top of reg net
                 if net_id in linked_nets:
                     pos_set = set()
