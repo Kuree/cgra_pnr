@@ -420,7 +420,11 @@ def generate_bitstream(board_filename, netlist_filename,
                                     track_in,
                                     tile_mapping,
                                     board_layout)
-                    output_string += s
+                    if s not in output_string:
+                        # Keyi:
+                        # sometimes it will produce legal duplicated routing
+                        # tracks.
+                        output_string += s
                 elif path_type == "sink":
                     track_in = find_track_in(entry[-1][0], path[:index + 1])
                     s = handle_sink_entry(entry, track_in,
