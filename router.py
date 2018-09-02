@@ -521,7 +521,7 @@ class Router:
             if is_reg_net and index == 0:
                 if len(final_path[index]) != 2:
                     assert (len(final_path[index + 1]) == 2)
-                    reg_pos = final_path[index + 1][-1][0]
+                    reg_pos = final_path[index + 1][0][0]
                 else:
                     reg_pos = final_path[index][-1][0]
                 continue
@@ -543,9 +543,18 @@ class Router:
             if p not in distance:
                 distance[p] = Router.manhattan_dist(pos, p)
         keys = list(distance.keys())
-        if reg_pos is not None:
+        # we have to find reg_src if it's a reg net
+        if is_reg_net:
+            assert reg_pos is not None
             assert (reg_pos in keys)
             keys.remove(reg_pos)
+            # also disable the coming in path which is used to direct reg net
+            # just in case
+            conn = final_path[0]
+            assert len(conn) == 1 or len(conn) == 2
+            src_pos = conn[0][0]
+            if src_pos in keys:
+                keys.remove(src_pos)
         keys.sort(key=lambda x: distance[x])
 
         return keys[0]
