@@ -415,7 +415,10 @@ def generate_bitstream(board_filename, netlist_filename,
                                    fold_reg=fold_reg)
                     output_string += s
                 elif path_type == "link":
-                    track_in = find_track_in(entry[1][0], path[:index + 1])
+                    track_out = entry[2][0]
+                    assert (track_out[1] == 1)
+                    track_in = find_track_in(entry[1][0], track_out,
+                                             path[:index + 1])
                     s = handle_link(entry[1], entry[2],
                                     track_in,
                                     tile_mapping,
@@ -426,7 +429,14 @@ def generate_bitstream(board_filename, netlist_filename,
                         # tracks.
                         output_string += s
                 elif path_type == "sink":
-                    track_in = find_track_in(entry[-1][0], path[:index + 1])
+                    if len(entry) == 4:
+                        track_out = entry[-2]
+                        assert len(track_out) == 4 and track_out[1] == 1
+                    else:
+                        assert len(entry) == 3
+                        track_out = None
+                    track_in = find_track_in(entry[-1][0], track_out,
+                                             path[:index + 1])
                     s = handle_sink_entry(entry, track_in,
                                           tile_mapping, board_layout,
                                           folded_blocks, placement,
@@ -444,15 +454,17 @@ def generate_bitstream(board_filename, netlist_filename,
         json.dump(io_pad_info, f, indent=2, separators=(',', ': '))
 
 
-def find_track_in(src_pos, path):
+def find_track_in(src_pos, track_out, path):
+    if track_out is None:
+        track_out = (None, None, None)
     # similar logic used in the router
-    for i in range(len(path) - 1, -1, -1):
+    for i in range(len(path)):
         entry = path[i]
         if entry[0] == "src":
             continue
         elif entry[0] == "link":
             (_, pos), (_, src_conn) = entry[1:]
-            if pos == src_pos:
+            if pos == src_pos and src_conn[2] != track_out[2]:
                 assert src_conn[1] == 0
                 return src_conn
         else:
@@ -461,12 +473,12 @@ def find_track_in(src_pos, path):
                     _, (_, src_conn), (pos, _) = entry
                 else:
                     _, src_conn, (pos, _) = entry
-                if pos == src_pos:
+                if pos == src_pos and src_conn[2] != track_out[2]:
                     assert src_conn[1] == 0
                     return src_conn
             elif len(entry) == 4:
                 (pos, _), (src_conn, _) = entry[1]
-                if pos == src_pos:
+                if pos == src_pos and src_conn[2] != track_out[2]:
                     assert src_conn[1] == 0
                     return src_conn
 
