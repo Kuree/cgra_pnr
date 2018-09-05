@@ -8,7 +8,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 import abc
-import copy
+import six
 import math
 import random
 import time
@@ -45,6 +45,13 @@ class Annealer(object):
     copy_strategy = 'deepcopy'
     user_exit = False
 
+    # early termination
+    num_nets = 0
+
+    # fast HPWL calculation
+    pre_state = None
+    pre_energy = None
+
     # placeholders
     best_state = None
     best_energy = None
@@ -64,6 +71,26 @@ class Annealer(object):
 
         self.anneal_rand = random.Random()
         self.anneal_rand.seed(0)
+
+    @staticmethod
+    def __deepcopy(obj_to_copy):
+        if isinstance(obj_to_copy, dict):
+            d = obj_to_copy.copy()  # shallow dict copy
+            for k, v in six.iteritems(d):
+                d[k] = Annealer.__deepcopy(v)
+        elif isinstance(obj_to_copy, list):
+            d = obj_to_copy[:]  # shallow list/tuple copy
+            i = len(d)
+            while i:
+                i -= 1
+                d[i] = Annealer.__deepcopy(d[i])
+        elif isinstance(obj_to_copy, set):
+            d = obj_to_copy.copy()
+        else:
+            # tuple is fine since we're not modifying tuples
+            d = obj_to_copy
+        return d
+
 
     @abc.abstractmethod
     def move(self):
@@ -92,7 +119,7 @@ class Annealer(object):
         * method: use the state's copy() method
         """
         if self.copy_strategy == 'deepcopy':
-            return copy.deepcopy(state)
+            return Annealer.__deepcopy(state)
         elif self.copy_strategy == 'slice':
             return state[:]
         elif self.copy_strategy == 'method':
@@ -123,8 +150,8 @@ class Annealer(object):
         # Note initial state
         T = self.Tmax
         E = self.energy()
-        prevState = self.copy_state(self.state)
-        prevEnergy = E
+        self.pre_state = self.copy_state(self.state)
+        self.pre_energy = E
         self.best_state = self.copy_state(self.state)
         self.best_energy = E
         trials, accepts, improves = 0, 0, 0
@@ -135,21 +162,25 @@ class Annealer(object):
             T = self.Tmax * math.exp(Tfactor * step / self.steps)
             self.move()
             E = self.energy()
-            dE = E - prevEnergy
+            dE = E - self.pre_energy
             trials += 1
             if dE > 0.0 and math.exp(-dE / T) < self.anneal_rand.random():
                 # Restore previous state
-                self.state = self.copy_state(prevState)
+                self.state = self.copy_state(self.pre_state)
             else:
                 # Accept new state and compare to best state
                 accepts += 1
                 if dE < 0.0:
                     improves += 1
-                prevState = self.copy_state(self.state)
-                prevEnergy = E
+                self.pre_state = self.copy_state(self.state)
+                self.pre_energy = E
                 if E < self.best_energy:
                     self.best_state = self.copy_state(self.state)
                     self.best_energy = E
+
+            # allow early termination
+            if self.num_nets > 0 and T < 0.005 * E / self.num_nets:
+                break
 
         self.state = self.copy_state(self.best_state)
 

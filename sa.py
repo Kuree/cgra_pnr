@@ -68,6 +68,29 @@ class SADetailedPlacer(Annealer):
 
         Annealer.__init__(self, initial_state=state, rand=rand)
 
+        # schedule
+        self.steps = len(blocks) * 125
+        self.num_nets = len(netlists)
+
+        # fast calculation
+        self.moves = set()
+        self.blk_index = self.__index_netlists(netlists, blocks)
+
+        self.pre_state = deepcopy(state)
+        self.pre_energy = self.init_energy()
+
+    @staticmethod
+    def __index_netlists(netlists, blocks):
+        result = {}
+        for net_id in netlists:
+            for blk in netlists[net_id]:
+                if blk not in blocks:
+                    continue
+                if blk not in result:
+                    result[blk] = set()
+                result[blk].add(net_id)
+        return result
+
     def __init_placement(self, rand):
         # filling in PE tiles first
         pos = list(self.available_pos)
@@ -164,6 +187,8 @@ class SADetailedPlacer(Annealer):
         return self.__reg_net(pos, blk, board)
 
     def move(self):
+        # reset the move set
+        self.moves = set()
         available_ids = list(self.state.keys())
         available_ids.sort(key=lambda x: int(x[1:]))
         available_pos = list(self.available_pos)
@@ -190,12 +215,15 @@ class SADetailedPlacer(Annealer):
             if next_pos not in board or len(board[next_pos]) == 0:
                 # an empty spot
                 self.state[blk] = next_pos
+                self.moves.add(blk)
             else:
                 # swap
                 assert len(board[next_pos]) == 1
                 next_blk = board[next_pos][0]
                 self.state[next_blk] = blk_pos
                 self.state[blk] = next_pos
+                self.moves.add(blk)
+                self.moves.add(next_blk)
             return
 
         if self.fold_reg:
@@ -203,6 +231,7 @@ class SADetailedPlacer(Annealer):
             if pos != blk_pos:
                 if self.is_legal(pos, blk, board):
                     self.state[blk] = pos
+                    self.moves.add(blk)
                 else:
                     # swap
                     blks = board[pos]
@@ -214,6 +243,9 @@ class SADetailedPlacer(Annealer):
                             self.state[blk] = pos
                             self.state[blk_swap] = blk_pos
 
+                            self.moves.add(blk)
+                            self.moves.add(blk_swap)
+
         else:
             b = self.random.choice(available_pe_ids)
             pos_b = self.state[b]
@@ -223,7 +255,10 @@ class SADetailedPlacer(Annealer):
                 self.state[blk] = pos_b
                 self.state[b] = blk_pos
 
-    def energy(self):
+                self.moves.add(blk)
+                self.moves.add(b)
+
+    def init_energy(self):
         """we use HPWL as the cost function"""
         # merge with state + prefixed positions
         board_pos = self.blk_pos.copy()
@@ -234,7 +269,39 @@ class SADetailedPlacer(Annealer):
         netlist_hpwl = compute_hpwl(self.netlists, board_pos)
         for key in netlist_hpwl:
             hpwl += netlist_hpwl[key]
+
         return float(hpwl)
+
+    def energy(self):
+        """we use HPWL as the cost function"""
+        changed_nets = {}
+        change_net_ids = set()
+        for blk in self.moves:
+            change_net_ids.update(self.blk_index[blk])
+        for net_id in change_net_ids:
+            changed_nets[net_id] = self.netlists[net_id]
+
+        board_pos = self.blk_pos.copy()
+        for blk_id in self.pre_state:
+            pos = self.pre_state[blk_id]
+            board_pos[blk_id] = pos
+        old_netlist_hpwl = compute_hpwl(changed_nets, board_pos)
+        old_hpwl = 0
+        for key in old_netlist_hpwl:
+            old_hpwl += old_netlist_hpwl[key]
+
+        board_pos = self.blk_pos.copy()
+        for blk_id in self.pre_state:
+            pos = self.state[blk_id]
+            board_pos[blk_id] = pos
+        new_netlist_hpwl = compute_hpwl(changed_nets, board_pos)
+        new_hpwl = 0
+        for key in new_netlist_hpwl:
+            new_hpwl += new_netlist_hpwl[key]
+
+        final_hpwl = self.pre_energy + (new_hpwl - old_hpwl)
+
+        return float(final_hpwl)
 
 
 # main class to perform simulated annealing within each cluster
