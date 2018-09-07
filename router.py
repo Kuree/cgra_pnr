@@ -45,7 +45,7 @@ class Router:
         # result
         self.route_result = {}
 
-        print("Building routing resurce")
+        print("Building routing resource")
         r = parse_routing_resource(cgra_filename)
         self.routing_resource = build_routing_resource(r)
 
