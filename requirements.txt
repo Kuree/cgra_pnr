@@ -1,5 +1,5 @@
 # 1.15 has tons of warnings from scipy
-numpy==1.14
+numpy
 scipy
 sklearn
 matplotlib
