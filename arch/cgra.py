@@ -82,25 +82,10 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
     for blk_id in blks:
         if blk_id[0] == "i":
             is_input = io_mapping[blk_id]
-            io_name = id_to_name[blk_id]
-            # FIXME
-            # Hard-code position since Steve's simulation only handles
             if is_input:
-                if "io16" not in io_name:
-                    assert (2, 1) in input_io_locations
-                    pos = (2, 1)
-                    input_io_locations.remove(pos)
-                else:
-                    pos = input_io_locations.pop(0)
+                pos = input_io_locations.pop(0)
             else:
-                # pad_S1_T0 1-bit output
-                if "io16" not in io_name:
-                    assert (2, 18) in output_io_locations
-                    pos = (2, 18)
-                    output_io_locations.remove(pos)
-                    # pos = output_io_locations.pop(0)
-                else:
-                    pos = output_io_locations.pop(0)
+                pos = output_io_locations.pop(0)
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
             io_count += 1
@@ -347,14 +332,14 @@ def generate_bitstream(board_filename, netlist_filename,
     for blk_id in pe_keys:
         tile, op, pins, _ = pe_tiles[blk_id]
         if "mem" in op:
-            output_string += "T{}_{}{}#{}\n".format(tile, op,
-                                                    tab,
-                                                    id_to_name[blk_id])
+            output_string += "T{:04X}_{}{}#{}\n".format(tile, op,
+                                                        tab,
+                                                        id_to_name[blk_id])
         else:
-            output_string += "T{}_{}({}){}# {}\n".format(tile, op,
-                                                         ",".join(pins),
-                                                         tab,
-                                                         id_to_name[blk_id])
+            output_string += "T{:04X}_{}({}){}# {}\n".format(tile, op,
+                                                             ",".join(pins),
+                                                             tab,
+                                                             id_to_name[blk_id])
 
     # FIXME 1-bit IO hack
     io_strings = []
@@ -502,7 +487,7 @@ def make_track_string(pos, track, tile_mapping, _, track_str=""):
     #    assert(board_layout[pos[1] - 1][pos[0]] == "m")
     #    pos = pos[0], pos[1] - 1
     tile = tile_mapping[pos]
-    result = "T{}_{}_s{}t{}{}{}".format(
+    result = "T{:04X}_{}_s{}t{}{}{}".format(
         tile,
         "out" if is_out else "in",
         side,
@@ -580,10 +565,10 @@ def handle_sink(self_conn, conn, dst, track_in,
     #    track_str = ""
     tile = tile_mapping[dst_pos]
     track = "" if conn[0] == 16 else "b"
-    end = "T{}_{}{}{}\n".format(tile,
-                                dst_port,
-                                track,
-                                track_str)
+    end = "T{:04X}_{}{}{}\n".format(tile,
+                                    dst_port,
+                                    track,
+                                    track_str)
 
     result += start + " -> " + end
 
@@ -613,7 +598,7 @@ def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
         assert fold_reg
         return ""
     track = "" if conn[0][0] == 16 else "b"
-    start = "T{}_{}{}".format(tile, src_port, track)
+    start = "T{:04X}_{}{}".format(tile, src_port, track)
     end = make_track_string(src_pos, conn[0], tile_mapping, board_layout)
     result = start + " -> " + end + "\n"
     # Keyi:

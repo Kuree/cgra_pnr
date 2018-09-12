@@ -23,7 +23,6 @@ def parse_routing_resource(cgra_file):
         tri = tile_elem.find("tri")
         if tri is None:
             # more complicated routing is here
-            # no idea what it is though
 
             # connection box
             cb_bus = {}
@@ -72,7 +71,7 @@ def parse_routing_resource(cgra_file):
             result[(col, row)] = {"cb": cb_bus, "sb": sb_bus}
 
         else:
-            # tri direction
+            # IO direction
             io_entry = {}
             directions = set()
             for direction in tri.iter("direction"):
@@ -80,15 +79,23 @@ def parse_routing_resource(cgra_file):
             io_entry["directions"] = directions
 
             # IO input and outputs
-            # no idea what to do with them yet
-            input_elem = tile_elem.find("input")
+            input_elem = tile_elem.find("f2p_1bit")
             assert input_elem is not None, "tile " + str(address) + \
-                                           " does not have input element"
+                                           " does not have f2p_1bit element"
 
-            io_entry["input"] = input_elem.text
+            io_entry["input"] = set()
+            io_entry["input"].add(input_elem.text)
             io_entry["output"] = set()
-            for output_elem in tile_elem.iter("output"):
+            for output_elem in tile_elem.iter("p2f_1bit"):
                 io_entry["output"].add(output_elem.text)
+
+            # 16 bit IO
+            if tile_elem.find("p2f_wide") is not None:
+                for elem in tile_elem.findall("p2f_wide"):
+                    io_entry["output"].add(elem.text)
+                assert tile_elem.find("f2p_wide") is not None
+                for elem in tile_elem.findall("f2p_wide"):
+                    io_entry["input"].add(elem.text)
 
             result[(col, row)] = io_entry
     return result
@@ -148,27 +155,24 @@ def build_routing_resource(parsed_resource):
         entry = parsed_resource[(x, y)]
         if "cb" not in entry:
             # io entry
-            input_channel = entry["input"]
+            operands = {}
+            input_channels = entry["input"]
             output_channels = entry["output"]
             sink = "in"
-            wire_in = convert_bus_to_tuple(input_channel)
-            operands = {sink: {wire_in}}
+            operands[sink] = set()
+            for wire_info in input_channels:
+                wire = convert_bus_to_tuple(wire_info)
+                if wire is not None:
+                    assert wire[1] == 0
+                    operands[sink].add(wire)
             sink = "out"
             operands[sink] = set()
             for wire_info in output_channels:
                 wire = convert_bus_to_tuple(wire_info)
                 if wire is not None:
+                    assert wire[1] == 1
                     operands[sink].add(wire)
 
-            for sink in operands:
-                add_set = set()
-                for wire in operands[sink]:
-                    if wire[0] == 16:
-                        new_wire = (1, wire[1], wire[2], wire[3])
-                        if new_wire not in operands[sink]:
-                            add_set.add(new_wire)
-                for wire in add_set:
-                    operands[sink].add(wire)
             result[(x, y)] = {"route_resource": set(),
                               "port": operands}
             continue

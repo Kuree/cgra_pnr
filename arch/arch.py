@@ -180,9 +180,11 @@ def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
         board_dict[(x, y)] = blk_type
         available_types.add(blk_type)
         tile_mapping[(x, y)] = tile_addr
-        # figure out where the 16 bit IO tiles is
-        if tile_type == "io16bit":
-            io_tiles.append((x, y))
+        # figure out where the 16 bit IO tiles
+        if tile_type == "io1bit":
+            # only 16 bit IO tiles has
+            if tile.find("p2f_wide") is not None:
+                io_tiles.append((x, y))
     positions = list(board_dict.keys())
     positions.sort(key=lambda entry: entry[0] + entry[1], reverse=True)
     pos = positions[0]
