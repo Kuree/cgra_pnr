@@ -829,7 +829,7 @@ class Router:
                     if entry[0][0] == next_pos:
                         # we need to insert
                         break
-            if index == len(final_path) - 1:
+            if index >= len(final_path) - 1:
                 terminated = True
             else:
                 final_path.insert(index, reg_src_entry)
