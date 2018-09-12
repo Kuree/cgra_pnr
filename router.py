@@ -377,6 +377,13 @@ class Router:
                 if path_entry[2] == pos:
                     assert path_entry[0][1] == 0
                     return path_entry[0]
+        # Keyi:
+        # it may happen when the pos directly comes from src
+        if len(path) >= 2 and len(path[1]) == 2 and path[1][0][0] == pos:
+            assert Router.manhattan_dist(path[0][0][0], pos) == 1
+            direction = path[0][0][3]
+            assert direction[1] == 0
+            return direction
         raise Exception("Unable to find pre pos for pos " + str(pos))
 
     @staticmethod
