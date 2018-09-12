@@ -186,9 +186,10 @@ def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
             if tile.find("p2f_wide") is not None:
                 io_tiles.append((x, y))
     positions = list(board_dict.keys())
-    positions.sort(key=lambda entry: entry[0] + entry[1], reverse=True)
-    pos = positions[0]
-    width, height = pos[0] + 1, pos[1] + 1
+    positions.sort(key=lambda entry: entry[0], reverse=True)
+    width = positions[0][0] + 1
+    positions.sort(key=lambda entry: entry[1], reverse=True)
+    height = positions[0][1] + 1
     layout_board = []
     for h in range(height):
         row = [None] * width
