@@ -4,9 +4,14 @@ declare -a design_files=("conv_1_2_mapped" "conv_2_1_mapped" "conv_3_1_mapped"
                          "conv_bw_mapped" "onebit_bool_mapped" "pointwise_mapped")
 
 
-echo "Downloading CGRA info"
-wget https://cdn.rawgit.com/StanfordAHA/CGRAGenerator/dev/hardware/generator_z/top/examples/cgra_info.txt.shortmem
-cgra="cgra_info.txt.shortmem"
+# clone CGRAGenerator and build it
+git clone --single-branch -b separate_pad_ring --depth 1 \
+        https://github.com/StanfordAHA/CGRAGenerator
+pushd CGRAGenerator/hardware/generator_z/top
+./build_cgra.sh
+
+cgra=$(realpath cgra_info.xml)
+popd
 
 for file in "${design_files[@]}"
 do
