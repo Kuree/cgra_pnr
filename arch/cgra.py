@@ -333,26 +333,34 @@ def generate_bitstream(board_filename, netlist_filename,
     for blk_id in pe_keys:
         tile, op, pins, _ = pe_tiles[blk_id]
         if "mem" in op:
-            output_string += "T{:04X}_{}{}#{}\n".format(tile, op,
-                                                        tab,
-                                                        id_to_name[blk_id])
+            output_string += "Tx{:04X}_{}{}#{}\n".format(tile, op,
+                                                         tab,
+                                                         id_to_name[blk_id])
         else:
-            output_string += "T{:04X}_{}({}){}# {}\n".format(tile, op,
-                                                             ",".join(pins),
-                                                             tab,
-                                                             id_to_name[blk_id])
-
+            output_string += "Tx{:04X}_{}({}){}# {}\n".format(tile, op,
+                                                              ",".join(pins),
+                                                              tab,
+                                                              id_to_name[
+                                                                  blk_id])
+    io_strings = []
     io_pad_info = {}
     for blk_id in id_to_name:
         if blk_id[0] == "i":
+            pos = placement[blk_id]
             if "io1_" in id_to_name[blk_id]:
-                io_pad_info[id_to_name[blk_id]] = {"bits": {"0": {"pad_bit": "0"}},
+                io_pad_info[id_to_name[blk_id]] = {"bits":
+                                                       {"0": {"pad_bit": "0"}},
                                                    "mode": "out",
                                                    "width": 1}
+                tile = tile_mapping[pos]
+                io_strings.append("Tx{:04X}_pad(out,1)".format(tile))
             elif "reset" in id_to_name[blk_id]:
-                io_pad_info[id_to_name[blk_id]] = {"bits": {"0": {"pad_bit": "0"}},
+                io_pad_info[id_to_name[blk_id]] = {"bits":
+                                                       {"0": {"pad_bit": "0"}},
                                                    "mode": "reset",
                                                    "width": 1}
+                tile = tile_mapping[pos]
+                io_strings.append("Tx{:04X}_pad(in,1)".format(tile))
             elif "io16_out" in id_to_name[blk_id]:
                 io_pad_info[id_to_name[blk_id]] = {"mode": "out",
                                                    "width": 16}
@@ -363,8 +371,11 @@ def generate_bitstream(board_filename, netlist_filename,
             else:
                 raise Exception("Unrecognized io name " + id_to_name[blk_id])
             # get bus pad name
-            pos = placement[blk_id]
             io_pad_info[id_to_name[blk_id]]["pad_bus"] = io_pad_name[pos]
+
+    if len(io_strings) > 0:
+        output_string += "\n\n#IO\n"
+        output_string += "\n".join(io_strings)
 
     output_string += "\n\n#ROUTING\n"
     net_id_list = list(route_result.keys())
@@ -479,7 +490,7 @@ def make_track_string(pos, track, tile_mapping, _, track_str=""):
     #    assert(board_layout[pos[1] - 1][pos[0]] == "m")
     #    pos = pos[0], pos[1] - 1
     tile = tile_mapping[pos]
-    result = "T{:04X}_{}_s{}t{}{}{}".format(
+    result = "Tx{:04X}_{}_s{}t{}{}{}".format(
         tile,
         "out" if is_out else "in",
         side,
@@ -557,7 +568,7 @@ def handle_sink(self_conn, conn, dst, track_in,
     #    track_str = ""
     tile = tile_mapping[dst_pos]
     track = "" if conn[0] == 16 else "b"
-    end = "T{:04X}_{}{}{}\n".format(tile,
+    end = "Tx{:04X}_{}{}{}\n".format(tile,
                                     dst_port,
                                     track,
                                     track_str)
@@ -590,7 +601,7 @@ def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
         assert fold_reg
         return ""
     track = "" if conn[0][0] == 16 else "b"
-    start = "T{:04X}_{}{}".format(tile, src_port, track)
+    start = "Tx{:04X}_{}{}".format(tile, src_port, track)
     end = make_track_string(src_pos, conn[0], tile_mapping, board_layout)
     result = start + " -> " + end + "\n"
     # Keyi:
