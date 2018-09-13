@@ -285,6 +285,7 @@ def generate_bitstream(board_filename, netlist_filename,
     tile_mapping = board_meta[-1]
     board_layout = board_meta[0]
     io_pad_name = board_meta[-2]["io_pad_name"]
+    io_pad_bit = board_meta[-2]["io_pad_bit"]
 
     connections, instances = read_netlist_json(netlist_filename)
 
@@ -349,14 +350,16 @@ def generate_bitstream(board_filename, netlist_filename,
             pos = placement[blk_id]
             if "io1_" in id_to_name[blk_id]:
                 io_pad_info[id_to_name[blk_id]] = {"bits":
-                                                       {"0": {"pad_bit": "0"}},
+                                                   {"0": {"pad_bit":
+                                                          io_pad_bit[pos]}},
                                                    "mode": "out",
                                                    "width": 1}
                 tile = tile_mapping[pos]
                 io_strings.append("Tx{:04X}_pad(out,1)".format(tile))
             elif "reset" in id_to_name[blk_id]:
                 io_pad_info[id_to_name[blk_id]] = {"bits":
-                                                       {"0": {"pad_bit": "0"}},
+                                                   {"0": {"pad_bit":
+                                                          io_pad_bit[pos]}},
                                                    "mode": "reset",
                                                    "width": 1}
                 tile = tile_mapping[pos]

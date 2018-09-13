@@ -170,6 +170,7 @@ def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
     tile_mapping = {}
     io_tiles = []
     io_pad_name = {}
+    io_pad_bit = {}
     for tile in root.iter("tile"):
         if "type" not in tile.attrib or tile.attrib["type"] == "gst":
             continue
@@ -188,6 +189,11 @@ def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
                 io_tiles.append((x, y))
             pad_name = tile.attrib["name"]
             io_pad_name[(x, y)] = pad_name
+            # obtain the io pad bit number
+            io_bit_elem = tile.find("io_bit")
+            assert io_bit_elem is not None
+            io_pad_bit[(x, y)] = io_bit_elem.text
+
     positions = list(board_dict.keys())
     positions.sort(key=lambda entry: entry[0], reverse=True)
     width = positions[0][0] + 1
@@ -225,7 +231,8 @@ def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
 
     info = {"margin": pe_margin, "clb_type": "p", "arch_type": "cgra",
             "height": height, "width": width, "id_remap": id_remap,
-            "io": io_tiles, "io_pad_name": io_pad_name}
+            "io": io_tiles, "io_pad_name": io_pad_name,
+            "io_pad_bit": io_pad_bit}
 
     # NOTE:
     # the CGRA file sets the height for each tiles implicitly
