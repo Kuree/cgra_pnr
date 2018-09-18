@@ -62,10 +62,20 @@ def write_sb(parent, bus, sources, num_chan):
 
 def write_io(root, x, y, num_chan, tile_address, margin, size):
     element = etree.SubElement(root, "tile")
-    element.attrib["type"] = "io16bit"
-    element.attrib["tile_addr"] = "0x{0:x}".format(tile_address)
+    element.attrib["type"] = "io1bit"
+    element.attrib["tile_addr"] = "0x{0:04X}".format(tile_address)
     element.attrib["row"] = str(y)
     element.attrib["col"] = str(x)
+
+    # really don't care about its name
+    element.attrib["name"] = "pad_{0:x}".format(tile_address)
+
+    # io bit and group are just for the bitstream generator,
+    # doesn't have to be accurate
+    io_bit = etree.SubElement(element, "io_bit")
+    io_bit.text = str(tile_address % 16)
+    io_group = etree.SubElement(element, "io_group")
+    io_group.text = str(tile_address // 16)
 
     # based on pos, compute output directions
     out_direction = -1
@@ -85,18 +95,27 @@ def write_io(root, x, y, num_chan, tile_address, margin, size):
     elem_out = etree.SubElement(tri, "direction")
     elem_out.text = "out"
 
-    elem = etree.SubElement(element, "input")
+    # 1 bit
+    elem = etree.SubElement(element, "f2p_1bit")
+    # we only write 1 bit for io on track 0
+    elem.text = convert_conn_to_str(1, 0, out_direction, 0)
+    for i in range(num_chan):
+        elem = etree.SubElement(element, "p2f_1bit")
+        elem.text = convert_conn_to_str(1, 1, out_direction, i)
+
+    # 16 bit
+    elem = etree.SubElement(element, "f2p_wide")
     # we only write 16 bit for io on track 0
     elem.text = convert_conn_to_str(16, 0, out_direction, 0)
     for i in range(num_chan):
-        elem = etree.SubElement(element, "output")
+        elem = etree.SubElement(element, "p2f_wide")
         elem.text = convert_conn_to_str(16, 1, out_direction, i)
 
 
 def write_empty(root, x, y):
     element = etree.SubElement(root, "tile")
     element.attrib["type"] = "empty"
-    element.attrib["tile_addr"] = "0x{0:x}".format(0)
+    element.attrib["tile_addr"] = "0x{0:04X}".format(0)
     element.attrib["row"] = str(y)
     element.attrib["col"] = str(x)
 
@@ -105,7 +124,7 @@ def write_mem(root, x, y, num_chan, tile_address, wdata_dir, wen_dir,
               rdata_dir):
     element = etree.SubElement(root, "tile")
     element.attrib["type"] = "memory_tile"
-    element.attrib["tile_addr"] = "0x{0:x}".format(tile_address)
+    element.attrib["tile_addr"] = "0x{0:04X}".format(tile_address)
     element.attrib["row"] = str(y)
     element.attrib["col"] = str(x)
 
@@ -123,7 +142,7 @@ def write_pe(root, x, y, num_chan, tile_addr, bit0_dir, bit1_dir, bit2_dir,
              data0_dir, data1_dir, pe_out_dir):
     element = etree.SubElement(root, "tile")
     element.attrib["type"] = "pe_tile_new"
-    element.attrib["tile_addr"] = "0x{0:x}".format(tile_addr)
+    element.attrib["tile_addr"] = "0x{0:04X}".format(tile_addr)
     element.attrib["row"] = str(y)
     element.attrib["col"] = str(x)
 
@@ -185,7 +204,7 @@ def main():
                         default=4, type=int, action="store", dest="mem_repeat")
     parser.add_argument("--pe_margin", help="How much padding space " +
                                             "(including IO) for PE tiles",
-                        default=2, type=int, action="store", dest="pe_margin")
+                        default=1, type=int, action="store", dest="pe_margin")
     parser.add_argument("--num_track", "--num_chan", help="Number of " +
                         "tracks/channels will be used in routing",
                         default=5, type=int, action="store", dest="num_chan")
@@ -223,12 +242,11 @@ def main():
 
     # generate the doc
     root = etree.Element("CGRA")
-    tile_addr = 0
     for y in range(size + pe_margin * 2):
         for x in range(size + pe_margin * 2):
+            tile_addr = (y << 8) + x
             if (x, y) in io_pos:
                 write_io(root, x, y, num_chan, tile_addr, pe_margin, size)
-                tile_addr += 1
                 continue
             if x < pe_margin or y < pe_margin or x >= pe_margin + size or \
                 y >= pe_margin + size:
@@ -238,14 +256,11 @@ def main():
                 # mem tiles
                 write_mem(root, x, y, num_chan, tile_addr, wdata_dir,
                           wen_dir, rdata_dir)
-                tile_addr += 1
                 continue
             # the rest is pe tiles
             write_pe(root, x, y, num_chan, tile_addr, bit0_dir,
                      bit1_dir, bit2_dir, data0_dir, data1_dir,
                      pe_out_dir)
-
-            tile_addr += 1
 
     with open(output_file, "wb+") as f:
         s = etree.tostring(root, pretty_print=True)
