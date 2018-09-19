@@ -286,6 +286,7 @@ def generate_bitstream(board_filename, netlist_filename,
     board_layout = board_meta[0]
     io_pad_name = board_meta[-2]["io_pad_name"]
     io_pad_bit = board_meta[-2]["io_pad_bit"]
+    io16_tile = board_meta[-2]["io16_tile"]
 
     connections, instances = read_netlist_json(netlist_filename)
 
@@ -343,42 +344,13 @@ def generate_bitstream(board_filename, netlist_filename,
                                                               tab,
                                                               id_to_name[
                                                                   blk_id])
-    io_strings = []
-    io_pad_info = {}
-    for blk_id in id_to_name:
-        if blk_id[0] == "i":
-            pos = placement[blk_id]
-            if "io1_" in id_to_name[blk_id]:
-                io_pad_info[id_to_name[blk_id]] = {"bits":
-                                                   {"0": {"pad_bit":
-                                                          io_pad_bit[pos]}},
-                                                   "mode": "out",
-                                                   "width": 1}
-                tile = tile_mapping[pos]
-                io_strings.append("Tx{:04X}_pad(out,1)".format(tile))
-            elif "reset" in id_to_name[blk_id]:
-                io_pad_info[id_to_name[blk_id]] = {"bits":
-                                                   {"0": {"pad_bit":
-                                                          io_pad_bit[pos]}},
-                                                   "mode": "reset",
-                                                   "width": 1}
-                tile = tile_mapping[pos]
-                io_strings.append("Tx{:04X}_pad(in,1)".format(tile))
-            elif "io16_out" in id_to_name[blk_id]:
-                io_pad_info[id_to_name[blk_id]] = {"mode": "out",
-                                                   "width": 16}
+    # IO info
+    io_pad_info, io_strings = generate_io(id_to_name, io16_tile, io_pad_bit,
+                                          io_pad_name, placement, tile_mapping)
 
-            elif "io16in" in id_to_name[blk_id]:
-                io_pad_info[id_to_name[blk_id]] = {"mode": "in",
-                                                   "width": 16}
-            else:
-                raise Exception("Unrecognized io name " + id_to_name[blk_id])
-            # get bus pad name
-            io_pad_info[id_to_name[blk_id]]["pad_bus"] = io_pad_name[pos]
-
-    if len(io_strings) > 0:
-        output_string += "\n\n#IO\n"
-        output_string += "\n".join(io_strings)
+    assert len(io_strings) > 0
+    output_string += "\n\n#IO\n"
+    output_string += "\n".join(io_strings)
 
     output_string += "\n\n#ROUTING\n"
     net_id_list = list(route_result.keys())
@@ -443,6 +415,50 @@ def generate_bitstream(board_filename, netlist_filename,
 
     with open(io_json, "w+") as f:
         json.dump(io_pad_info, f, indent=2, separators=(',', ': '))
+
+
+def generate_io(id_to_name, io16_tile, io_pad_bit, io_pad_name, placement,
+                tile_mapping):
+    io_strings = []
+    io_pad_info = {}
+    for blk_id in id_to_name:
+        if blk_id[0] == "i":
+            pos = placement[blk_id]
+            pad_name = io_pad_name[pos]
+            if "io1_" in id_to_name[blk_id]:
+                io_pad_info[id_to_name[blk_id]] = {"bits":
+                                                       {"0": {"pad_bit":
+                                                                  io_pad_bit[
+                                                                      pos]}},
+                                                   "mode": "out",
+                                                   "width": 1}
+                tile = tile_mapping[pos]
+                io_strings.append("Tx{:04X}_pad(out,1)".format(tile))
+            elif "reset" in id_to_name[blk_id]:
+                io_pad_info[id_to_name[blk_id]] = {"bits":
+                                                       {"0": {"pad_bit":
+                                                                  io_pad_bit[
+                                                                      pos]}},
+                                                   "mode": "reset",
+                                                   "width": 1}
+                tile = tile_mapping[pos]
+                io_strings.append("Tx{:04X}_pad(in,1)".format(tile))
+            elif "io16_out" in id_to_name[blk_id]:
+                io_pad_info[id_to_name[blk_id]] = {"mode": "out",
+                                                   "width": 16}
+                for tile_addr in io16_tile[pad_name]:
+                    io_strings.append("Tx{:04X}_pad(out,16)".format(tile_addr))
+
+            elif "io16in" in id_to_name[blk_id]:
+                io_pad_info[id_to_name[blk_id]] = {"mode": "in",
+                                                   "width": 16}
+                for tile_addr in io16_tile[pad_name]:
+                    io_strings.append("Tx{:04X}_pad(in,16)".format(tile_addr))
+            else:
+                raise Exception("Unrecognized io name " + id_to_name[blk_id])
+            # get bus pad name
+            io_pad_info[id_to_name[blk_id]]["pad_bus"] = pad_name
+    return io_pad_info, io_strings
 
 
 def find_track_in(src_pos, track_out, path):

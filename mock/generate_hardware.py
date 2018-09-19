@@ -249,7 +249,7 @@ def main():
                 write_io(root, x, y, num_chan, tile_addr, pe_margin, size)
                 continue
             if x < pe_margin or y < pe_margin or x >= pe_margin + size or \
-                y >= pe_margin + size:
+               y >= pe_margin + size:
                 write_empty(root, x, y)
                 continue
             if (x - mem_start) % mem_repeat == 0:
