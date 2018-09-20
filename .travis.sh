@@ -5,7 +5,7 @@ declare -a design_files=("conv_1_2_mapped" "conv_2_1_mapped" "conv_3_1_mapped"
 
 
 # clone CGRAGenerator and build it
-git clone --single-branch -b io_chunk --depth 1 \
+git clone --single-branch -b master --depth 1 \
         https://github.com/StanfordAHA/CGRAGenerator
 pushd CGRAGenerator/hardware/generator_z/top
 ./build_cgra.sh
