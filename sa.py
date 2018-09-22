@@ -342,89 +342,6 @@ class SAMacroPlacer(Annealer):
         return float(hpwl)
 
 
-# unused for CGRA
-class DeblockAnnealer(Annealer):
-    def __init__(self, block_pos, available_pos, netlists, board_pos,
-                 is_legal=None, exclude_list=("u", "m", "i")):
-        # by default IO will be excluded
-        # place note that in this case available_pos includes empty cells
-        # as well
-        # we need to reverse index the block pos since we are swapping spaces
-        state = {}
-        self.excluded_blocks = {}
-        for blk_id in block_pos:
-            b_type = blk_id[0]
-            pos = block_pos[blk_id]
-            # always exclude the cluster centroid
-            if b_type in exclude_list or b_type == "x":
-                self.excluded_blocks[blk_id] = pos
-            else:
-                state[pos] = blk_id
-        self.available_pos = available_pos
-        assert (len(self.available_pos) >= len(block_pos))
-        self.netlists = netlists
-        self.board_pos = board_pos
-
-        if is_legal is not None:
-            # this one does not check whether the board is occupied or not
-            self.is_legal = is_legal
-        else:
-            self.is_legal = lambda p, block_id: True
-
-        self.exclude_list = exclude_list
-
-        rand = random.Random()
-        rand.seed(0)
-
-        Annealer.__init__(self, initial_state=state, rand=rand)
-
-        # reduce the schedule
-        # self.Tmax = self.Tmin + 3
-        # self.steps /= 10
-
-    def get_block_pos(self):
-        block_pos = {}
-        for pos in self.state:
-            blk_type = self.state[pos]
-            block_pos[blk_type] = pos
-        ex = self.excluded_blocks.copy()
-        block_pos.update(ex)
-        return block_pos
-
-    def move(self):
-        pos1, pos2 = self.random.sample(self.available_pos, 2)
-        if pos1 in self.state and pos2 in self.state:
-            # both of them are actual blocks
-            blk1, blk2 = self.state[pos1], self.state[pos2]
-            if self.is_legal(pos2, blk1) and self.is_legal(pos1, blk2):
-                # update the positions
-                self.state[pos1] = blk2
-                self.state[pos2] = blk1
-        elif pos1 in self.state and pos2 not in self.state:
-            blk1 = self.state[pos1]
-            if self.is_legal(pos2, blk1):
-                self.state.pop(pos1, None)
-                self.state[pos2] = blk1
-        elif pos1 not in self.state and pos2 in self.state:
-            blk2 = self.state[pos2]
-            if self.is_legal(pos1, blk2):
-                self.state.pop(pos2, None)
-                self.state[pos1] = blk2
-
-    def energy(self):
-        board_pos = self.board_pos.copy()
-        board_pos.update(self.excluded_blocks)
-
-        new_pos = self.get_block_pos()
-        board_pos.update(new_pos)
-
-        hpwl = 0
-        netlist_hpwl = compute_hpwl(self.netlists, board_pos)
-        for key in netlist_hpwl:
-            hpwl += netlist_hpwl[key]
-        return float(hpwl)
-
-
 # main class to perform simulated annealing on each cluster
 class SAClusterPlacer(Annealer):
     def __init__(self, clusters, netlists, board, board_pos, board_meta,
@@ -598,6 +515,16 @@ class SAClusterPlacer(Annealer):
 
         return state
 
+    def __initial_energy(self):
+        state = self.state
+
+        # Keyi:
+        # HPWL is calculated as a weighted sum, where the weights are the
+        # ratio of their entire macroblocks
+
+
+
+
     def move(self):
         pass
 
@@ -695,7 +622,6 @@ class SAClusterPlacer(Annealer):
                     assert (not bboard[y][x])
                 bboard[y][x] = True
         return bboard
-
 
 
 class ClusterException(Exception):

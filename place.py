@@ -1,8 +1,8 @@
 from __future__ import print_function
-from util import reduce_cluster_graph, compute_centroid
+from util import reduce_cluster_graph
 from argparse import ArgumentParser
 from arch.parser import parse_emb
-from sa import SAClusterPlacer, SADetailedPlacer, DeblockAnnealer
+from sa import SAClusterPlacer, SADetailedPlacer
 from sa import ClusterException, SAMacroPlacer
 from arch import make_board, parse_cgra, generate_place_on_board
 from arch import generate_is_cell_legal
@@ -44,14 +44,6 @@ def detailed_placement(args, context=None):
                 'headers': {'Content-Type': 'application/json'},
                 'body': detailed.state
                 }
-
-
-def deblock_placement(args):
-    clusters, cells, netlist, board, blk_pos = args
-    deblock = DeblockAnnealer(clusters, cells, netlist, blk_pos)
-    # deblock.steps = 100
-    deblock.anneal()
-    return deblock.get_block_pos()
 
 
 def macro_placement(board, board_pos, fixed_blk_pos, netlists, is_legal,
@@ -174,10 +166,6 @@ def main():
     #                               is_cell_legal, board_meta)
     # board_pos.update(macro_result)
 
-    # only use deblock when we have lots of clusters
-    # if len(clusters) > 2:
-    #     board_pos = perform_deblock_placement(board, board_pos, fixed_blk_pos,
-    #                                          netlists)
 
     for blk_id in board_pos:
         pos = board_pos[blk_id]
@@ -189,67 +177,6 @@ def main():
     design_name, _ = os.path.splitext(basename_file)
     if vis_opt:
         visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe)
-
-
-def perform_deblock_placement(board, board_pos, fixed_blk_pos, netlists):
-    # apply deblock "filter" to further improve the quality
-    num_x = 2
-    num_y = 2  # these values are determined by the board size
-    box_x = len(board[0]) // num_x
-    box_y = len(board) // num_y
-    boxes = []
-    for j in range(num_y):
-        pos_x = 0
-        pos_y = box_y * j
-        for i in range(num_x):
-            corner_x = pos_x + box_x
-            corner_y = pos_y + box_y
-            box = set()
-            # avoid over the board
-            corner_x = min(corner_x, len(board[0]))
-            corner_y = min(corner_y, len(board))
-            for xx in range(pos_x, corner_x):
-                for yy in range(pos_y, corner_y):
-                    box.add((xx, yy))
-            boxes.append(box)
-            pos_x += box_x
-    deblock_args = []
-    assigned_boxes = {}
-    box_centroids = {}
-    for index, box in enumerate(boxes):
-        # box is available
-        assigned = {}
-        for blk_id in board_pos:
-            pos = board_pos[blk_id]
-            if pos in box:
-                assigned[blk_id] = pos
-        if len(assigned) == 0:
-            continue  # they are empty so don't need them any more
-        assigned_boxes[index] = assigned
-        box_centroids[index] = compute_centroid(assigned)
-    # boxes is the new clusters here
-    for c_id in range(len(boxes)):
-        if c_id not in box_centroids:
-            continue
-        blk_pos = fixed_blk_pos.copy()
-        for i in range(len(boxes)):
-            if i == c_id or i not in box_centroids:
-                continue
-            node_id = "x" + str(i)
-            pos = box_centroids[i]
-            blk_pos[node_id] = pos
-        new_netlist = reduce_cluster_graph(netlists, assigned_boxes,
-                                           fixed_blk_pos, c_id)
-        deblock_args.append((assigned_boxes[c_id], boxes[c_id], new_netlist,
-                             board, blk_pos))
-    pool = Pool(4)
-    results = pool.map(deblock_placement, deblock_args)
-    pool.close()
-    pool.join()
-    board_pos = fixed_blk_pos.copy()
-    for r in results:
-        board_pos.update(r)
-    return board_pos
 
 
 def get_num_clusters(id_to_name):
