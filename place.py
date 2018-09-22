@@ -294,8 +294,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
               np.std(cluster_sizes), "total:", np.sum(cluster_sizes))
         try:
             cluster_placer = SAClusterPlacer(clusters, netlists, board,
-                                             fixed_blk_pos, place_factor=factor,
-                                             is_cell_legal=is_cell_legal,
+                                             fixed_blk_pos,
                                              board_meta=board_meta,
                                              fold_reg=fold_reg,
                                              seed=seed)
