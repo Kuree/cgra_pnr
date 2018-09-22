@@ -422,7 +422,7 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
 
         for entry in remove_blks:
             blk_id = entry[0]
-            print("Absorb", id_to_name[blk_id], "to", entry[1])
+            # print("Absorb", id_to_name[blk_id], "to", entry[1])
             item = (entry[0], entry[2])
             net.remove(item)
             assert (blk_id not in changed_pe)
@@ -435,9 +435,9 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
             nets_to_remove.add(net_id)
 
     for net_id in nets_to_remove:
-        print("Remove net_id:", net_id, "->".join(
-            ["{}::{}".format(id_to_name[blk], port)
-             for blk, port in raw_netlists[net_id]]), file=sys.stderr)
+        # print("Remove net_id:", net_id, "->".join(
+        #     ["{}::{}".format(id_to_name[blk], port)
+        #     for blk, port in raw_netlists[net_id]]), file=sys.stderr)
         raw_netlists.pop(net_id, None)
 
     # second pass to reconnect nets

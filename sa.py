@@ -19,11 +19,8 @@ class SADetailedPlacer(Annealer):
         The board can be an empty board.
         """
         self.blocks = blocks
-        # TODO:
-        # switch every thing into dictionary based
         available_pos = total_cells["p"]
         self.total_cells = total_cells
-        self.available_pos = available_pos
         self.netlists = netlists
         self.blk_pos = board_pos
         self.board = board
@@ -93,7 +90,7 @@ class SADetailedPlacer(Annealer):
 
     def __init_placement(self, rand):
         # filling in PE tiles first
-        pos = list(self.available_pos)
+        pos = list(self.total_cells["p"])
         num_pos = len(pos)
         state = {}
         pe_blocks = [b for b in self.blocks if b[0] == "p"]
@@ -177,7 +174,7 @@ class SADetailedPlacer(Annealer):
 
     def __is_legal_fold(self, pos, blk, board):
         # reverse index pos -> blk
-        assert (pos in board)   # it has to be since we're packing more stuff in
+        assert (pos in board)  # it has to be since we're packing more stuff in
         # we only allow capacity 2
         if len(board[pos]) > 1:
             return False
@@ -191,9 +188,7 @@ class SADetailedPlacer(Annealer):
         self.moves = set()
         available_ids = list(self.state.keys())
         available_ids.sort(key=lambda x: int(x[1:]))
-        available_pos = list(self.available_pos)
-        available_pe_ids = [x for x in list(self.state.keys()) if x[0] == "p"]
-        available_pe_ids.sort(key=lambda x: int(x[1:]))
+        available_pos = list(self.total_cells["p"])
 
         board = {}
         for blk_id in self.state:
@@ -207,56 +202,51 @@ class SADetailedPlacer(Annealer):
 
         # if blk is a special block
         blk_type = blk[0]
-        # TODO: fix this
-        if blk_type != "p" and blk_type != "r":
+        if blk_type != "r":
             # special blocks
             # pick up a random pos
             next_pos = self.random.sample(self.total_cells[blk_type], 1)[0]
-            if next_pos not in board or len(board[next_pos]) == 0:
+            if next_pos not in board or len([b for b in board[next_pos] if
+                                             b[0] == blk_type]) == 0:
                 # an empty spot
                 self.state[blk] = next_pos
                 self.moves.add(blk)
             else:
                 # swap
-                assert len(board[next_pos]) == 1
-                next_blk = board[next_pos][0]
-                self.state[next_blk] = blk_pos
-                self.state[blk] = next_pos
-                self.moves.add(blk)
-                self.moves.add(next_blk)
+                assert len([b for b in board[next_pos] if
+                            b[0] == blk_type]) == 1
+                next_blk = [b for b in board[next_pos] if
+                            b[0] == blk_type][0]
+                # make sure that you can swap it
+                if (not self.fold_reg) or \
+                        (self.__reg_net(next_pos, blk, board) and
+                         self.__reg_net(blk_pos, next_blk, board)):
+                    self.state[next_blk] = blk_pos
+                    self.state[blk] = next_pos
+                    self.moves.add(blk)
+                    self.moves.add(next_blk)
             return
 
         if self.fold_reg:
             pos = self.random.choice(available_pos)
-            if pos != blk_pos:
-                if self.is_legal(pos, blk, board):
+            blks = board[pos]
+            same_type_blocks = [b for b in blks if b[0] == blk[0]]
+            if len(same_type_blocks) == 1:
+                # swap
+                blk_swap = same_type_blocks[0]
+                if self.__reg_net(pos, blk, board) and \
+                        self.__reg_net(blk_pos, blk_swap, board):
+                    self.state[blk] = pos
+                    self.state[blk_swap] = blk_pos
+
+                    self.moves.add(blk)
+                    self.moves.add(blk_swap)
+            elif len(same_type_blocks) == 0:
+                # just move there
+                if self.__reg_net(pos, blk, board):
+                    # update the move
                     self.state[blk] = pos
                     self.moves.add(blk)
-                else:
-                    # swap
-                    blks = board[pos]
-                    same_type_blocks = [b for b in blks if b[0] == blk[0]]
-                    if len(same_type_blocks) == 1:
-                        blk_swap = same_type_blocks[0]
-                        if self.__reg_net(pos, blk, board) and \
-                           self.__reg_net(blk_pos, blk_swap, board):
-                            self.state[blk] = pos
-                            self.state[blk_swap] = blk_pos
-
-                            self.moves.add(blk)
-                            self.moves.add(blk_swap)
-
-        else:
-            b = self.random.choice(available_pe_ids)
-            pos_b = self.state[b]
-            if self.is_legal(blk_pos, b, self.board) and \
-                    self.is_legal(pos_b, blk, self.board):
-                # swap
-                self.state[blk] = pos_b
-                self.state[b] = blk_pos
-
-                self.moves.add(blk)
-                self.moves.add(b)
 
     def init_energy(self):
         """we use HPWL as the cost function"""
@@ -371,7 +361,7 @@ class DeblockAnnealer(Annealer):
             else:
                 state[pos] = blk_id
         self.available_pos = available_pos
-        assert(len(self.available_pos) >= len(block_pos))
+        assert (len(self.available_pos) >= len(block_pos))
         self.netlists = netlists
         self.board_pos = board_pos
 
@@ -513,9 +503,9 @@ class SAClusterPlacer(Annealer):
         xx = bbox1[0] + pos[0]
         yy = bbox1[1] + pos[1]
         if xx >= len(self.board[0]) - self.clb_margin or \
-           xx < self.clb_margin or \
-           yy >= len(self.board) - self.clb_margin or \
-           yy < self.clb_margin:
+                xx < self.clb_margin or \
+                yy >= len(self.board) - self.clb_margin or \
+                yy < self.clb_margin:
             return False
         overlap_size = 0
         for c_id in state:
@@ -641,7 +631,7 @@ class SAClusterPlacer(Annealer):
     def move(self):
         ids = list(self.clusters.keys())
         ids.sort(key=lambda x: x)
-        if len(ids) == 1:   # only one cluster
+        if len(ids) == 1:  # only one cluster
             direct_move = True
         else:
             direct_move = False
@@ -822,13 +812,13 @@ class SAClusterPlacer(Annealer):
                     old_cell = overlap_set.pop()
                     cluster_cells[cluster_id1].remove(old_cell)
                     cluster_cells[cluster_id1].add(cell)
-                    assert(not bboard[cell[1]][cell[0]])
+                    assert (not bboard[cell[1]][cell[0]])
             assert (len(cluster_cells[cluster_id1]) ==
                     self.get_cluster_size(self.clusters[cluster_id1]))
 
         for i in self.clusters:
-            assert(len(cluster_cells[i]) ==
-                   self.get_cluster_size(self.clusters[i]))
+            assert (len(cluster_cells[i]) ==
+                    self.get_cluster_size(self.clusters[i]))
         # check no overlap
         self.__get_bboard(cluster_cells)
 
@@ -917,7 +907,7 @@ class SAClusterPlacer(Annealer):
         for cluster_id in cluster_cells:
             for x, y in cluster_cells[cluster_id]:
                 if check:
-                    assert(not bboard[y][x])
+                    assert (not bboard[y][x])
                 bboard[y][x] = True
         return bboard
 
