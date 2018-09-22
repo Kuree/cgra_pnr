@@ -136,3 +136,6 @@ test_dataset
 # images
 *.png
 *.pdf
+
+# sls
+*_sls

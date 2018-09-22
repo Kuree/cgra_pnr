@@ -8,5 +8,8 @@ lxml
 pillow
 # for progress bar
 tqdm
+# futures for python 2 support
+futures
+requests-futures
 # should be installed with matplotlib; just in case
 six

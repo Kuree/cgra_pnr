@@ -8,6 +8,7 @@ from arch import make_board, parse_cgra, generate_place_on_board
 from arch import generate_is_cell_legal
 import numpy as np
 import os
+import pickle
 from visualize import visualize_placement_cgra
 from sklearn.cluster import KMeans
 import random
@@ -17,9 +18,18 @@ from arch.cgra import place_special_blocks, save_placement, prune_netlist
 from arch.cgra_packer import load_packed_file
 
 
-def detailed_placement(args):
-    clusters, cells, netlist, raw_netlist,\
-                board, blk_pos, fold_reg, seed, fallback = args
+def detailed_placement(args, context=None):
+    if context is not None:
+        args = pickle.loads(args["body"])
+    clusters = args["clusters"]
+    cells = args["cells"]
+    netlist = args["new_netlist"]
+    raw_netlist = args["raw_netlist"]
+    board = args["board"]
+    blk_pos = args["blk_pos"]
+    fold_reg = args["fold_reg"]
+    seed = args["seed"]
+    fallback = args["fallback"]
     detailed = SADetailedPlacer(clusters, cells, netlist, raw_netlist,
                                 board, blk_pos,
                                 fold_reg=fold_reg, seed=seed)
@@ -27,7 +37,13 @@ def detailed_placement(args):
         detailed.steps *= 5
     # detailed.steps = 10
     detailed.anneal()
-    return detailed.state
+    if context is None:
+        return detailed.state
+    else:
+        return {'statusCode': 200,
+                'headers': {'Content-Type': 'application/json'},
+                'body': detailed.state
+                }
 
 
 def deblock_placement(args):
@@ -85,12 +101,19 @@ def main():
                         "default is 0", type=int, default=0,
                         required=False, action="store", dest="seed")
 
+    parser.add_argument("-u", "--url", help="Lambda function entry for " +
+                        "detailed placement. If set, will try to connect to "
+                        "that URL",
+                        dest="lambda_url", type=str, required=False,
+                        action="store", default="")
+
     args = parser.parse_args()
 
     arch_filename = args.arch_filename
     packed_filename = args.packed_filename
     netlist_embedding = args.netlist_embedding
     placement_filename = args.placement_filename
+    lambda_url = args.lambda_url
 
     seed = args.seed
     print("Using seed", seed, "for placement")
@@ -143,7 +166,8 @@ def main():
                                            cluster_cells, clusters,
                                            fixed_blk_pos, netlists,
                                            raw_netlist,
-                                           fold_reg, seed, fallback)
+                                           fold_reg, seed, fallback,
+                                           lambda_url)
 
     # do a macro placement
     # macro_result = macro_placement(board, board_pos, fixed_blk_pos, netlists,
@@ -327,7 +351,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
 
 def perform_detailed_placement(board, centroids, cluster_cells, clusters,
                                fixed_blk_pos, netlists, raw_netlist,
-                               fold_reg, seed, fallback):
+                               fold_reg, seed, fallback, lambda_url=""):
     board_pos = fixed_blk_pos.copy()
     map_args = []
     for c_id in cluster_cells:
@@ -341,17 +365,35 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
             node_id = "x" + str(i)
             pos = centroids[i]
             blk_pos[node_id] = pos
-        map_args.append((clusters[c_id], cells, new_netlist, raw_netlist,
-                         board, blk_pos,
-                         fold_reg, seed, fallback))
-    num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
-    pool = Pool(num_of_cpus)
-    # detailed_placement(map_args[0])
-    results = pool.map(detailed_placement, map_args)
-    pool.close()
-    pool.join()
-    for r in results:
-        board_pos.update(r)
+        args = {"clusters": clusters[c_id], "cells": cells,
+                "new_netlist": new_netlist, "raw_netlist": raw_netlist,
+                "board": board, "blk_pos": blk_pos, "fold_reg": fold_reg,
+                "seed": seed, "fallback": fallback}
+
+        map_args.append(args)
+    if lambda_url:
+        from requests_futures.sessions import FuturesSession
+        session = FuturesSession()
+        res_list = []
+        import time
+        for arg in map_args:
+            print("time:", time.time())
+            r = session.post(lambda_url, data=pickle.dumps(arg))
+            res_list.append(r)
+        # merge
+        for res in res_list:
+            r = res.json()
+            board_pos.update(r)
+    else:
+        num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
+        pool = Pool(num_of_cpus)
+        # detailed_placement(map_args[0])
+        results = pool.map(detailed_placement, map_args)
+        pool.close()
+        pool.join()
+        for r in results:
+            board_pos.update(r)
+
     return board_pos
 
 
