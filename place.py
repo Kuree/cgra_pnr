@@ -3,7 +3,7 @@ from util import reduce_cluster_graph
 from argparse import ArgumentParser
 from arch.parser import parse_emb
 from sa import SAClusterPlacer, SADetailedPlacer
-from sa import ClusterException, SAMacroPlacer
+from sa import ClusterException
 from arch import make_board, parse_cgra, generate_place_on_board
 from arch import generate_is_cell_legal
 import numpy as np
@@ -44,27 +44,6 @@ def detailed_placement(args, context=None):
                 'headers': {'Content-Type': 'application/json'},
                 'body': detailed.state
                 }
-
-
-def macro_placement(board, board_pos, fixed_blk_pos, netlists, is_legal,
-                    board_meta):
-    layout_board = board_meta[0]
-    available_pos = set()
-    for y in range(len(layout_board)):
-        for x in range(len(layout_board[0])):
-            if layout_board[y][x] == "m" or layout_board == "u":
-                available_pos.add((x, y))
-    current_placement = {}
-    for blk_id in fixed_blk_pos:
-        if blk_id[0] == "m" or blk_id[0] == "u":
-            current_placement[blk_id] = fixed_blk_pos[blk_id]
-
-    macro = SAMacroPlacer(available_pos, netlists, board, board_pos,
-                          current_placement, is_legal)
-    macro.steps = 30
-    macro.anneal()
-
-    return macro.state
 
 
 def main():

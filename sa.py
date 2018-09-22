@@ -294,54 +294,6 @@ class SADetailedPlacer(Annealer):
         return float(final_hpwl)
 
 
-# main class to perform simulated annealing within each cluster
-class SAMacroPlacer(Annealer):
-    def __init__(self, available_pos, netlists, board,
-                 board_pos, current_state, is_legal):
-        self.available_pos = available_pos
-        self.netlists = netlists
-        self.board = board
-        self.blk_pos = board_pos
-        assert (len(current_state) <= len(available_pos))
-        self.is_legal = is_legal
-
-        rand = random.Random()
-        rand.seed(0)
-        state = current_state
-
-        Annealer.__init__(self, initial_state=state, rand=rand)
-
-    def move(self):
-        target = self.random.sample(self.state.keys(), 1)[0]
-        target_pos = self.state[target]
-        dst_pos = self.random.sample(self.available_pos, 1)[0]
-
-        pos_to_block = {}
-        for blk_id in self.state:
-            pos_to_block[self.state[blk_id]] = blk_id
-
-        if dst_pos in pos_to_block:
-            # both of them are actual blocks
-            dst_blk = pos_to_block[dst_pos]
-
-            self.state[dst_blk] = target_pos
-            self.state[target] = dst_pos
-        else:
-            # just swap them
-            self.state[target] = dst_pos
-
-    def energy(self):
-        """we use HPWL as the cost function"""
-        # merge with state + prefixed positions
-        board_pos = self.blk_pos.copy()
-        board_pos.update(self.state)
-        hpwl = 0
-        netlist_hpwl = compute_hpwl(self.netlists, board_pos)
-        for key in netlist_hpwl:
-            hpwl += netlist_hpwl[key]
-        return float(hpwl)
-
-
 # main class to perform simulated annealing on each cluster
 class SAClusterPlacer(Annealer):
     def __init__(self, clusters, netlists, board, board_pos, board_meta,
