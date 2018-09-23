@@ -211,7 +211,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
     if num_clusters > 0:
         # cluster_placer.steps = 200
         cluster_placer.anneal()
-        cluster_cells, centroids = cluster_placer.squeeze()
+        cluster_cells, centroids = cluster_placer.realize()
         fallback = False
     else:
         # it exceeds the algorithm's limit
@@ -292,12 +292,12 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
     else:
         num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
         pool = Pool(num_of_cpus)
-        # detailed_placement(map_args[0])
-        results = pool.map(detailed_placement, map_args)
-        pool.close()
-        pool.join()
-        for r in results:
-            board_pos.update(r)
+        detailed_placement(map_args[4])
+        #results = pool.map(detailed_placement, map_args)
+        #pool.close()
+        #pool.join()
+        #for r in results:
+        #    board_pos.update(r)
 
     return board_pos
 

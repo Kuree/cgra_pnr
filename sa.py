@@ -5,7 +5,6 @@ from util import reduce_cluster_graph, compute_centroids
 from arch.netlist import group_reg_nets
 import numpy as np
 import random
-import math
 
 
 # main class to perform simulated annealing within each cluster
@@ -24,10 +23,10 @@ class SADetailedPlacer(Annealer):
         self.netlists = netlists
         self.blk_pos = board_pos
         self.board = board
-        if fold_reg:
-            assert (len(blocks) >= len(available_pos))
-        else:
-            assert (len(blocks) == len(available_pos))
+
+        p_blocks = [b for b in blocks if b[0] == "p"]
+        assert (len(p_blocks) <= len(available_pos))
+
         if is_legal is None:
             if fold_reg:
                 self.is_legal = self.__is_legal_fold
@@ -229,24 +228,29 @@ class SADetailedPlacer(Annealer):
 
         if self.fold_reg:
             pos = self.random.choice(available_pos)
-            blks = board[pos]
-            same_type_blocks = [b for b in blks if b[0] == blk[0]]
-            if len(same_type_blocks) == 1:
-                # swap
-                blk_swap = same_type_blocks[0]
-                if self.__reg_net(pos, blk, board) and \
-                        self.__reg_net(blk_pos, blk_swap, board):
-                    self.state[blk] = pos
-                    self.state[blk_swap] = blk_pos
+            if pos in board:
+                blks = board[pos]
+                same_type_blocks = [b for b in blks if b[0] == blk[0]]
+                if len(same_type_blocks) == 1:
+                    # swap
+                    blk_swap = same_type_blocks[0]
+                    if self.__reg_net(pos, blk, board) and \
+                            self.__reg_net(blk_pos, blk_swap, board):
+                        self.state[blk] = pos
+                        self.state[blk_swap] = blk_pos
 
-                    self.moves.add(blk)
-                    self.moves.add(blk_swap)
-            elif len(same_type_blocks) == 0:
-                # just move there
-                if self.__reg_net(pos, blk, board):
-                    # update the move
-                    self.state[blk] = pos
-                    self.moves.add(blk)
+                        self.moves.add(blk)
+                        self.moves.add(blk_swap)
+                elif len(same_type_blocks) == 0:
+                    # just move there
+                    if self.__reg_net(pos, blk, board):
+                        # update the move
+                        self.state[blk] = pos
+                        self.moves.add(blk)
+            else:
+                # it's an empty spot
+                self.state[blk] = pos
+                self.moves.add(blk)
 
     def init_energy(self):
         """we use HPWL as the cost function"""
@@ -323,9 +327,11 @@ class SAClusterPlacer(Annealer):
         self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)
 
         cluster_ids = list(clusters.keys())
-        self.m_partitions = self.partition_board(self.board_layout, board_info)
+        self.m_partitions, self.centroid_index\
+            = self.partition_board(self.board_layout, board_info)
 
         state = self.__init_placement(cluster_ids)
+        self.state_index = self.__build_reverse_placement(state)
 
         Annealer.__init__(self, initial_state=state, rand=rand)
 
@@ -333,7 +339,7 @@ class SAClusterPlacer(Annealer):
 
         # some scheduling stuff?
         # self.Tmax = 10
-        # self.steps = 1000
+        self.steps = 100
 
     def get_cluster_size(self, cluster):
         if self.fold_reg:
@@ -353,6 +359,8 @@ class SAClusterPlacer(Annealer):
         board_height = height
         width -= 2 * margin
         height -= 2 * margin
+
+        centroid_index = {}
 
         # we'll try to do a 4x4 macroblock with 2x2 sub-macroblock
         macroblock_size = 4
@@ -398,8 +406,23 @@ class SAClusterPlacer(Annealer):
                             blk_entry[blk_type] = 0
                         blk_entry[blk_type] += 1
                 sub_blocks.update(blk_entry)
-
-        return m_partitions
+        for m_id in m_partitions:
+            for sub_m_id in m_partitions[m_id]:
+                if not isinstance(sub_m_id, int):
+                    continue
+                positions = m_partitions[m_id][sub_m_id]
+                xx = 0
+                yy = 0
+                count = 0
+                for blk_type in positions:
+                    for x, y in positions[blk_type]:
+                        xx += x
+                        yy += y
+                        count += 1
+                center_x = xx // count
+                center_y = yy // count
+                centroid_index[(m_id, sub_m_id)] = (center_x, center_y)
+        return m_partitions, centroid_index
 
     def __init_placement(self, cluster_ids):
         state = {}
@@ -467,48 +490,203 @@ class SAClusterPlacer(Annealer):
 
         return state
 
+    @staticmethod
+    def __build_reverse_placement(state):
+        index = {}
+        for cluster_id in state:
+            for m_id in state[cluster_id]:
+                for sub_m_id in state[cluster_id][m_id]:
+                    index[(m_id, sub_m_id)] = cluster_id
+        return index
+
     def __initial_energy(self):
-        state = self.state
-
-        # Keyi:
-        # HPWL is calculated as a weighted sum, where the weights are the
-        # ratio of their entire macroblocks
-
-
-
+        # TO BE IMPLEMENTED
+        pass
 
     def move(self):
-        pass
+        self.state_index = self.__build_reverse_placement(self.state)
+        # first we randomly pickup a sub-macroblock
+        (m_id, sub_m_id), cluster_id = \
+            self.random.choice(list(self.state_index.items()))
+        if len(self.state[cluster_id][m_id]) == 4:
+            # it's an entire macroblock
+            # just find another macroblock and swap with it
+            next_m_id = self.random.choice(list(self.m_partitions.keys()))
+            if next_m_id in self.state[cluster_id]:
+                # early exit
+                return
+            # see if there is any blocks occupied there
+            next_clusters = set()
+            for i in range(4):
+                if (next_m_id, i) in self.state_index:
+                    next_clusters.add(self.state_index[(next_m_id, i)])
+            if len(next_clusters) == 0:
+                # it's an empty macroblock
+                # we are good to go
+                self.__update_state_mb(cluster_id, m_id, next_m_id)
+            else:
+                # we have some clusters there
+                # move them all the way to the old macroblock
+                for next_cluster_id in next_clusters:
+                    self.__update_state_mb(next_cluster_id, next_m_id, m_id)
+                # move over
+                self.__update_state_mb(cluster_id, m_id, next_m_id)
+            return
+        else:
+            # we have two choice
+            # either shuffle, or move around
+            if self.random.random() < 0.5:
+                # shuffle
+                indexes = [None for _ in range(4)]
+                old_clusters = {}
+                for i in range(4):
+                    if (m_id, i) in self.state_index:
+                        cluster_id = self.state_index[(m_id, i)]
+                        indexes[i] = cluster_id
+                        if cluster_id not in old_clusters:
+                            old_clusters[cluster_id] = set()
+                        old_clusters[cluster_id].add(i)
+                self.random.shuffle(indexes)
+                clusters = {}
+                for i in range(4):
+                    cluster_id = indexes[i]
+                    if cluster_id is None:
+                        continue
+                    if cluster_id not in clusters:
+                        clusters[cluster_id] = set()
+                    clusters[cluster_id].add(i)
+                # remove all the old data
+                for cluster_id in old_clusters:
+                    for sub_m_id in old_clusters[cluster_id]:
+                        self.state[cluster_id][m_id].remove(sub_m_id)
+                        # remove the old state index
+                        self.state_index.pop((m_id, sub_m_id), None)
+                # add new data
+                for cluster_id in clusters:
+                    for sub_m_id in clusters[cluster_id]:
+                        self.state[cluster_id][m_id].add(sub_m_id)
+                        self.state_index[(m_id, sub_m_id)] = cluster_id
+            else:
+                # try to change elements with other half-filled macroblocks
+                # find other half filled blocks
+                blocks = []
+                for block_id in self.m_partitions:
+                    different_owner = False
+                    owner = None
+                    filled = 0
+                    for i in range(0, 4):
+                        if (block_id, i) in self.state_index:
+                            if owner is None:
+                                owner = self.state_index[(block_id, i)]
+                            if self.state_index[(block_id, i)] != owner:
+                                different_owner = True
+                                break
+                            else:
+                                filled += 1
+                    if different_owner or (filled != 4 and filled != 0):
+                        blocks.append(block_id)
+                assert m_id in blocks
+                # build another table to get random sub-macroblock
+                # TODO: implement better update algorithm to allow
+                #       fast movement
+                blocks.remove(m_id)
+                if len(blocks) == 0:
+                    # we're good
+                    return
+                next_block = self.random.sample(blocks, 1)[0]
+                # find out its sub-macroblocks
+                sub_blocks = []
+                for i in range(4):
+                    if (next_block, i) in self.state_index:
+                        sub_blocks.append(i)
+                next_sm = self.random.sample(sub_blocks, 1)[0]
+                next_cluster_id = self.state_index[(next_block, next_sm)]
+
+                # update the state
+                self.state[cluster_id][m_id].remove(sub_m_id)
+                if next_block not in self.state[cluster_id]:
+                    self.state[cluster_id][next_block] = set()
+                self.state[cluster_id][next_block].add(next_sm)
+
+                self.state[next_cluster_id][next_block].remove(next_sm)
+                if m_id not in self.state[next_cluster_id]:
+                    self.state[next_cluster_id][m_id] = set()
+                self.state[next_cluster_id][m_id].add(sub_m_id)
+
+    def __update_state_mb(self, cluster_id, m_id, next_m_id):
+        sub_m = self.state[cluster_id].pop(m_id, None)
+        assert sub_m is not None
+        self.state[cluster_id][next_m_id] = sub_m
+
+        return
 
     def energy(self):
         """we use HPWL as the cost function"""
         blk_pos = self.board_pos
+        # Keyi:
+        # the energy comes with two parts
+        # first is the normal HPWL
+        # the second is the HPWL within the cluster, by approximation of the
+        # bounding box of centroids.
+        # Using these two should allow const update time
 
-        # using the centroid as new state
-        centers = self.compute_center()
-        for node_id in centers:
-            c_id = "x" + str(node_id)
-            blk_pos[c_id] = centers[node_id]
-        netlist_hpwl = compute_hpwl(self.netlists, blk_pos)
+        def update(pos, cord):
+            x, y = pos
+            if x < cord["xmin"]:
+                cord["xmin"] = x
+            if x > cord["xmax"]:
+                cord["xmax"] = x
+            if y < cord["ymin"]:
+                cord["ymin"] = y
+            if y > cord["ymax"]:
+                cord["ymax"] = y
         hpwl = 0
-        for key in netlist_hpwl:
-            hpwl += netlist_hpwl[key]
-        return float(hpwl)
+        for net_id in self.netlists:
+            cord_index = {"xmin": 10000, "xmax": -1, "ymin": 10000, "ymax": -1}
+            net = self.netlists[net_id]
+            for node_id in net:
+                if node_id in blk_pos:
+                    update(blk_pos[node_id], cord_index)
+                else:
+                    assert node_id[0] == "x"
+                    cluster_id = int(node_id[1:])
+                    cluster_pos = self.state[cluster_id]
+                    for m_id in cluster_pos:
+                        for sub_m in cluster_pos[m_id]:
+                            s_pos = self.centroid_index[(m_id, sub_m)]
+                            update(s_pos, cord_index)
+            hpwl += abs(cord_index["xmax"] - cord_index["xmin"]) + \
+                abs(cord_index["ymax"] - cord_index["ymin"])
 
-    def squeeze(self):
+        # notice that we do double count the wire length here
+        # this is necessary to keep all the macro blocks together
+        for cluster_id in self.state:
+            cord_index = {"xmin": 10000, "xmax": -1, "ymin": 10000, "ymax": -1}
+            cluster_pos = self.state[cluster_id]
+            for m_id in cluster_pos:
+                for sub_m in cluster_pos[m_id]:
+                    s_pos = self.centroid_index[(m_id, sub_m)]
+                    update(s_pos, cord_index)
+            hpwl += abs(cord_index["xmax"] - cord_index["xmin"]) + \
+                abs(cord_index["ymax"] - cord_index["ymin"])
+        return hpwl
 
-
+    def realize(self):
         # merge them into per blk_type
         result_cells = {}
-        for cluster_id in cluster_cells:
-            result_cells[cluster_id] = {"p": cluster_cells[cluster_id]}
-
-        # add special cells to the final position
-        for cluster_id in special_cells:
-            result_cells[cluster_id].update(special_cells[cluster_id])
+        for cluster_id in self.state:
+            entry = {}
+            result_cells[cluster_id] = entry
+            for m_id in self.state[cluster_id]:
+                for sub_m_id in self.state[cluster_id][m_id]:
+                    blks = self.m_partitions[m_id][sub_m_id]
+                    for blk_type in blks:
+                        if blk_type not in entry:
+                            entry[blk_type] = []
+                        entry[blk_type] += blks[blk_type]
 
         # return centroids as well
-        centroids = compute_centroids(result_cells)
+        centroids = compute_centroids(result_cells, "p")
 
         return result_cells, centroids
 

@@ -94,11 +94,13 @@ def reduce_cluster_graph(netlists, clusters, fixed_blocks,
     return new_netlist
 
 
-def compute_centroids(cluster_cells):
+def compute_centroids(cluster_cells, b_type):
     result = {}
     for cluster_id in cluster_cells:
         cells = set()
         for blk_type in cluster_cells[cluster_id]:
+            if b_type != blk_type:
+                continue
             cells.update(cluster_cells[cluster_id][blk_type])
         pos = compute_centroid(cells)
         result[cluster_id] = pos
