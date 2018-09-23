@@ -327,7 +327,7 @@ class SAClusterPlacer(Annealer):
         self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)
 
         cluster_ids = list(clusters.keys())
-        self.m_partitions, self.centroid_index\
+        self.m_partitions, self.centroid_index, self.sub_mb_index \
             = self.partition_board(self.board_layout, board_info)
 
         state = self.__init_placement(cluster_ids)
@@ -339,7 +339,7 @@ class SAClusterPlacer(Annealer):
 
         # some scheduling stuff?
         # self.Tmax = 10
-        self.steps = 100
+        self.steps = 10000
 
     def get_cluster_size(self, cluster):
         if self.fold_reg:
@@ -360,7 +360,11 @@ class SAClusterPlacer(Annealer):
         width -= 2 * margin
         height -= 2 * margin
 
+        # used to fat look up
         centroid_index = {}
+        # the name of mb_type may be random
+        # it's mean for internal usage
+        sub_mb_table = {}
 
         # we'll try to do a 4x4 macroblock with 2x2 sub-macroblock
         macroblock_size = 4
@@ -401,10 +405,13 @@ class SAClusterPlacer(Annealer):
                             sub_blocks[sub_id][blk_type] = set()
                         sub_blocks[sub_id][blk_type].add((pos_x, pos_y))
 
+                        # the information below are pre-computed to speed up
+                        # computation later on
                         # flattened version
                         if blk_type not in blk_entry:
                             blk_entry[blk_type] = 0
                         blk_entry[blk_type] += 1
+
                 sub_blocks.update(blk_entry)
         for m_id in m_partitions:
             for sub_m_id in m_partitions[m_id]:
@@ -422,7 +429,42 @@ class SAClusterPlacer(Annealer):
                 center_x = xx // count
                 center_y = yy // count
                 centroid_index[(m_id, sub_m_id)] = (center_x, center_y)
-        return m_partitions, centroid_index
+
+        # add sub mb_type info
+        # not all sub macroblocks are created equal
+        sub_mb_index = {}
+        for m_id in m_partitions:
+            for sub_m_id in m_partitions[m_id]:
+                if not isinstance(sub_m_id, int):
+                    continue
+                entry = {}
+                for blk_type in m_partitions[m_id][sub_m_id]:
+                    entry[blk_type] = \
+                        len(m_partitions[m_id][sub_m_id][blk_type])
+                # search for a match in the table
+                # brute force is fine since we only need to generate
+                # once
+                found = False
+                for mb_type in sub_mb_table:
+                    table_entry = sub_mb_table[mb_type]
+                    found = True
+                    for blk_type in table_entry:
+                        if blk_type not in entry:
+                            found = False
+                            break
+                        if entry[blk_type] != table_entry[blk_type]:
+                            found = False
+                            break
+                    if found:
+                        sub_mb_index[(m_id, sub_m_id)] = mb_type
+                        break
+                if not found:
+                    mb_type = "mb" + str(len(sub_mb_table))
+                    sub_mb_index[(m_id, sub_m_id)] = mb_type
+                    sub_mb_table[mb_type] = entry
+                    found = True
+                assert found
+        return m_partitions, centroid_index, sub_mb_index
 
     def __init_placement(self, cluster_ids):
         state = {}
@@ -488,7 +530,31 @@ class SAClusterPlacer(Annealer):
                     raise ClusterException(4)
             state[cluster_id] = placement
 
+        # sanity check
+        self.__check_placement(state, self.clusters, self.m_partitions)
         return state
+
+    @staticmethod
+    def __check_placement(state, clusters, partitions):
+        for cluster_id in clusters:
+            needed = {}
+            for blk in clusters[cluster_id]:
+                blk_type = blk[0]
+                if blk_type == "r":
+                    continue
+                if blk_type not in needed:
+                    needed[blk_type] = 0
+                needed[blk_type] += 1
+            # check state if it has enough
+            for m_id in state[cluster_id]:
+                for sub_m_id in state[cluster_id][m_id]:
+                    blocks = partitions[m_id][sub_m_id]
+                    for blk_type in blocks:
+                        num = len(blocks[blk_type])
+                        if blk_type in needed:
+                            needed[blk_type] -= num
+            for blk_type in needed:
+                assert needed[blk_type] <= 0
 
     @staticmethod
     def __build_reverse_placement(state):
@@ -504,11 +570,18 @@ class SAClusterPlacer(Annealer):
         pass
 
     def move(self):
+        self.__check_placement(self.state, self.clusters, self.m_partitions)
+
         self.state_index = self.__build_reverse_placement(self.state)
         # first we randomly pickup a sub-macroblock
         (m_id, sub_m_id), cluster_id = \
             self.random.choice(list(self.state_index.items()))
         if len(self.state[cluster_id][m_id]) == 4:
+            # FIXME: in CGRA because the size of macroblock is the same
+            # FIXME: as the MEM stride, all the macroblock are the same.
+            # FIXME: however it is not the case for a more complex board
+            # FIXME: when swapping, we need to check their compatibility
+            return
             # it's an entire macroblock
             # just find another macroblock and swap with it
             next_m_id = self.random.choice(list(self.m_partitions.keys()))
@@ -535,80 +608,56 @@ class SAClusterPlacer(Annealer):
         else:
             # we have two choice
             # either shuffle, or move around
-            if self.random.random() < 0.5:
-                # shuffle
-                indexes = [None for _ in range(4)]
-                old_clusters = {}
+            # actually local shuffle is possible to be achieved by moving
+            # around, where the destination is the same macroblock
+
+            # try to change elements with other half-filled macroblocks
+            blocks = set()
+            origin_sub_mb_type = self.sub_mb_index[(m_id, sub_m_id)]
+            for block_id in self.m_partitions:
+                different_owner = False
+                owner = None
+                filled = 0
                 for i in range(4):
-                    if (m_id, i) in self.state_index:
-                        cluster_id = self.state_index[(m_id, i)]
-                        indexes[i] = cluster_id
-                        if cluster_id not in old_clusters:
-                            old_clusters[cluster_id] = set()
-                        old_clusters[cluster_id].add(i)
-                self.random.shuffle(indexes)
-                clusters = {}
-                for i in range(4):
-                    cluster_id = indexes[i]
-                    if cluster_id is None:
-                        continue
-                    if cluster_id not in clusters:
-                        clusters[cluster_id] = set()
-                    clusters[cluster_id].add(i)
-                # remove all the old data
-                for cluster_id in old_clusters:
-                    for sub_m_id in old_clusters[cluster_id]:
-                        self.state[cluster_id][m_id].remove(sub_m_id)
-                        # remove the old state index
-                        self.state_index.pop((m_id, sub_m_id), None)
-                # add new data
-                for cluster_id in clusters:
-                    for sub_m_id in clusters[cluster_id]:
-                        self.state[cluster_id][m_id].add(sub_m_id)
-                        self.state_index[(m_id, sub_m_id)] = cluster_id
-            else:
-                # try to change elements with other half-filled macroblocks
-                # find other half filled blocks
-                blocks = []
-                for block_id in self.m_partitions:
-                    different_owner = False
-                    owner = None
-                    filled = 0
-                    for i in range(0, 4):
-                        if (block_id, i) in self.state_index:
-                            if owner is None:
-                                owner = self.state_index[(block_id, i)]
-                            if self.state_index[(block_id, i)] != owner:
-                                different_owner = True
-                                break
-                            else:
-                                filled += 1
-                    if different_owner or (filled != 4 and filled != 0):
-                        blocks.append(block_id)
-                assert m_id in blocks
-                # build another table to get random sub-macroblock
-                # TODO: implement better update algorithm to allow
-                #       fast movement
-                blocks.remove(m_id)
-                if len(blocks) == 0:
-                    # we're good
-                    return
-                next_block = self.random.sample(blocks, 1)[0]
-                # find out its sub-macroblocks
-                sub_blocks = []
-                for i in range(4):
-                    if (next_block, i) in self.state_index:
-                        sub_blocks.append(i)
-                next_sm = self.random.sample(sub_blocks, 1)[0]
+                    if (block_id, i) in self.state_index:
+                        if owner is None:
+                            owner = self.state_index[(block_id, i)]
+                        if self.state_index[(block_id, i)] != owner:
+                            different_owner = True
+                            break
+                        else:
+                            filled += 1
+                if different_owner or (filled != 4 and filled != 0):
+                    for i in range(4):
+                        blk = (block_id, i)
+                        mb_type = self.sub_mb_index[blk]
+                        if mb_type == origin_sub_mb_type:
+                            blocks.add((block_id, i))
+
+            assert (m_id, sub_m_id) in blocks
+            blocks.remove((m_id, sub_m_id))
+            if not blocks:
+                # very rare, but we can't do anything if it's unique
+                return
+            next_block, next_sm = self.random.sample(blocks, 1)[0]
+
+            # update the state
+            self.state[cluster_id][m_id].remove(sub_m_id)
+            # clean up
+            if len(self.state[cluster_id][m_id]) == 0:
+                self.state[cluster_id].pop(m_id)
+            if next_block not in self.state[cluster_id]:
+                self.state[cluster_id][next_block] = set()
+            self.state[cluster_id][next_block].add(next_sm)
+
+            if (next_block, next_sm) in self.state_index:
+                # has assigned
                 next_cluster_id = self.state_index[(next_block, next_sm)]
 
-                # update the state
-                self.state[cluster_id][m_id].remove(sub_m_id)
-                if next_block not in self.state[cluster_id]:
-                    self.state[cluster_id][next_block] = set()
-                self.state[cluster_id][next_block].add(next_sm)
-
                 self.state[next_cluster_id][next_block].remove(next_sm)
+                # clean up
+                if len(self.state[next_cluster_id][next_block]) == 0:
+                    self.state[next_cluster_id].pop(next_block)
                 if m_id not in self.state[next_cluster_id]:
                     self.state[next_cluster_id][m_id] = set()
                 self.state[next_cluster_id][m_id].add(sub_m_id)
@@ -616,6 +665,7 @@ class SAClusterPlacer(Annealer):
     def __update_state_mb(self, cluster_id, m_id, next_m_id):
         sub_m = self.state[cluster_id].pop(m_id, None)
         assert sub_m is not None
+        assert next_m_id not in self.state[cluster_id]
         self.state[cluster_id][next_m_id] = sub_m
 
         return
