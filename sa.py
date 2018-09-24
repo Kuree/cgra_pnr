@@ -3,7 +3,6 @@ from simanneal import Annealer
 from util import compute_hpwl, manhattan_distance, deepcopy
 from util import reduce_cluster_graph, compute_centroids
 from arch.netlist import group_reg_nets
-import numpy as np
 import random
 
 
@@ -352,13 +351,6 @@ class SAClusterPlacer(Annealer):
         # self.Tmax = 10
         self.steps = 15000
 
-    def get_cluster_size(self, cluster):
-        if self.fold_reg:
-            p_len = sum([1 for x in cluster if x[0] == "p"])
-            r_len = sum([1 for x in cluster if x[0] == "r"])
-            return max(p_len, r_len)
-        else:
-            return len(cluster)
 
     @staticmethod
     def partition_board(board_layout, board_info, mb_size=4,
@@ -916,16 +908,6 @@ class SAClusterPlacer(Annealer):
                 used_spots.add(pos_list[i])
 
         return cells
-
-    @staticmethod
-    def __get_bboard(cluster_cells, check=True):
-        bboard = np.zeros((60, 60), dtype=np.bool)
-        for cluster_id in cluster_cells:
-            for x, y in cluster_cells[cluster_id]:
-                if check:
-                    assert (not bboard[y][x])
-                bboard[y][x] = True
-        return bboard
 
 
 class ClusterException(Exception):

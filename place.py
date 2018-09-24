@@ -5,7 +5,6 @@ from arch.parser import parse_emb
 from sa import SAClusterPlacer, SADetailedPlacer
 from sa import ClusterException
 from arch import make_board, parse_cgra, generate_place_on_board
-from arch import generate_is_cell_legal
 import numpy as np
 import os
 import pickle
@@ -101,7 +100,6 @@ def main():
     num_dim, raw_emb = parse_emb(netlist_embedding)
     board = make_board(board_meta)
     place_on_board = generate_place_on_board(board_meta, fold_reg=fold_reg)
-    is_cell_legal = generate_is_cell_legal(board_meta, fold_reg=fold_reg)
 
     fixed_blk_pos = {}
     emb = {}
@@ -128,7 +126,7 @@ def main():
     num_of_kernels = get_num_clusters(id_to_name)
 
     centroids, cluster_cells, clusters, fallback = perform_global_placement(
-        blks, data_x, emb, fixed_blk_pos, netlists, board, is_cell_legal,
+        blks, data_x, emb, fixed_blk_pos, netlists, board,
         board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
         seed=seed)
 
@@ -139,12 +137,6 @@ def main():
                                            raw_netlist,
                                            fold_reg, seed, fallback,
                                            lambda_url)
-
-    # do a macro placement
-    # macro_result = macro_placement(board, board_pos, fixed_blk_pos, netlists,
-    #                               is_cell_legal, board_meta)
-    # board_pos.update(macro_result)
-
 
     for blk_id in board_pos:
         pos = board_pos[blk_id]
@@ -172,14 +164,13 @@ def get_num_clusters(id_to_name):
 
 
 def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
-                             is_cell_legal, board_meta, fold_reg, seed,
+                             board_meta, fold_reg, seed,
                              num_clusters=None):
     # simple heuristics to calculate the clusters
     if num_clusters is None or num_clusters == 0:
         num_clusters = int(np.ceil(len(emb) / 40)) + 1
     # extra careful
     num_clusters = min(num_clusters, len(blks))
-    factor = 6
     clusters = {}
     while True:     # this just enforce we can actually place it
         if num_clusters == 0:
@@ -207,7 +198,6 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
             break
         except ClusterException as _:
             num_clusters -= 1
-            factor = 4
     if num_clusters > 0:
         # cluster_placer.steps = 200
         cluster_placer.anneal()
