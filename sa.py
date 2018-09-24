@@ -301,7 +301,8 @@ class SADetailedPlacer(Annealer):
 # main class to perform simulated annealing on each cluster
 class SAClusterPlacer(Annealer):
     def __init__(self, clusters, netlists, board, board_pos, board_meta,
-                 is_cell_legal=None, fold_reg=True, seed=0):
+                 is_cell_legal=None, fold_reg=True, seed=0,
+                 num_sub_mb=4):
         """Notice that each clusters has to be a condensed node in a networkx graph
         whose edge denotes how many intra-cluster connections.
         """
@@ -326,11 +327,21 @@ class SAClusterPlacer(Annealer):
 
         self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)
 
+        self.num_sub_mb = num_sub_mb
+        self.sub_mb_size = int(num_sub_mb ** 0.5)
+        assert self.sub_mb_size ** 2 == num_sub_mb
+
         cluster_ids = list(clusters.keys())
-        self.m_partitions, self.centroid_index, self.sub_mb_index \
+        self.m_partitions, self.centroid_index, type_table, index_table \
             = self.partition_board(self.board_layout, board_info)
 
-        state = self.__init_placement(cluster_ids)
+        # obtain index and table information
+        self.mb_table = type_table["mb"]
+        self.smb_table = type_table["smb"]
+        self.mb_index = index_table["mb"]
+        self.sub_mb_index = index_table["smb"]
+
+        state, self.cluster_mb_count = self.__init_placement(cluster_ids)
         self.state_index = self.__build_reverse_placement(state)
 
         Annealer.__init__(self, initial_state=state, rand=rand)
@@ -350,7 +361,8 @@ class SAClusterPlacer(Annealer):
             return len(cluster)
 
     @staticmethod
-    def partition_board(board_layout, board_info):
+    def partition_board(board_layout, board_info, mb_size=4,
+                        sub_mb_size=2):
         width = board_info["width"]
         height = board_info["height"]
         margin = board_info["margin"]
@@ -367,16 +379,16 @@ class SAClusterPlacer(Annealer):
         sub_mb_table = {}
 
         # we'll try to do a 4x4 macroblock with 2x2 sub-macroblock
-        macroblock_size = 4
-        assert width % macroblock_size == 0
-        assert height % macroblock_size == 0
+        num_sub_mb = sub_mb_size ** 2
+        assert width % mb_size == 0
+        assert height % mb_size == 0
 
         m_partitions = {}
-        num_x = width // macroblock_size
-        if width % macroblock_size != 0:
+        num_x = width // mb_size
+        if width % mb_size != 0:
             num_x += 1
-        num_y = height // macroblock_size
-        if height % macroblock_size != 0:
+        num_y = height // mb_size
+        if height % mb_size != 0:
             num_y += 1
         m_id = 0
         for y in range(num_y):
@@ -384,18 +396,16 @@ class SAClusterPlacer(Annealer):
                 sub_blocks = {}
                 m_partitions[m_id] = sub_blocks
                 m_id += 1
-                for i in range(4):
+                for i in range(num_sub_mb):
                     sub_blocks[i] = {}
                 blk_entry = {}
-                for yy in range(macroblock_size):
-                    for xx in range(macroblock_size):
-                        sub_id = 0
-                        if yy >= macroblock_size // 2:
-                            sub_id += 2
-                        if xx >= macroblock_size // 2:
-                            sub_id += 1
-                        pos_x = x * macroblock_size + xx + margin
-                        pos_y = y * macroblock_size + yy + margin
+                for yy in range(mb_size):
+                    for xx in range(mb_size):
+                        sub_y = yy // sub_mb_size
+                        sub_x = xx // sub_mb_size
+                        sub_id = sub_y * sub_mb_size + sub_x
+                        pos_x = x * mb_size + xx + margin
+                        pos_y = y * mb_size + yy + margin
                         if pos_x >= board_width or pos_y >= board_height:
                             continue
                         blk_type = board_layout[pos_y][pos_x]
@@ -430,6 +440,36 @@ class SAClusterPlacer(Annealer):
                 center_y = yy // count
                 centroid_index[(m_id, sub_m_id)] = (center_x, center_y)
 
+        # add mb type info
+        # NOTE: this can be improved further if clock/power down is used
+        mb_index = {}
+        mb_table = {}
+        for m_id in m_partitions:
+            entry = {}
+            # get the flatten version
+            for blk_type in m_partitions[m_id]:
+                if isinstance(blk_type, int):
+                    continue
+                entry[blk_type] = m_partitions[m_id][blk_type]
+            found = False
+            for mb_type in mb_table:
+                table_entry = mb_table[mb_type]
+                found = True
+                for b_type in table_entry:
+                    if b_type not in entry:
+                        found = False
+                        break
+                    if entry[b_type] != table_entry[b_type]:
+                        found = False
+                        break
+                if found:
+                    mb_index[m_id] = mb_type
+                    break
+            if not found:
+                mb_type = "mb" + str(len(mb_table))
+                mb_table[mb_type] = entry
+                mb_index[m_id] = mb_type
+
         # add sub mb_type info
         # not all sub macroblocks are created equal
         sub_mb_index = {}
@@ -459,12 +499,13 @@ class SAClusterPlacer(Annealer):
                         sub_mb_index[(m_id, sub_m_id)] = mb_type
                         break
                 if not found:
-                    mb_type = "mb" + str(len(sub_mb_table))
+                    mb_type = "smb" + str(len(sub_mb_table))
                     sub_mb_index[(m_id, sub_m_id)] = mb_type
                     sub_mb_table[mb_type] = entry
-                    found = True
-                assert found
-        return m_partitions, centroid_index, sub_mb_index
+
+        type_table = {"mb": mb_table, "smb": sub_mb_table}
+        index_table = {"mb": mb_index, "smb": sub_mb_index}
+        return m_partitions, centroid_index, type_table, index_table
 
     def __init_placement(self, cluster_ids):
         state = {}
@@ -531,11 +572,13 @@ class SAClusterPlacer(Annealer):
             state[cluster_id] = placement
 
         # sanity check
-        self.__check_placement(state, self.clusters, self.m_partitions)
-        return state
+        cluster_mb_count =\
+            self.__check_placement(state, self.clusters, self.m_partitions)
+        return state, cluster_mb_count
 
     @staticmethod
     def __check_placement(state, clusters, partitions):
+        result = {}
         for cluster_id in clusters:
             needed = {}
             for blk in clusters[cluster_id]:
@@ -555,6 +598,8 @@ class SAClusterPlacer(Annealer):
                             needed[blk_type] -= num
             for blk_type in needed:
                 assert needed[blk_type] <= 0
+            result[cluster_id] = needed
+        return result
 
     @staticmethod
     def __build_reverse_placement(state):
@@ -574,34 +619,99 @@ class SAClusterPlacer(Annealer):
         # first we randomly pickup a sub-macroblock
         (m_id, sub_m_id), cluster_id = \
             self.random.choice(list(self.state_index.items()))
-        if len(self.state[cluster_id][m_id]) == 4:
-            # FIXME: in CGRA because the size of macroblock is the same
-            # FIXME: as the MEM stride, all the macroblock are the same.
-            # FIXME: however it is not the case for a more complex board
-            # FIXME: when swapping, we need to check their compatibility
+        if len(self.state[cluster_id][m_id]) == self.num_sub_mb:
             # it's an entire macroblock
             # just find another macroblock and swap with it
             next_m_id = self.random.choice(list(self.m_partitions.keys()))
             if next_m_id in self.state[cluster_id]:
                 # early exit
                 return
+            # mb count check A -> B
+            # if B doesn't have enough blocks for A, don't allow
+            current_mb_entry = self.mb_table[self.mb_index[m_id]]
+            next_mb_entry = self.mb_table[self.mb_index[next_m_id]]
+            should_swap = True
+            a_count = self.cluster_mb_count[cluster_id].copy()
+            b_count_dict = {}
+            # remove the current block
+            for blk_type in current_mb_entry:
+                if blk_type not in a_count:
+                    continue
+                a_count[blk_type] += current_mb_entry[blk_type]
+            # add them from the next block
+            for blk_type in next_mb_entry:
+                if blk_type not in a_count:
+                    continue
+                a_count[blk_type] -= next_mb_entry[blk_type]
+                if a_count[blk_type] > 0:
+                    should_swap = False
+                    break
+            if not should_swap:
+                # early exit
+                raise Exception("Error state based on current config")
+
             # see if there is any blocks occupied there
-            next_clusters = set()
-            for i in range(4):
+            next_clusters = {}
+            for i in range(self.num_sub_mb):
                 if (next_m_id, i) in self.state_index:
-                    next_clusters.add(self.state_index[(next_m_id, i)])
+                    next_cluster_id = self.state_index[(next_m_id, i)]
+                    if next_cluster_id not in next_clusters:
+                        next_clusters[next_cluster_id] = set()
+                    next_clusters[next_cluster_id].add(i)
             if len(next_clusters) == 0:
                 # it's an empty macroblock
                 # we are good to go
                 self.__update_state_mb(cluster_id, m_id, next_m_id)
             else:
                 # we have some clusters there
+                # check if we can move. this time it's B -> A
+                # we just need to make sure that for each cluster's got moved
+                # there is enough blocks.
+                # NOTE: we count all the sub-macroblock that belongs to a
+                # cluster together
+                should_swap = True
+                for next_cluster_id in next_clusters:
+                    if not should_swap:
+                        # early exit
+                        break
+                    sub_mbs = next_clusters[next_cluster_id]
+                    count = self.cluster_mb_count[next_cluster_id].copy()
+
+                    # remove from the current mb
+                    for sub_mb in sub_mbs:
+                        sb_entry = \
+                            self.smb_table[self.sub_mb_index[(next_m_id,
+                                                              sub_mb)]]
+                        next_sb_entry = \
+                            self.smb_table[self.sub_mb_index[(m_id, sub_mb)]]
+                        for blk_type in sb_entry:
+                            if blk_type not in count:
+                                continue
+                            count[blk_type] += sb_entry[blk_type]
+                        for blk_type in next_sb_entry:
+                            if blk_type not in count:
+                                continue
+                            count[blk_type] -= next_sb_entry[blk_type]
+                    for blk_type in count:
+                        if count[blk_type] > 0:
+                            should_swap = False
+                            break
+                    b_count_dict[next_cluster_id] = count
+                if not should_swap:
+                    # not enough block left
+                    raise Exception("Error state based on current config")
+
                 # move them all the way to the old macroblock
                 for next_cluster_id in next_clusters:
                     self.__update_state_mb(next_cluster_id, next_m_id, m_id)
                 # move over
                 self.__update_state_mb(cluster_id, m_id, next_m_id)
-            return
+            # notice that we have already re-compute the count
+            # just need to update the count
+            self.cluster_mb_count[cluster_id] = a_count
+            for next_cluster_id in b_count_dict:
+                self.cluster_mb_count[next_cluster_id] = \
+                    b_count_dict[next_cluster_id]
         else:
             # we have two choice
             # either shuffle, or move around
@@ -615,7 +725,7 @@ class SAClusterPlacer(Annealer):
                 different_owner = False
                 owner = None
                 filled = 0
-                for i in range(4):
+                for i in range(self.num_sub_mb):
                     if (block_id, i) in self.state_index:
                         if owner is None:
                             owner = self.state_index[(block_id, i)]
@@ -625,7 +735,7 @@ class SAClusterPlacer(Annealer):
                         else:
                             filled += 1
                 if different_owner or (filled != 4 and filled > 0):
-                    for i in range(4):
+                    for i in range(self.num_sub_mb):
                         blk = (block_id, i)
                         mb_type = self.sub_mb_index[blk]
                         if mb_type == origin_sub_mb_type:
@@ -669,7 +779,12 @@ class SAClusterPlacer(Annealer):
                 self.state[next_cluster_id][m_id].add(sub_m_id)
 
         # use the following code to check if the movement is correct (legal)
-        self.__check_placement(self.state, self.clusters, self.m_partitions)
+        mb_count = \
+            self.__check_placement(self.state, self.clusters, self.m_partitions)
+        for c_id in mb_count:
+            for blk_type in mb_count[c_id]:
+                assert self.cluster_mb_count[c_id][blk_type] == \
+                       mb_count[c_id][blk_type]
 
     def __update_state_mb(self, cluster_id, m_id, next_m_id):
         sub_m = self.state[cluster_id].pop(m_id, None)
