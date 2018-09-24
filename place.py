@@ -292,12 +292,13 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
     else:
         num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
         pool = Pool(num_of_cpus)
-        detailed_placement(map_args[4])
-        #results = pool.map(detailed_placement, map_args)
-        #pool.close()
-        #pool.join()
-        #for r in results:
-        #    board_pos.update(r)
+        # use the following code to debug
+        # detailed_placement(map_args[0])
+        results = pool.map(detailed_placement, map_args)
+        pool.close()
+        pool.join()
+        for r in results:
+            board_pos.update(r)
 
     return board_pos
 

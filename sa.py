@@ -65,7 +65,7 @@ class SADetailedPlacer(Annealer):
         Annealer.__init__(self, initial_state=state, rand=rand)
 
         # schedule
-        self.steps = len(blocks) * 125
+        self.steps = len(blocks) * 500
         self.num_nets = len(netlists)
 
         # fast calculation
@@ -339,7 +339,7 @@ class SAClusterPlacer(Annealer):
 
         # some scheduling stuff?
         # self.Tmax = 10
-        self.steps = 10000
+        self.steps = 15000
 
     def get_cluster_size(self, cluster):
         if self.fold_reg:
@@ -570,8 +570,6 @@ class SAClusterPlacer(Annealer):
         pass
 
     def move(self):
-        self.__check_placement(self.state, self.clusters, self.m_partitions)
-
         self.state_index = self.__build_reverse_placement(self.state)
         # first we randomly pickup a sub-macroblock
         (m_id, sub_m_id), cluster_id = \
@@ -581,7 +579,6 @@ class SAClusterPlacer(Annealer):
             # FIXME: as the MEM stride, all the macroblock are the same.
             # FIXME: however it is not the case for a more complex board
             # FIXME: when swapping, we need to check their compatibility
-            return
             # it's an entire macroblock
             # just find another macroblock and swap with it
             next_m_id = self.random.choice(list(self.m_partitions.keys()))
@@ -627,7 +624,7 @@ class SAClusterPlacer(Annealer):
                             break
                         else:
                             filled += 1
-                if different_owner or (filled != 4 and filled != 0):
+                if different_owner or (filled != 4 and filled > 0):
                     for i in range(4):
                         blk = (block_id, i)
                         mb_type = self.sub_mb_index[blk]
@@ -641,11 +638,19 @@ class SAClusterPlacer(Annealer):
                 return
             next_block, next_sm = self.random.sample(blocks, 1)[0]
 
+            # if it's point to the same cluster, no need to swap
+            if (next_block, next_sm) in self.state_index:
+                # has assigned
+                next_cluster_id = self.state_index[(next_block, next_sm)]
+                if next_cluster_id == cluster_id:
+                    return
+
             # update the state
             self.state[cluster_id][m_id].remove(sub_m_id)
             # clean up
             if len(self.state[cluster_id][m_id]) == 0:
                 self.state[cluster_id].pop(m_id)
+
             if next_block not in self.state[cluster_id]:
                 self.state[cluster_id][next_block] = set()
             self.state[cluster_id][next_block].add(next_sm)
@@ -658,9 +663,13 @@ class SAClusterPlacer(Annealer):
                 # clean up
                 if len(self.state[next_cluster_id][next_block]) == 0:
                     self.state[next_cluster_id].pop(next_block)
+
                 if m_id not in self.state[next_cluster_id]:
                     self.state[next_cluster_id][m_id] = set()
                 self.state[next_cluster_id][m_id].add(sub_m_id)
+
+        # use the following code to check if the movement is correct (legal)
+        self.__check_placement(self.state, self.clusters, self.m_partitions)
 
     def __update_state_mb(self, cluster_id, m_id, next_m_id):
         sub_m = self.state[cluster_id].pop(m_id, None)
@@ -717,8 +726,8 @@ class SAClusterPlacer(Annealer):
                 for sub_m in cluster_pos[m_id]:
                     s_pos = self.centroid_index[(m_id, sub_m)]
                     update(s_pos, cord_index)
-            hpwl += abs(cord_index["xmax"] - cord_index["xmin"]) + \
-                abs(cord_index["ymax"] - cord_index["ymin"])
+            hpwl += (abs(cord_index["xmax"] - cord_index["xmin"]) +
+                     abs(cord_index["ymax"] - cord_index["ymin"])) * 2
         return hpwl
 
     def realize(self):
