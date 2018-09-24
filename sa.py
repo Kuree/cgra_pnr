@@ -327,12 +327,13 @@ class SAClusterPlacer(Annealer):
         self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)
 
         self.num_sub_mb = num_sub_mb
-        self.sub_mb_size = int(num_sub_mb ** 0.5)
-        assert self.sub_mb_size ** 2 == num_sub_mb
+        self.sub_mb_side = int(num_sub_mb ** 0.5)
+        assert self.sub_mb_side ** 2 == num_sub_mb
 
         cluster_ids = list(clusters.keys())
         self.m_partitions, self.centroid_index, type_table, index_table \
-            = self.partition_board(self.board_layout, board_info)
+            = self.partition_board(self.board_layout, board_info,
+                                   num_sm_side=self.sub_mb_side)
 
         # obtain index and table information
         self.mb_table = type_table["mb"]
@@ -351,18 +352,18 @@ class SAClusterPlacer(Annealer):
         # self.Tmax = 10
         self.steps = 15000
 
-
     @staticmethod
-    def partition_board(board_layout, board_info, mb_size=4,
-                        sub_mb_size=2):
+    def partition_board(board_layout, board_info, total_mb_size=36,
+                        num_sm_side=2):
         width = board_info["width"]
         height = board_info["height"]
         margin = board_info["margin"]
 
-        board_width = width
-        board_height = height
         width -= 2 * margin
         height -= 2 * margin
+
+        x_max = width + margin
+        y_max = height + margin
 
         # used to fat look up
         centroid_index = {}
@@ -370,17 +371,21 @@ class SAClusterPlacer(Annealer):
         # it's mean for internal usage
         sub_mb_table = {}
 
-        # we'll try to do a 4x4 macroblock with 2x2 sub-macroblock
-        num_sub_mb = sub_mb_size ** 2
-        assert width % mb_size == 0
-        assert height % mb_size == 0
+        mb_width = int(total_mb_size ** 0.5)
+        sub_mb_size = (mb_width // num_sm_side) ** 2
+        sub_mb_width = int(sub_mb_size ** 0.5)
+        num_sub_mb = total_mb_size // sub_mb_size
+        assert sub_mb_width ** 2 == sub_mb_size
+        assert mb_width ** 2 == total_mb_size
+        assert mb_width % num_sm_side == 0
+        assert num_sm_side ** 2 == num_sub_mb
 
         m_partitions = {}
-        num_x = width // mb_size
-        if width % mb_size != 0:
+        num_x = width // mb_width
+        if width % mb_width != 0:
             num_x += 1
-        num_y = height // mb_size
-        if height % mb_size != 0:
+        num_y = height // mb_width
+        if height % mb_width != 0:
             num_y += 1
         m_id = 0
         for y in range(num_y):
@@ -391,14 +396,14 @@ class SAClusterPlacer(Annealer):
                 for i in range(num_sub_mb):
                     sub_blocks[i] = {}
                 blk_entry = {}
-                for yy in range(mb_size):
-                    for xx in range(mb_size):
-                        sub_y = yy // sub_mb_size
-                        sub_x = xx // sub_mb_size
-                        sub_id = sub_y * sub_mb_size + sub_x
-                        pos_x = x * mb_size + xx + margin
-                        pos_y = y * mb_size + yy + margin
-                        if pos_x >= board_width or pos_y >= board_height:
+                for yy in range(mb_width):
+                    for xx in range(mb_width):
+                        sub_y = yy // sub_mb_width
+                        sub_x = xx // sub_mb_width
+                        sub_id = sub_y * num_sm_side + sub_x
+                        pos_x = x * mb_width + xx + margin
+                        pos_y = y * mb_width + yy + margin
+                        if pos_x >= x_max or pos_y >= y_max:
                             continue
                         blk_type = board_layout[pos_y][pos_x]
                         if blk_type is None:
@@ -413,6 +418,7 @@ class SAClusterPlacer(Annealer):
                         if blk_type not in blk_entry:
                             blk_entry[blk_type] = 0
                         blk_entry[blk_type] += 1
+                # clean up block entry if it's empty ?
 
                 sub_blocks.update(blk_entry)
         for m_id in m_partitions:
@@ -640,7 +646,7 @@ class SAClusterPlacer(Annealer):
                     break
             if not should_swap:
                 # early exit
-                raise Exception("Error state based on current config")
+                return
 
             # see if there is any blocks occupied there
             next_clusters = {}
@@ -691,7 +697,8 @@ class SAClusterPlacer(Annealer):
                     b_count_dict[next_cluster_id] = count
                 if not should_swap:
                     # not enough block left
-                    raise Exception("Error state based on current config")
+                    # early exit
+                    return
 
                 # move them all the way to the old macroblock
                 for next_cluster_id in next_clusters:
