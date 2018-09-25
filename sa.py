@@ -219,6 +219,10 @@ class SADetailedPlacer(Annealer):
             next_pos = self.random.sample(self.total_cells[blk_type], 1)[0]
             if next_pos not in board or len([b for b in board[next_pos] if
                                              b[0] == blk_type]) == 0:
+                # reg net
+                if self.fold_reg and next_pos in board and \
+                        not self.__reg_net(next_pos, blk, board):
+                    return
                 # an empty spot
                 placement[blk] = next_pos
                 self.moves.add(blk)
@@ -984,6 +988,18 @@ class SAClusterPlacer(Annealer):
 
         return
 
+    @staticmethod
+    def __update_cord(pos, cord):
+        x, y = pos
+        if x < cord["xmin"]:
+            cord["xmin"] = x
+        if x > cord["xmax"]:
+            cord["xmax"] = x
+        if y < cord["ymin"]:
+            cord["ymin"] = y
+        if y > cord["ymax"]:
+            cord["ymax"] = y
+
     def energy(self):
         """we use HPWL as the cost function"""
         blk_pos = self.board_pos
@@ -995,23 +1011,13 @@ class SAClusterPlacer(Annealer):
         # bounding box of centroids.
         # Using these two should allow const update time
 
-        def update(pos, cord):
-            x, y = pos
-            if x < cord["xmin"]:
-                cord["xmin"] = x
-            if x > cord["xmax"]:
-                cord["xmax"] = x
-            if y < cord["ymin"]:
-                cord["ymin"] = y
-            if y > cord["ymax"]:
-                cord["ymax"] = y
         hpwl = 0
         for net_id in self.netlists:
             cord_index = {"xmin": 10000, "xmax": -1, "ymin": 10000, "ymax": -1}
             net = self.netlists[net_id]
             for node_id in net:
                 if node_id in blk_pos:
-                    update(blk_pos[node_id], cord_index)
+                    self.__update_cord(blk_pos[node_id], cord_index)
                 else:
                     assert node_id[0] == "x"
                     cluster_id = int(node_id[1:])
@@ -1019,7 +1025,7 @@ class SAClusterPlacer(Annealer):
                     for m_id in cluster_pos:
                         for sub_m in cluster_pos[m_id]:
                             s_pos = self.centroid_index[(m_id, sub_m)]
-                            update(s_pos, cord_index)
+                            self.__update_cord(s_pos, cord_index)
             hpwl += abs(cord_index["xmax"] - cord_index["xmin"]) + \
                 abs(cord_index["ymax"] - cord_index["ymin"])
 
@@ -1031,7 +1037,7 @@ class SAClusterPlacer(Annealer):
             for m_id in cluster_pos:
                 for sub_m in cluster_pos[m_id]:
                     s_pos = self.centroid_index[(m_id, sub_m)]
-                    update(s_pos, cord_index)
+                    self.__update_cord(s_pos, cord_index)
             hpwl += (abs(cord_index["xmax"] - cord_index["xmin"]) +
                      abs(cord_index["ymax"] - cord_index["ymin"])) * 2
         return hpwl
