@@ -300,8 +300,8 @@ class SADetailedPlacer(Annealer):
         final_hpwl = pre_energy + (new_hpwl - old_hpwl)
 
         # use the following code to check correctness
-        # reference_hpwl = self.init_energy(placement)
-        # assert final_hpwl == reference_hpwl
+        reference_hpwl = self.init_energy(placement)
+        assert final_hpwl == reference_hpwl
 
         self.state["energy"] = final_hpwl
 
@@ -452,36 +452,6 @@ class SAClusterPlacer(Annealer):
                 center_y = yy // count
                 centroid_index[(m_id, sub_m_id)] = (center_x, center_y)
 
-        # add mb type info
-        # NOTE: this can be improved further if clock/power down is used
-        mb_index = {}
-        mb_table = {}
-        for m_id in m_partitions:
-            entry = {}
-            # get the flatten version
-            for blk_type in m_partitions[m_id]:
-                if isinstance(blk_type, int):
-                    continue
-                entry[blk_type] = m_partitions[m_id][blk_type]
-            found = False
-            for mb_type in mb_table:
-                table_entry = mb_table[mb_type]
-                found = True
-                for b_type in table_entry:
-                    if b_type not in entry:
-                        found = False
-                        break
-                    if entry[b_type] != table_entry[b_type]:
-                        found = False
-                        break
-                if found:
-                    mb_index[m_id] = mb_type
-                    break
-            if not found:
-                mb_type = "mb" + str(len(mb_table))
-                mb_table[mb_type] = entry
-                mb_index[m_id] = mb_type
-
         # add sub mb_type info
         # not all sub macroblocks are created equal
         sub_mb_index = {}
@@ -515,6 +485,54 @@ class SAClusterPlacer(Annealer):
                     sub_mb_index[(m_id, sub_m_id)] = mb_type
                     sub_mb_table[mb_type] = entry
 
+        # add mb type info
+        # NOTE: this can be improved further if clock/power down is used
+        mb_index = {}
+        mb_smb_table = {}
+        for m_id in m_partitions:
+            entry = {}
+            # get the flatten version
+            for mb_id, sub_mb_id in sub_mb_index:
+                if m_id != mb_id:
+                    continue
+                smb_type = sub_mb_index[(mb_id, sub_mb_id)]
+                if smb_type not in entry:
+                    entry[smb_type] = 0
+                entry[smb_type] += 1
+
+            found = False
+            for mb_type in mb_smb_table:
+                table_entry = mb_smb_table[mb_type]
+                found = True
+                for smb_type in table_entry:
+                    if smb_type not in entry:
+                        found = False
+                        break
+                    if entry[smb_type] != table_entry[smb_type]:
+                        found = False
+                        break
+                if found:
+                    mb_index[m_id] = mb_type
+                    break
+            if not found:
+                mb_type = "mb" + str(len(mb_smb_table))
+                # rebuild the table entry with block counters
+
+                mb_smb_table[mb_type] = entry
+                mb_index[m_id] = mb_type
+
+        mb_table = {}
+        for mb_type in mb_smb_table:
+            entry = mb_smb_table[mb_type]
+            table_entry = {}
+            for smb_type in entry:
+                smb_count = entry[smb_type]
+                smb_entry = sub_mb_table[smb_type]
+                for blk_type in smb_entry:
+                    if blk_type not in table_entry:
+                        table_entry[blk_type] = 0
+                    table_entry[blk_type] += smb_count * smb_entry[blk_type]
+            mb_table[mb_type] = table_entry
         # check the table built for mb and smb is correct
         for mb_id in mb_index:
             mb_entry = mb_table[mb_index[mb_id]]
@@ -665,29 +683,37 @@ class SAClusterPlacer(Annealer):
             # if B doesn't have enough blocks for A, don't allow
             current_mb_type = self.mb_index[m_id]
             current_mb_entry = self.mb_table[current_mb_type]
-            next_mb_type = self.mb_index[self.mb_index[next_m_id]]
+            next_mb_type = self.mb_index[next_m_id]
             next_mb_entry = self.mb_table[next_mb_type]
 
-            # if they are the
-            should_swap = True
-            a_count = cluster_mb_count[cluster_id].copy()
+            # count control variables
+            a_count = None
             b_count_dict = None
-            # remove the current block
-            for blk_type in current_mb_entry:
-                if blk_type not in a_count:
-                    continue
-                a_count[blk_type] += current_mb_entry[blk_type]
-            # add them from the next block
-            for blk_type in next_mb_entry:
-                if blk_type not in a_count:
-                    continue
-                a_count[blk_type] -= next_mb_entry[blk_type]
-                if a_count[blk_type] > 0:
-                    should_swap = False
-                    break
-            if not should_swap:
-                # early exit
-                return
+
+            # if they are the same, by pass the count check
+            bypass_count = False
+            if current_mb_type == next_mb_type:
+                bypass_count = True
+            if not bypass_count:
+                should_swap = True
+                a_count = cluster_mb_count[cluster_id].copy()
+                b_count_dict = None
+                # remove the current block
+                for blk_type in current_mb_entry:
+                    if blk_type not in a_count:
+                        continue
+                    a_count[blk_type] += current_mb_entry[blk_type]
+                # add them from the next block
+                for blk_type in next_mb_entry:
+                    if blk_type not in a_count:
+                        continue
+                    a_count[blk_type] -= next_mb_entry[blk_type]
+                    if a_count[blk_type] > 0:
+                        should_swap = False
+                        break
+                if not should_swap:
+                    # early exit
+                    return
 
             # see if there is any blocks occupied there
             next_clusters = {}
@@ -708,53 +734,57 @@ class SAClusterPlacer(Annealer):
                 # there is enough blocks.
                 # NOTE: we count all the sub-macroblock that belongs to a
                 # cluster together
-
-                b_count_dict = {}
-                should_swap = True
-                for next_cluster_id in next_clusters:
-                    if not should_swap:
-                        # early exit
-                        break
-                    sub_mbs = next_clusters[next_cluster_id]
-                    count = cluster_mb_count[next_cluster_id].copy()
-
-                    # remove from the current mb
-                    for sub_mb in sub_mbs:
-                        sb_entry = \
-                            self.smb_table[self.sub_mb_index[(next_m_id,
-                                                              sub_mb)]]
-                        next_sb_entry = \
-                            self.smb_table[self.sub_mb_index[(m_id, sub_mb)]]
-                        for blk_type in sb_entry:
-                            if blk_type not in count:
-                                continue
-                            count[blk_type] += sb_entry[blk_type]
-                        for blk_type in next_sb_entry:
-                            if blk_type not in count:
-                                continue
-                            count[blk_type] -= next_sb_entry[blk_type]
-                    for blk_type in count:
-                        if count[blk_type] > 0:
-                            should_swap = False
+                if not bypass_count:
+                    b_count_dict = {}
+                    should_swap = True
+                    for next_cluster_id in next_clusters:
+                        if not should_swap:
+                            # early exit
                             break
-                    b_count_dict[next_cluster_id] = count
-                if not should_swap:
-                    # not enough block left
-                    # early exit
-                    return
+                        sub_mbs = next_clusters[next_cluster_id]
+                        count = cluster_mb_count[next_cluster_id].copy()
+
+                        # remove from the current mb
+                        for sub_mb in sub_mbs:
+                            sb_entry = \
+                                self.smb_table[self.sub_mb_index[(next_m_id,
+                                                                  sub_mb)]]
+                            next_sb_entry = \
+                                self.smb_table[self.sub_mb_index[(m_id,
+                                                                  sub_mb)]]
+                            for blk_type in sb_entry:
+                                if blk_type not in count:
+                                    continue
+                                count[blk_type] += sb_entry[blk_type]
+                            for blk_type in next_sb_entry:
+                                if blk_type not in count:
+                                    continue
+                                count[blk_type] -= next_sb_entry[blk_type]
+                        for blk_type in count:
+                            if count[blk_type] > 0:
+                                should_swap = False
+                                break
+                        b_count_dict[next_cluster_id] = count
+                    if not should_swap:
+                        # not enough block left
+                        # early exit
+                        return
 
                 # move them all the way to the old macroblock
                 for next_cluster_id in next_clusters:
                     self.__update_state_mb(next_cluster_id, next_m_id, m_id)
                 # move over
                 self.__update_state_mb(cluster_id, m_id, next_m_id)
-            # notice that we have already re-compute the count
-            # just need to update the count
-            cluster_mb_count[cluster_id] = a_count
-            if b_count_dict is not None:
-                for next_cluster_id in b_count_dict:
-                    cluster_mb_count[next_cluster_id] = \
-                        b_count_dict[next_cluster_id]
+
+            if not bypass_count:
+                # notice that we have already re-compute the count
+                # just need to update the count
+                assert a_count is not None
+                cluster_mb_count[cluster_id] = a_count
+                if b_count_dict is not None:
+                    for next_cluster_id in b_count_dict:
+                        cluster_mb_count[next_cluster_id] = \
+                            b_count_dict[next_cluster_id]
 
         else:
             # we have two choice
