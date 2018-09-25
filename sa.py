@@ -1,6 +1,6 @@
 from __future__ import division, print_function
 from simanneal import Annealer
-from util import compute_hpwl, manhattan_distance, deepcopy
+from util import compute_hpwl, deepcopy
 from util import reduce_cluster_graph, compute_centroids
 from arch.netlist import group_reg_nets
 import random
@@ -399,7 +399,8 @@ class SAClusterPlacer(Annealer):
         self.sub_mb_index = index_table["smb"]
 
         state = self.__init_placement(cluster_ids)
-        self.state_index = self.__build_reverse_placement(state)
+        state_index = self.__build_state_index(state)
+        state["state_index"] = state_index
 
         Annealer.__init__(self, initial_state=state, rand=rand)
 
@@ -564,6 +565,7 @@ class SAClusterPlacer(Annealer):
                 mb_smb_table[mb_type] = entry
                 mb_index[m_id] = mb_type
 
+        # FIXME: check the location of the smb as well
         mb_table = {}
         for mb_type in mb_smb_table:
             entry = mb_smb_table[mb_type]
@@ -691,11 +693,12 @@ class SAClusterPlacer(Annealer):
         return result
 
     @staticmethod
-    def __build_reverse_placement(state):
+    def __build_state_index(state):
+        placement = state["placement"]
         index = {}
-        for cluster_id in state:
-            for m_id in state[cluster_id]:
-                for sub_m_id in state[cluster_id][m_id]:
+        for cluster_id in placement:
+            for m_id in placement[cluster_id]:
+                for sub_m_id in placement[cluster_id][m_id]:
                     index[(m_id, sub_m_id)] = cluster_id
         return index
 
@@ -710,11 +713,11 @@ class SAClusterPlacer(Annealer):
         # sub-macroblocks
         placement = self.state["placement"]
         cluster_mb_count = self.state["cluster_mb_count"]
+        state_index = self.state["state_index"]
 
-        self.state_index = self.__build_reverse_placement(placement)
         # first we randomly pickup a sub-macroblock
         (m_id, sub_m_id), cluster_id = \
-            self.random.choice(list(self.state_index.items()))
+            self.random.choice(list(state_index.items()))
         if len(placement[cluster_id][m_id]) == self.num_sub_mb:
             # it's an entire macroblock
             # just find another macroblock and swap with it
@@ -761,15 +764,17 @@ class SAClusterPlacer(Annealer):
             # see if there is any blocks occupied there
             next_clusters = {}
             for i in range(self.num_sub_mb):
-                if (next_m_id, i) in self.state_index:
-                    next_cluster_id = self.state_index[(next_m_id, i)]
+                if (next_m_id, i) in state_index:
+                    next_cluster_id = state_index[(next_m_id, i)]
                     if next_cluster_id not in next_clusters:
                         next_clusters[next_cluster_id] = []
                     next_clusters[next_cluster_id].append(i)
             if len(next_clusters) == 0:
                 # it's an empty macroblock
                 # we are good to go
-                self.__update_state_mb(cluster_id, m_id, next_m_id)
+                self.__update_state_mb(cluster_id, m_id, next_m_id,
+                                       remove_old=True)
+
             else:
                 # we have some clusters there
                 # check if we can move. this time it's B -> A
@@ -836,16 +841,18 @@ class SAClusterPlacer(Annealer):
             # around, where the destination is the same macroblock
 
             # try to change elements with other half-filled macroblocks
+            # TODO: add a state element to keep track of all half-filled
+            # macroblocks
             blocks = set()
             for block_id in self.m_partitions:
                 different_owner = False
                 owner = None
                 filled = 0
                 for i in range(self.num_sub_mb):
-                    if (block_id, i) in self.state_index:
+                    if (block_id, i) in state_index:
                         if owner is None:
-                            owner = self.state_index[(block_id, i)]
-                        if self.state_index[(block_id, i)] != owner:
+                            owner = state_index[(block_id, i)]
+                        if state_index[(block_id, i)] != owner:
                             different_owner = True
                             break
                         else:
@@ -862,9 +869,9 @@ class SAClusterPlacer(Annealer):
             next_block, next_sm = self.random.sample(blocks, 1)[0]
 
             # if it's point to the same cluster, no need to swap
-            if (next_block, next_sm) in self.state_index:
+            if (next_block, next_sm) in state_index:
                 # has assigned
-                next_cluster_id = self.state_index[(next_block, next_sm)]
+                next_cluster_id = state_index[(next_block, next_sm)]
                 if next_cluster_id == cluster_id:
                     return
             else:
@@ -909,9 +916,13 @@ class SAClusterPlacer(Annealer):
                 placement[cluster_id][next_block] = set()
             placement[cluster_id][next_block].add(next_sm)
 
-            if (next_block, next_sm) in self.state_index:
+            # update state index
+            state_index.pop((m_id, sub_m_id))
+            state_index[(next_block, next_sm)] = cluster_id
+
+            if (next_block, next_sm) in state_index:
                 # has assigned
-                next_cluster_id = self.state_index[(next_block, next_sm)]
+                next_cluster_id = state_index[(next_block, next_sm)]
 
                 placement[next_cluster_id][next_block].remove(next_sm)
                 # clean up
@@ -922,8 +933,18 @@ class SAClusterPlacer(Annealer):
                     placement[next_cluster_id][m_id] = set()
                 placement[next_cluster_id][m_id].add(sub_m_id)
 
-        # use the following code to check if the movement is correct (legal)
+                # update state_index
+                state_index[(m_id, sub_m_id)] = next_cluster_id
+
+        # use following code to check correctness
         self.__check_correctness(cluster_mb_count, placement)
+        self.__check_state_index_correctness(state_index)
+
+    def __check_state_index_correctness(self, state_index):
+        reference_state_index = self.__build_state_index(self.state)
+        assert len(reference_state_index) == len(state_index)
+        for key in reference_state_index:
+            assert reference_state_index[key] == state_index[key]
 
     def __check_correctness(self, cluster_mb_count, placement):
         mb_count = \
@@ -950,12 +971,21 @@ class SAClusterPlacer(Annealer):
                 break
         return should_swap
 
-    def __update_state_mb(self, cluster_id, m_id, next_m_id):
+    def __update_state_mb(self, cluster_id, m_id, next_m_id, remove_old=False):
         placement = self.state["placement"]
+        state_index = self.state["state_index"]
         sub_m = placement[cluster_id].pop(m_id, None)
         assert sub_m is not None
         assert next_m_id not in placement[cluster_id]
         placement[cluster_id][next_m_id] = sub_m
+
+        # update state_index (override)
+        for sub_m_id in sub_m:
+            if remove_old:
+                c_id = state_index.pop((m_id, sub_m_id), None)
+                assert c_id == cluster_id
+            # add it to a new cluster
+            state_index[(next_m_id, sub_m_id)] = cluster_id
 
         return
 
