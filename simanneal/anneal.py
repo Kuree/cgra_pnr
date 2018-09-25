@@ -102,6 +102,10 @@ class Annealer(object):
         """Calculate state's energy"""
         pass
 
+    @staticmethod
+    def copy_state(state):
+        return Annealer.__deepcopy(state)
+
     def set_schedule(self, schedule):
         """Takes the output from `auto` and sets the attributes
         """
@@ -109,25 +113,6 @@ class Annealer(object):
         self.Tmin = schedule['tmin']
         self.steps = int(schedule['steps'])
         self.updates = int(schedule['updates'])
-
-    def copy_state(self, state):
-        """Returns an exact copy of the provided state
-        Implemented according to self.copy_strategy, one of
-
-        * deepcopy : use copy.deepcopy (slow but reliable)
-        * slice: use list slices (faster but only works if state is list-like)
-        * method: use the state's copy() method
-        """
-        if self.copy_strategy == 'deepcopy':
-            return Annealer.__deepcopy(state)
-        elif self.copy_strategy == 'slice':
-            return state[:]
-        elif self.copy_strategy == 'method':
-            return state.copy()
-        else:
-            raise RuntimeError('No implementation found for ' +
-                               'the self.copy_strategy "%s"' %
-                               self.copy_strategy)
 
     def anneal(self):
         """Minimizes the energy of a system by simulated annealing.
@@ -149,8 +134,8 @@ class Annealer(object):
 
         # Note initial state
         T = self.Tmax
-        E = self.energy()
         self.pre_state = self.copy_state(self.state)
+        E = self.energy()
         self.pre_energy = E
         self.best_state = self.copy_state(self.state)
         self.best_energy = E

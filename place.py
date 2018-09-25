@@ -36,12 +36,13 @@ def detailed_placement(args, context=None):
         detailed.steps *= 5
     # detailed.steps = 10
     detailed.anneal()
+    placement = detailed.realize()
     if context is None:
-        return detailed.state
+        return placement
     else:
         return {'statusCode': 200,
                 'headers': {'Content-Type': 'application/json'},
-                'body': detailed.state
+                'body': placement
                 }
 
 

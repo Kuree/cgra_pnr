@@ -59,7 +59,10 @@ class SADetailedPlacer(Annealer):
 
         rand = random.Random()
         rand.seed(seed)
-        state = self.__init_placement(rand)
+        placement = self.__init_placement(rand)
+        current_energy = self.init_energy(placement)
+        state = {"placement": placement,
+                 "energy": current_energy}
 
         Annealer.__init__(self, initial_state=state, rand=rand)
 
@@ -70,9 +73,6 @@ class SADetailedPlacer(Annealer):
         # fast calculation
         self.moves = set()
         self.blk_index = self.__index_netlists(netlists, blocks)
-
-        self.pre_state = deepcopy(state)
-        self.pre_energy = self.init_energy()
 
     @staticmethod
     def __index_netlists(netlists, blocks):
@@ -90,7 +90,7 @@ class SADetailedPlacer(Annealer):
         # filling in PE tiles first
         pos = list(self.total_cells["p"])
         num_pos = len(pos)
-        state = {}
+        placement = {}
         pe_blocks = [b for b in self.blocks if b[0] == "p"]
         pe_blocks.sort(key=lambda x: int(x[1:]))
         reg_blocks = [b for b in self.blocks if b[0] == "r"]
@@ -122,7 +122,7 @@ class SADetailedPlacer(Annealer):
                             blk_id in self.reg_no_pos[reg]:
                         continue
                 board[new_pos].append(blk_id)
-                state[blk_id] = new_pos
+                placement[blk_id] = new_pos
                 index += 1
             else:
                 if len(board[new_pos]) > 0 and board[new_pos][0][0] == "r":
@@ -134,7 +134,7 @@ class SADetailedPlacer(Annealer):
                             p_block in self.reg_no_pos[blk_id]:
                         continue
                 board[new_pos].append(blk_id)
-                state[blk_id] = new_pos
+                placement[blk_id] = new_pos
                 index += 1
 
         # place special blocks
@@ -147,9 +147,9 @@ class SADetailedPlacer(Annealer):
             available_cells = special_cells[blk_type]
             cells = rand.sample(available_cells, len(blks))
             for i in range(len(blks)):
-                state[blks[i]] = cells[i]
+                placement[blks[i]] = cells[i]
 
-        return state
+        return placement
 
     def __reg_net(self, pos, blk, board):
         # the board will always be occupied
@@ -184,19 +184,20 @@ class SADetailedPlacer(Annealer):
     def move(self):
         # reset the move set
         self.moves = set()
-        available_ids = list(self.state.keys())
+        placement = self.state["placement"]
+        available_ids = list(placement.keys())
         available_ids.sort(key=lambda x: int(x[1:]))
         available_pos = list(self.total_cells["p"])
 
         board = {}
-        for blk_id in self.state:
-            b_pos = self.state[blk_id]
+        for blk_id in placement:
+            b_pos = placement[blk_id]
             if b_pos not in board:
                 board[b_pos] = []
             board[b_pos].append(blk_id)
 
         blk = self.random.choice(available_ids)
-        blk_pos = self.state[blk]
+        blk_pos = placement[blk]
 
         # if blk is a special block
         blk_type = blk[0]
@@ -207,7 +208,7 @@ class SADetailedPlacer(Annealer):
             if next_pos not in board or len([b for b in board[next_pos] if
                                              b[0] == blk_type]) == 0:
                 # an empty spot
-                self.state[blk] = next_pos
+                placement[blk] = next_pos
                 self.moves.add(blk)
             else:
                 # swap
@@ -219,8 +220,8 @@ class SADetailedPlacer(Annealer):
                 if (not self.fold_reg) or \
                         (self.__reg_net(next_pos, blk, board) and
                          self.__reg_net(blk_pos, next_blk, board)):
-                    self.state[next_blk] = blk_pos
-                    self.state[blk] = next_pos
+                    placement[next_blk] = blk_pos
+                    placement[blk] = next_pos
                     self.moves.add(blk)
                     self.moves.add(next_blk)
             return
@@ -235,8 +236,8 @@ class SADetailedPlacer(Annealer):
                     blk_swap = same_type_blocks[0]
                     if self.__reg_net(pos, blk, board) and \
                             self.__reg_net(blk_pos, blk_swap, board):
-                        self.state[blk] = pos
-                        self.state[blk_swap] = blk_pos
+                        placement[blk] = pos
+                        placement[blk_swap] = blk_pos
 
                         self.moves.add(blk)
                         self.moves.add(blk_swap)
@@ -244,39 +245,43 @@ class SADetailedPlacer(Annealer):
                     # just move there
                     if self.__reg_net(pos, blk, board):
                         # update the move
-                        self.state[blk] = pos
+                        placement[blk] = pos
                         self.moves.add(blk)
             else:
                 # it's an empty spot
-                self.state[blk] = pos
+                placement[blk] = pos
                 self.moves.add(blk)
 
-    def init_energy(self):
+    def init_energy(self, placement):
         """we use HPWL as the cost function"""
         # merge with state + prefixed positions
         board_pos = self.blk_pos.copy()
-        for blk_id in self.state:
-            pos = self.state[blk_id]
+        for blk_id in placement:
+            pos = placement[blk_id]
             board_pos[blk_id] = pos
         hpwl = 0
         netlist_hpwl = compute_hpwl(self.netlists, board_pos)
         for key in netlist_hpwl:
             hpwl += netlist_hpwl[key]
 
-        return float(hpwl)
+        return hpwl
 
     def energy(self):
         """we use HPWL as the cost function"""
         changed_nets = {}
         change_net_ids = set()
+        pre_energy = self.pre_state["energy"]
+        placement = self.state["placement"]
+        pre_placement = self.pre_state["placement"]
+
         for blk in self.moves:
             change_net_ids.update(self.blk_index[blk])
         for net_id in change_net_ids:
             changed_nets[net_id] = self.netlists[net_id]
 
         board_pos = self.blk_pos.copy()
-        for blk_id in self.pre_state:
-            pos = self.pre_state[blk_id]
+        for blk_id in pre_placement:
+            pos = pre_placement[blk_id]
             board_pos[blk_id] = pos
         old_netlist_hpwl = compute_hpwl(changed_nets, board_pos)
         old_hpwl = 0
@@ -284,17 +289,26 @@ class SADetailedPlacer(Annealer):
             old_hpwl += old_netlist_hpwl[key]
 
         board_pos = self.blk_pos.copy()
-        for blk_id in self.pre_state:
-            pos = self.state[blk_id]
+        for blk_id in placement:
+            pos = placement[blk_id]
             board_pos[blk_id] = pos
         new_netlist_hpwl = compute_hpwl(changed_nets, board_pos)
         new_hpwl = 0
         for key in new_netlist_hpwl:
             new_hpwl += new_netlist_hpwl[key]
 
-        final_hpwl = self.pre_energy + (new_hpwl - old_hpwl)
+        final_hpwl = pre_energy + (new_hpwl - old_hpwl)
 
-        return float(final_hpwl)
+        # use the following code to check correctness
+        # reference_hpwl = self.init_energy(placement)
+        # assert final_hpwl == reference_hpwl
+
+        self.state["energy"] = final_hpwl
+
+        return final_hpwl
+
+    def realize(self):
+        return self.state["placement"]
 
 
 # main class to perform simulated annealing on each cluster
@@ -341,7 +355,7 @@ class SAClusterPlacer(Annealer):
         self.mb_index = index_table["mb"]
         self.sub_mb_index = index_table["smb"]
 
-        state, self.cluster_mb_count = self.__init_placement(cluster_ids)
+        state = self.__init_placement(cluster_ids)
         self.state_index = self.__build_reverse_placement(state)
 
         Annealer.__init__(self, initial_state=state, rand=rand)
@@ -353,7 +367,7 @@ class SAClusterPlacer(Annealer):
         self.steps = 15000
 
     @staticmethod
-    def partition_board(board_layout, board_info, total_mb_size=36,
+    def partition_board(board_layout, board_info, total_mb_size=16,
                         num_sm_side=2):
         width = board_info["width"]
         height = board_info["height"]
@@ -501,12 +515,25 @@ class SAClusterPlacer(Annealer):
                     sub_mb_index[(m_id, sub_m_id)] = mb_type
                     sub_mb_table[mb_type] = entry
 
+        # check the table built for mb and smb is correct
+        for mb_id in mb_index:
+            mb_entry = mb_table[mb_index[mb_id]]
+            for blk_type in m_partitions[mb_id]:
+                if isinstance(blk_type, int):
+                    continue
+                assert mb_entry[blk_type] == m_partitions[mb_id][blk_type]
+        for m_id, smb_m_id in sub_mb_index:
+            smb_entry = sub_mb_table[sub_mb_index[(m_id, smb_m_id)]]
+            for blk_type in m_partitions[m_id][smb_m_id]:
+                assert smb_entry[blk_type] == \
+                       len(m_partitions[m_id][smb_m_id][blk_type])
+
         type_table = {"mb": mb_table, "smb": sub_mb_table}
         index_table = {"mb": mb_index, "smb": sub_mb_index}
         return m_partitions, centroid_index, type_table, index_table
 
     def __init_placement(self, cluster_ids):
-        state = {}
+        init_placement = {}
         partitions = deepcopy(self.m_partitions)
         for cluster_id in cluster_ids:
             cluster = self.clusters[cluster_id]
@@ -567,12 +594,15 @@ class SAClusterPlacer(Annealer):
             for blk_type in blk_entries:
                 if blk_entries[blk_type] > 0:
                     raise ClusterException(4)
-            state[cluster_id] = placement
+            init_placement[cluster_id] = placement
 
         # sanity check
         cluster_mb_count =\
-            self.__check_placement(state, self.clusters, self.m_partitions)
-        return state, cluster_mb_count
+            self.__check_placement(init_placement, self.clusters,
+                                   self.m_partitions)
+        state = {"placement": init_placement,
+                 "cluster_mb_count": cluster_mb_count}
+        return state
 
     @staticmethod
     def __check_placement(state, clusters, partitions):
@@ -613,24 +643,35 @@ class SAClusterPlacer(Annealer):
         pass
 
     def move(self):
-        self.state_index = self.__build_reverse_placement(self.state)
+        # optimizations for checking sub-macroblocks
+        # 1. check their type. if the type is the same then
+        # automatically allow the swap for that particular
+        # sub-macroblocks
+        placement = self.state["placement"]
+        cluster_mb_count = self.state["cluster_mb_count"]
+
+        self.state_index = self.__build_reverse_placement(placement)
         # first we randomly pickup a sub-macroblock
         (m_id, sub_m_id), cluster_id = \
             self.random.choice(list(self.state_index.items()))
-        if len(self.state[cluster_id][m_id]) == self.num_sub_mb:
+        if len(placement[cluster_id][m_id]) == self.num_sub_mb:
             # it's an entire macroblock
             # just find another macroblock and swap with it
             next_m_id = self.random.choice(list(self.m_partitions.keys()))
-            if next_m_id in self.state[cluster_id]:
+            if next_m_id in placement[cluster_id]:
                 # early exit
                 return
             # mb count check A -> B
             # if B doesn't have enough blocks for A, don't allow
-            current_mb_entry = self.mb_table[self.mb_index[m_id]]
-            next_mb_entry = self.mb_table[self.mb_index[next_m_id]]
+            current_mb_type = self.mb_index[m_id]
+            current_mb_entry = self.mb_table[current_mb_type]
+            next_mb_type = self.mb_index[self.mb_index[next_m_id]]
+            next_mb_entry = self.mb_table[next_mb_type]
+
+            # if they are the
             should_swap = True
-            a_count = self.cluster_mb_count[cluster_id].copy()
-            b_count_dict = {}
+            a_count = cluster_mb_count[cluster_id].copy()
+            b_count_dict = None
             # remove the current block
             for blk_type in current_mb_entry:
                 if blk_type not in a_count:
@@ -654,8 +695,8 @@ class SAClusterPlacer(Annealer):
                 if (next_m_id, i) in self.state_index:
                     next_cluster_id = self.state_index[(next_m_id, i)]
                     if next_cluster_id not in next_clusters:
-                        next_clusters[next_cluster_id] = set()
-                    next_clusters[next_cluster_id].add(i)
+                        next_clusters[next_cluster_id] = []
+                    next_clusters[next_cluster_id].append(i)
             if len(next_clusters) == 0:
                 # it's an empty macroblock
                 # we are good to go
@@ -667,13 +708,15 @@ class SAClusterPlacer(Annealer):
                 # there is enough blocks.
                 # NOTE: we count all the sub-macroblock that belongs to a
                 # cluster together
+
+                b_count_dict = {}
                 should_swap = True
                 for next_cluster_id in next_clusters:
                     if not should_swap:
                         # early exit
                         break
                     sub_mbs = next_clusters[next_cluster_id]
-                    count = self.cluster_mb_count[next_cluster_id].copy()
+                    count = cluster_mb_count[next_cluster_id].copy()
 
                     # remove from the current mb
                     for sub_mb in sub_mbs:
@@ -707,10 +750,12 @@ class SAClusterPlacer(Annealer):
                 self.__update_state_mb(cluster_id, m_id, next_m_id)
             # notice that we have already re-compute the count
             # just need to update the count
-            self.cluster_mb_count[cluster_id] = a_count
-            for next_cluster_id in b_count_dict:
-                self.cluster_mb_count[next_cluster_id] = \
-                    b_count_dict[next_cluster_id]
+            cluster_mb_count[cluster_id] = a_count
+            if b_count_dict is not None:
+                for next_cluster_id in b_count_dict:
+                    cluster_mb_count[next_cluster_id] = \
+                        b_count_dict[next_cluster_id]
+
         else:
             # we have two choice
             # either shuffle, or move around
@@ -719,7 +764,6 @@ class SAClusterPlacer(Annealer):
 
             # try to change elements with other half-filled macroblocks
             blocks = set()
-            origin_sub_mb_type = self.sub_mb_index[(m_id, sub_m_id)]
             for block_id in self.m_partitions:
                 different_owner = False
                 owner = None
@@ -733,12 +777,9 @@ class SAClusterPlacer(Annealer):
                             break
                         else:
                             filled += 1
-                if different_owner or (filled != 4 and filled > 0):
+                if different_owner or (filled != self.num_sub_mb and filled > 0):
                     for i in range(self.num_sub_mb):
-                        blk = (block_id, i)
-                        mb_type = self.sub_mb_index[blk]
-                        if mb_type == origin_sub_mb_type:
-                            blocks.add((block_id, i))
+                        blocks.add((block_id, i))
 
             assert (m_id, sub_m_id) in blocks
             blocks.remove((m_id, sub_m_id))
@@ -753,49 +794,102 @@ class SAClusterPlacer(Annealer):
                 next_cluster_id = self.state_index[(next_block, next_sm)]
                 if next_cluster_id == cluster_id:
                     return
+            else:
+                next_cluster_id = None
+
+            # check if it's legal to swap
+            # first, check A -> B
+            a_count = cluster_mb_count[cluster_id].copy()
+            current_smb_entry = self.smb_table[self.sub_mb_index[(m_id,
+                                                                  sub_m_id)]]
+            next_smb_entry = self.smb_table[self.sub_mb_index[(next_block,
+                                                               next_sm)]]
+            should_swap = self.update_blk_count(a_count, current_smb_entry,
+                                                next_smb_entry)
+            if not should_swap:
+                # early exit
+                return
+
+            # then B -> A
+            if next_cluster_id is not None:
+                b_count = cluster_mb_count[next_cluster_id].copy()
+                should_swap = self.update_blk_count(b_count, next_smb_entry,
+                                                    current_smb_entry)
+                if not should_swap:
+                    # early exit
+                    return
+            else:
+                b_count = None
+
+            # update the count
+            cluster_mb_count[cluster_id] = a_count
+            if b_count is not None:
+                cluster_mb_count[next_cluster_id] = b_count
 
             # update the state
-            self.state[cluster_id][m_id].remove(sub_m_id)
+            placement[cluster_id][m_id].remove(sub_m_id)
             # clean up
-            if len(self.state[cluster_id][m_id]) == 0:
-                self.state[cluster_id].pop(m_id)
+            if len(placement[cluster_id][m_id]) == 0:
+                placement[cluster_id].pop(m_id)
 
-            if next_block not in self.state[cluster_id]:
-                self.state[cluster_id][next_block] = set()
-            self.state[cluster_id][next_block].add(next_sm)
+            if next_block not in placement[cluster_id]:
+                placement[cluster_id][next_block] = set()
+            placement[cluster_id][next_block].add(next_sm)
 
             if (next_block, next_sm) in self.state_index:
                 # has assigned
                 next_cluster_id = self.state_index[(next_block, next_sm)]
 
-                self.state[next_cluster_id][next_block].remove(next_sm)
+                placement[next_cluster_id][next_block].remove(next_sm)
                 # clean up
-                if len(self.state[next_cluster_id][next_block]) == 0:
-                    self.state[next_cluster_id].pop(next_block)
+                if len(placement[next_cluster_id][next_block]) == 0:
+                    placement[next_cluster_id].pop(next_block)
 
-                if m_id not in self.state[next_cluster_id]:
-                    self.state[next_cluster_id][m_id] = set()
-                self.state[next_cluster_id][m_id].add(sub_m_id)
+                if m_id not in placement[next_cluster_id]:
+                    placement[next_cluster_id][m_id] = set()
+                placement[next_cluster_id][m_id].add(sub_m_id)
 
         # use the following code to check if the movement is correct (legal)
+        self.__check_correctness(cluster_mb_count, placement)
+
+    def __check_correctness(self, cluster_mb_count, placement):
         mb_count = \
-            self.__check_placement(self.state, self.clusters, self.m_partitions)
+            self.__check_placement(placement, self.clusters, self.m_partitions)
         for c_id in mb_count:
             for blk_type in mb_count[c_id]:
-                assert self.cluster_mb_count[c_id][blk_type] == \
+                assert cluster_mb_count[c_id][blk_type] == \
                        mb_count[c_id][blk_type]
 
+    @staticmethod
+    def update_blk_count(a_count, current_smb_entry, next_smb_entry):
+        for blk_type in current_smb_entry:
+            if blk_type not in a_count:
+                continue
+            a_count[blk_type] += current_smb_entry[blk_type]
+        for blk_type in next_smb_entry:
+            if blk_type not in a_count:
+                continue
+            a_count[blk_type] -= next_smb_entry[blk_type]
+        should_swap = True
+        for blk_type in a_count:
+            if a_count[blk_type] > 0:
+                should_swap = False
+                break
+        return should_swap
+
     def __update_state_mb(self, cluster_id, m_id, next_m_id):
-        sub_m = self.state[cluster_id].pop(m_id, None)
+        placement = self.state["placement"]
+        sub_m = placement[cluster_id].pop(m_id, None)
         assert sub_m is not None
-        assert next_m_id not in self.state[cluster_id]
-        self.state[cluster_id][next_m_id] = sub_m
+        assert next_m_id not in placement[cluster_id]
+        placement[cluster_id][next_m_id] = sub_m
 
         return
 
     def energy(self):
         """we use HPWL as the cost function"""
         blk_pos = self.board_pos
+        placement = self.state["placement"]
         # Keyi:
         # the energy comes with two parts
         # first is the normal HPWL
@@ -823,7 +917,7 @@ class SAClusterPlacer(Annealer):
                 else:
                     assert node_id[0] == "x"
                     cluster_id = int(node_id[1:])
-                    cluster_pos = self.state[cluster_id]
+                    cluster_pos = placement[cluster_id]
                     for m_id in cluster_pos:
                         for sub_m in cluster_pos[m_id]:
                             s_pos = self.centroid_index[(m_id, sub_m)]
@@ -833,9 +927,9 @@ class SAClusterPlacer(Annealer):
 
         # notice that we do double count the wire length here
         # this is necessary to keep all the macro blocks together
-        for cluster_id in self.state:
+        for cluster_id in placement:
             cord_index = {"xmin": 10000, "xmax": -1, "ymin": 10000, "ymax": -1}
-            cluster_pos = self.state[cluster_id]
+            cluster_pos = placement[cluster_id]
             for m_id in cluster_pos:
                 for sub_m in cluster_pos[m_id]:
                     s_pos = self.centroid_index[(m_id, sub_m)]
@@ -845,13 +939,14 @@ class SAClusterPlacer(Annealer):
         return hpwl
 
     def realize(self):
+        placement = self.state["placement"]
         # merge them into per blk_type
         result_cells = {}
-        for cluster_id in self.state:
+        for cluster_id in placement:
             entry = {}
             result_cells[cluster_id] = entry
-            for m_id in self.state[cluster_id]:
-                for sub_m_id in self.state[cluster_id][m_id]:
+            for m_id in placement[cluster_id]:
+                for sub_m_id in placement[cluster_id][m_id]:
                     blks = self.m_partitions[m_id][sub_m_id]
                     for blk_type in blks:
                         if blk_type not in entry:
@@ -862,59 +957,6 @@ class SAClusterPlacer(Annealer):
         centroids = compute_centroids(result_cells, "p")
 
         return result_cells, centroids
-
-    @staticmethod
-    def assign_special_blocks(cluster, cluster_pos, bbox, board_layout,
-                              used_spots):
-        special_blks = {}
-        cells = {}
-        for blk_id in cluster:
-            blk_type = blk_id[0]
-            if blk_type != "p" and blk_type != "r" and blk_type != "i":
-                if blk_type not in special_blks:
-                    special_blks[blk_type] = 0
-                special_blks[blk_type] += 1
-
-        pos_x, pos_y = cluster_pos
-        width, height = bbox
-        centroid = pos_x + width // 2, pos_y + height / 2
-        for x in range(pos_x, pos_x + width):
-            for y in range(pos_y, pos_y + width):
-                blk_type = board_layout[y][x]
-                pos = (x, y)
-                if blk_type in special_blks and pos not in used_spots:
-                    # we found one
-                    if blk_type not in cells:
-                        cells[blk_type] = set()
-                    cells[blk_type].add(pos)
-                    used_spots.add(pos)
-                    if special_blks[blk_type] > 0:
-                        special_blks[blk_type] -= 1
-
-        # here is the difficult part. if we still have blocks left to assign,
-        # we need to do an brute force search
-        available_pos = {}
-        for blk_type in special_blks:
-            available_pos[blk_type] = []
-        for y in range(len(board_layout)):
-            for x in range(len(board_layout[y])):
-                pos = (x, y)
-                blk_type = board_layout[y][x]
-                if pos not in used_spots and blk_type in special_blks:
-                    available_pos[blk_type].append(pos)
-        for blk_type in special_blks:
-            num_blocks = special_blks[blk_type]
-            pos_list = available_pos[blk_type]
-            if len(pos_list) < num_blocks:
-                raise Exception("Not enough blocks left for type: " + blk_type)
-            pos_list.sort(key=lambda p: manhattan_distance(p, centroid))
-            for i in range(num_blocks):
-                if blk_type not in cells:
-                    cells[blk_type] = set()
-                cells[blk_type].add(pos_list[i])
-                used_spots.add(pos_list[i])
-
-        return cells
 
 
 class ClusterException(Exception):
