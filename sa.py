@@ -61,8 +61,10 @@ class SADetailedPlacer(Annealer):
         rand.seed(seed)
         placement = self.__init_placement(rand)
         current_energy = self.init_energy(placement)
+        board = self.__create_board(placement)
         state = {"placement": placement,
-                 "energy": current_energy}
+                 "energy": current_energy,
+                 "board": board}
 
         Annealer.__init__(self, initial_state=state, rand=rand)
 
@@ -181,20 +183,27 @@ class SADetailedPlacer(Annealer):
         # disallow the reg net
         return self.__reg_net(pos, blk, board)
 
+    @staticmethod
+    def __update_board(board, blk, pos, next_pos):
+        if next_pos not in board:
+            board[next_pos] = []
+        board[next_pos].append(blk)
+
+        board[pos].remove(blk)
+        if len(board[pos]) == 0:
+            board.pop(pos, None)
+
     def move(self):
         # reset the move set
         self.moves = set()
         placement = self.state["placement"]
+        board = self.state["board"]
         available_ids = list(placement.keys())
         available_ids.sort(key=lambda x: int(x[1:]))
         available_pos = list(self.total_cells["p"])
 
-        board = {}
-        for blk_id in placement:
-            b_pos = placement[blk_id]
-            if b_pos not in board:
-                board[b_pos] = []
-            board[b_pos].append(blk_id)
+        # use this code to check implementation correctness
+        self.__check_board_correctness(board, placement)
 
         blk = self.random.choice(available_ids)
         blk_pos = placement[blk]
@@ -210,6 +219,7 @@ class SADetailedPlacer(Annealer):
                 # an empty spot
                 placement[blk] = next_pos
                 self.moves.add(blk)
+                self.__update_board(board, blk, blk_pos, next_pos)
             else:
                 # swap
                 assert len([b for b in board[next_pos] if
@@ -224,33 +234,66 @@ class SADetailedPlacer(Annealer):
                     placement[blk] = next_pos
                     self.moves.add(blk)
                     self.moves.add(next_blk)
+
+                    # update board
+                    board[blk] = next_pos
+                    self.__update_board(board, blk, blk_pos, next_pos)
+                    self.__update_board(board, next_blk, next_pos, blk_pos)
             return
 
         if self.fold_reg:
-            pos = self.random.choice(available_pos)
-            if pos in board:
-                blks = board[pos]
+            next_pos = self.random.choice(available_pos)
+            if next_pos in board:
+                blks = board[next_pos]
                 same_type_blocks = [b for b in blks if b[0] == blk[0]]
                 if len(same_type_blocks) == 1:
                     # swap
                     blk_swap = same_type_blocks[0]
-                    if self.__reg_net(pos, blk, board) and \
+                    if self.__reg_net(next_pos, blk, board) and \
                             self.__reg_net(blk_pos, blk_swap, board):
-                        placement[blk] = pos
+                        placement[blk] = next_pos
                         placement[blk_swap] = blk_pos
 
                         self.moves.add(blk)
                         self.moves.add(blk_swap)
+
+                        # update board
+                        self.__update_board(board, blk, blk_pos, next_pos)
+                        self.__update_board(board, blk_swap, next_pos, blk_pos)
+
                 elif len(same_type_blocks) == 0:
                     # just move there
-                    if self.__reg_net(pos, blk, board):
+                    if self.__reg_net(next_pos, blk, board):
                         # update the move
-                        placement[blk] = pos
+                        placement[blk] = next_pos
                         self.moves.add(blk)
+
+                        # update board
+                        self.__update_board(board, blk, blk_pos, next_pos)
             else:
                 # it's an empty spot
-                placement[blk] = pos
+                placement[blk] = next_pos
                 self.moves.add(blk)
+
+                # update board
+                self.__update_board(board, blk, blk_pos, next_pos)
+
+    def __check_board_correctness(self, board, placement):
+        current_board = self.__create_board(placement)
+        for b_pos in current_board:
+            assert len(current_board[b_pos]) == len(board[b_pos])
+            for blk in current_board[b_pos]:
+                assert blk in board[b_pos]
+
+    @staticmethod
+    def __create_board(placement):
+        board = {}
+        for blk_id in placement:
+            b_pos = placement[blk_id]
+            if b_pos not in board:
+                board[b_pos] = []
+            board[b_pos].append(blk_id)
+        return board
 
     def init_energy(self, placement):
         """we use HPWL as the cost function"""
