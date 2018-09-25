@@ -104,6 +104,8 @@ class Annealer(object):
 
     @staticmethod
     def copy_state(state):
+        # FIXME:
+        # FIXME: implement restore_state method instead of copying state
         return Annealer.__deepcopy(state)
 
     def set_schedule(self, schedule):

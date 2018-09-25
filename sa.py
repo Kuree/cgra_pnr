@@ -9,7 +9,7 @@ import random
 # main class to perform simulated annealing within each cluster
 class SADetailedPlacer(Annealer):
     def __init__(self, blocks, total_cells, netlists, raw_netlist, board,
-                 board_pos, is_legal=None, fold_reg=True, seed=0):
+                 board_pos, is_legal=None, fold_reg=True, seed=0, debug=True):
         """Please notice that netlists has to be prepared already, i.e., replace
         the remote partition with a pseudo block.
         Also assumes that available_pos is the same size as blocks. If not,
@@ -75,6 +75,8 @@ class SADetailedPlacer(Annealer):
         # fast calculation
         self.moves = set()
         self.blk_index = self.__index_netlists(netlists, blocks)
+
+        self.debug = debug
 
     @staticmethod
     def __index_netlists(netlists, blocks):
@@ -203,7 +205,8 @@ class SADetailedPlacer(Annealer):
         available_pos = list(self.total_cells["p"])
 
         # use this code to check implementation correctness
-        self.__check_board_correctness(board, placement)
+        if self.debug:
+            self.__check_board_correctness(board, placement)
 
         blk = self.random.choice(available_ids)
         blk_pos = placement[blk]
@@ -358,7 +361,7 @@ class SADetailedPlacer(Annealer):
 class SAClusterPlacer(Annealer):
     def __init__(self, clusters, netlists, board, board_pos, board_meta,
                  is_cell_legal=None, fold_reg=True, seed=0,
-                 num_sub_mb=4):
+                 num_sub_mb=4, debug=True):
         """Notice that each clusters has to be a condensed node in a networkx graph
         whose edge denotes how many intra-cluster connections.
         """
@@ -409,6 +412,8 @@ class SAClusterPlacer(Annealer):
         # some scheduling stuff?
         # self.Tmax = 10
         self.steps = 15000
+
+        self.debug = debug
 
     @staticmethod
     def partition_board(board_layout, board_info, total_mb_size=16,
@@ -715,6 +720,8 @@ class SAClusterPlacer(Annealer):
         cluster_mb_count = self.state["cluster_mb_count"]
         state_index = self.state["state_index"]
 
+        moves = set()
+
         # first we randomly pickup a sub-macroblock
         (m_id, sub_m_id), cluster_id = \
             self.random.choice(list(state_index.items()))
@@ -772,9 +779,9 @@ class SAClusterPlacer(Annealer):
             if len(next_clusters) == 0:
                 # it's an empty macroblock
                 # we are good to go
-                self.__update_state_mb(cluster_id, m_id, next_m_id,
-                                       remove_old=True)
-
+                # generate all move assignments
+                for smb in placement[cluster_id][m_id]:
+                    moves.add((cluster_id, m_id, next_m_id, smb, smb))
             else:
                 # we have some clusters there
                 # check if we can move. this time it's B -> A
@@ -820,9 +827,13 @@ class SAClusterPlacer(Annealer):
 
                 # move them all the way to the old macroblock
                 for next_cluster_id in next_clusters:
-                    self.__update_state_mb(next_cluster_id, next_m_id, m_id)
+                    for smb in next_clusters[next_cluster_id]:
+                        moves.add((next_cluster_id, next_m_id, m_id, smb, smb))
                 # move over
-                self.__update_state_mb(cluster_id, m_id, next_m_id)
+                for smb in placement[cluster_id][m_id]:
+                    moves.add((cluster_id, m_id, next_m_id, smb, smb))
+
+                self.__update_state_mb(moves)
 
             if not bypass_count:
                 # notice that we have already re-compute the count
@@ -907,38 +918,19 @@ class SAClusterPlacer(Annealer):
                 cluster_mb_count[next_cluster_id] = b_count
 
             # update the state
-            placement[cluster_id][m_id].remove(sub_m_id)
-            # clean up
-            if len(placement[cluster_id][m_id]) == 0:
-                placement[cluster_id].pop(m_id)
-
-            if next_block not in placement[cluster_id]:
-                placement[cluster_id][next_block] = set()
-            placement[cluster_id][next_block].add(next_sm)
-
-            # update state index
-            state_index.pop((m_id, sub_m_id))
-            state_index[(next_block, next_sm)] = cluster_id
+            moves.add((cluster_id, m_id, next_block, sub_m_id, next_sm))
 
             if (next_block, next_sm) in state_index:
                 # has assigned
-                next_cluster_id = state_index[(next_block, next_sm)]
+                moves.add((next_cluster_id, next_block, m_id, next_sm,
+                           sub_m_id))
 
-                placement[next_cluster_id][next_block].remove(next_sm)
-                # clean up
-                if len(placement[next_cluster_id][next_block]) == 0:
-                    placement[next_cluster_id].pop(next_block)
-
-                if m_id not in placement[next_cluster_id]:
-                    placement[next_cluster_id][m_id] = set()
-                placement[next_cluster_id][m_id].add(sub_m_id)
-
-                # update state_index
-                state_index[(m_id, sub_m_id)] = next_cluster_id
+            self.__update_state_mb(moves)
 
         # use following code to check correctness
-        self.__check_correctness(cluster_mb_count, placement)
-        self.__check_state_index_correctness(state_index)
+        if self.debug:
+            self.__check_correctness(cluster_mb_count, placement)
+            self.__check_state_index_correctness(state_index)
 
     def __check_state_index_correctness(self, state_index):
         reference_state_index = self.__build_state_index(self.state)
@@ -971,21 +963,24 @@ class SAClusterPlacer(Annealer):
                 break
         return should_swap
 
-    def __update_state_mb(self, cluster_id, m_id, next_m_id, remove_old=False):
+    def __update_state_mb(self, moves):
         placement = self.state["placement"]
         state_index = self.state["state_index"]
-        sub_m = placement[cluster_id].pop(m_id, None)
-        assert sub_m is not None
-        assert next_m_id not in placement[cluster_id]
-        placement[cluster_id][next_m_id] = sub_m
+        for cluster_id, m_id, next_m_id, smb, next_smb in moves:
+            # because we may already pop it
+            if state_index[(m_id, smb)] == cluster_id:
+                state_index.pop((m_id, smb), None)
+            if smb in placement[cluster_id][m_id]:
+                placement[cluster_id][m_id].remove(smb)
+            if len(placement[cluster_id][m_id]) == 0:
+                placement[cluster_id].pop(m_id, None)
+            # assign placement
+            if next_m_id not in placement[cluster_id]:
+                placement[cluster_id][next_m_id] = set()
+            placement[cluster_id][next_m_id].add(next_smb)
 
-        # update state_index (override)
-        for sub_m_id in sub_m:
-            if remove_old:
-                c_id = state_index.pop((m_id, sub_m_id), None)
-                assert c_id == cluster_id
-            # add it to a new cluster
-            state_index[(next_m_id, sub_m_id)] = cluster_id
+            # update stage index
+            state_index[(next_m_id, next_smb)] = cluster_id
 
         return
 
