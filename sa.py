@@ -201,6 +201,14 @@ class SADetailedPlacer(Annealer):
         if len(board[pos]) == 0:
             board.pop(pos, None)
 
+    def commit_changes(self):
+        placement = self.state["placement"]
+        board = self.state["board"]
+        for blk, pos, next_pos in self.moves:
+            placement[blk] = next_pos
+            self.__update_board(board, blk, pos, next_pos)
+        self.moves = set()
+
     def move(self):
         # reset the move set
         self.moves = set()
@@ -230,9 +238,8 @@ class SADetailedPlacer(Annealer):
                         not self.__reg_net(next_pos, blk, board):
                     return
                 # an empty spot
-                placement[blk] = next_pos
-                self.moves.add(blk)
-                self.__update_board(board, blk, blk_pos, next_pos)
+                self.moves.add((blk, blk_pos, next_pos))
+                # self.__update_board(board, blk, blk_pos, next_pos)
             else:
                 # swap
                 assert len([b for b in board[next_pos] if
@@ -245,13 +252,13 @@ class SADetailedPlacer(Annealer):
                          self.__reg_net(blk_pos, next_blk, board)):
                     placement[next_blk] = blk_pos
                     placement[blk] = next_pos
-                    self.moves.add(blk)
-                    self.moves.add(next_blk)
+                    self.moves.add((blk, blk_pos, next_pos))
+                    self.moves.add((next_blk, next_pos, blk_pos))
 
                     # update board
-                    board[blk] = next_pos
-                    self.__update_board(board, blk, blk_pos, next_pos)
-                    self.__update_board(board, next_blk, next_pos, blk_pos)
+                    # board[blk] = next_pos
+                    # self.__update_board(board, blk, blk_pos, next_pos)
+                    # self.__update_board(board, next_blk, next_pos, blk_pos)
             return
 
         if self.fold_reg:
@@ -264,32 +271,33 @@ class SADetailedPlacer(Annealer):
                     blk_swap = same_type_blocks[0]
                     if self.__reg_net(next_pos, blk, board) and \
                             self.__reg_net(blk_pos, blk_swap, board):
-                        placement[blk] = next_pos
-                        placement[blk_swap] = blk_pos
+                        # placement[blk] = next_pos
+                        # placement[blk_swap] = blk_pos
 
-                        self.moves.add(blk)
-                        self.moves.add(blk_swap)
+                        self.moves.add((blk, blk_pos, next_pos))
+                        self.moves.add((blk_swap, next_pos, blk_pos))
 
                         # update board
-                        self.__update_board(board, blk, blk_pos, next_pos)
-                        self.__update_board(board, blk_swap, next_pos, blk_pos)
+                        # self.__update_board(board, blk, blk_pos, next_pos)
+                        # self.__update_board(board, blk_swap, next_pos,
+                        # blk_pos)
 
                 elif len(same_type_blocks) == 0:
                     # just move there
                     if self.__reg_net(next_pos, blk, board):
                         # update the move
-                        placement[blk] = next_pos
-                        self.moves.add(blk)
+                        # placement[blk] = next_pos
+                        self.moves.add((blk, blk_pos, next_pos))
 
                         # update board
-                        self.__update_board(board, blk, blk_pos, next_pos)
+                        # self.__update_board(board, blk, blk_pos, next_pos)
             else:
                 # it's an empty spot
-                placement[blk] = next_pos
-                self.moves.add(blk)
+                # placement[blk] = next_pos
+                self.moves.add((blk, blk_pos, next_pos))
 
                 # update board
-                self.__update_board(board, blk, blk_pos, next_pos)
+                # self.__update_board(board, blk, blk_pos, next_pos)
 
     def __check_board_correctness(self, board, placement):
         current_board = self.__create_board(placement)
@@ -324,11 +332,17 @@ class SADetailedPlacer(Annealer):
 
     def energy(self):
         """we use HPWL as the cost function"""
+        # early exit
+        if len(self.moves) == 0:
+            return self.state["energy"]
         changed_nets = {}
         change_net_ids = set()
-        pre_energy = self.pre_state["energy"]
+        pre_energy = self.state["energy"]
         placement = self.state["placement"]
-        pre_placement = self.pre_state["placement"]
+
+        new_pos = {}
+        for blk, _, blk_pos in self.moves:
+            new_pos[blk] = blk_pos
 
         for blk in self.moves:
             change_net_ids.update(self.blk_index[blk])
@@ -336,8 +350,8 @@ class SADetailedPlacer(Annealer):
             changed_nets[net_id] = self.netlists[net_id]
 
         board_pos = self.blk_pos.copy()
-        for blk_id in pre_placement:
-            pos = pre_placement[blk_id]
+        for blk_id in placement:
+            pos = placement[blk_id]
             board_pos[blk_id] = pos
         old_netlist_hpwl = compute_hpwl(changed_nets, board_pos)
         old_hpwl = 0
@@ -346,7 +360,10 @@ class SADetailedPlacer(Annealer):
 
         board_pos = self.blk_pos.copy()
         for blk_id in placement:
-            pos = placement[blk_id]
+            if blk_id in new_pos:
+                pos = new_pos[blk_id]
+            else:
+                pos = placement[blk_id]
             board_pos[blk_id] = pos
         new_netlist_hpwl = compute_hpwl(changed_nets, board_pos)
         new_hpwl = 0
@@ -356,8 +373,9 @@ class SADetailedPlacer(Annealer):
         final_hpwl = pre_energy + (new_hpwl - old_hpwl)
 
         # use the following code to check correctness
-        reference_hpwl = self.init_energy(placement)
-        assert final_hpwl == reference_hpwl
+        if self.debug:
+            reference_hpwl = self.init_energy(placement)
+            assert final_hpwl == reference_hpwl
 
         self.state["energy"] = final_hpwl
 
@@ -411,19 +429,84 @@ class SAClusterPlacer(Annealer):
         self.mb_index = index_table["mb"]
         self.sub_mb_index = index_table["smb"]
 
+        # reduce netlists
+        self.netlists, self.intra_cluster_count = \
+            self.__collapse_netlist(clusters, netlists, board_pos)
+
         state = self.__init_placement(cluster_ids)
         state_index = self.__build_state_index(state)
         state["state_index"] = state_index
+        state["energy"] = self.__init_energy(state)
+
+        self.netlist_index = self.__index_clusters(clusters, netlists)
 
         Annealer.__init__(self, initial_state=state, rand=rand)
-
-        self.netlists = reduce_cluster_graph(netlists, clusters, board_pos)
 
         # some scheduling stuff?
         # self.Tmax = 10
         self.steps = 15000
 
         self.debug = debug
+        self.moves = set()
+
+    @staticmethod
+    def __collapse_netlist(clusters, netlist, fixed_position):
+        netlist_1 = {}
+        intra_cluster_count = {}
+        for cluster_id in clusters:
+            intra_cluster_count[cluster_id] = 0
+        blk_index = {}
+        for cluster_id in clusters:
+            for blk in clusters[cluster_id]:
+                blk_index[blk] = cluster_id
+
+        # first pass
+        # remove self connection
+        for net_id in netlist:
+            net = netlist[net_id]
+            same_net = True
+            first_blk = net[0]
+            for blk in net:
+                if blk not in blk_index or \
+                        blk_index[blk] != blk_index[first_blk]:
+                    same_net = False
+                    break
+            if same_net:
+                cluster_id = blk_index[first_blk]
+                intra_cluster_count[cluster_id] += 1
+            else:
+                netlist_1[net_id] = net
+        # second pass
+        # change into x format, as well as remove redundancy
+        netlist_2 = {}
+        for net_id in netlist_1:
+            net = netlist_1[net_id]
+            new_net = set()
+            for blk in net:
+                if blk in blk_index:
+                    cluster_id = blk_index[blk]
+                    node_id = "x" + str(cluster_id)
+                else:
+                    assert blk in fixed_position
+                    node_id = blk
+                new_net.add(node_id)
+            assert len(new_net) > 1
+            netlist_2[net_id] = new_net
+
+        return netlist_2, intra_cluster_count
+
+    @staticmethod
+    def __index_clusters(clusters, netlist):
+        result = {}
+        for cluster_id in clusters:
+            result[cluster_id] = set()
+        for cluster_id in clusters:
+            for blk in clusters[cluster_id]:
+                for net_id in netlist:
+                    net = netlist[net_id]
+                    if blk in net:
+                        result[cluster_id].add(net_id)
+        return result
 
     @staticmethod
     def partition_board(board_layout, board_info, total_mb_size=16,
@@ -717,10 +800,6 @@ class SAClusterPlacer(Annealer):
                     index[(m_id, sub_m_id)] = cluster_id
         return index
 
-    def __initial_energy(self):
-        # TO BE IMPLEMENTED
-        pass
-
     def move(self):
         # optimizations for checking sub-macroblocks
         # 1. check their type. if the type is the same then
@@ -730,7 +809,12 @@ class SAClusterPlacer(Annealer):
         cluster_mb_count = self.state["cluster_mb_count"]
         state_index = self.state["state_index"]
 
-        moves = set()
+        # use following code to check correctness
+        if self.debug:
+            self.__check_correctness(cluster_mb_count, placement)
+            self.__check_state_index_correctness(state_index)
+
+        self.moves = set()
 
         # first we randomly pickup a sub-macroblock
         (m_id, sub_m_id), cluster_id = \
@@ -791,7 +875,7 @@ class SAClusterPlacer(Annealer):
                 # we are good to go
                 # generate all move assignments
                 for smb in placement[cluster_id][m_id]:
-                    moves.add((cluster_id, m_id, next_m_id, smb, smb))
+                    self.moves.add((cluster_id, m_id, next_m_id, smb, smb))
             else:
                 # we have some clusters there
                 # check if we can move. this time it's B -> A
@@ -838,12 +922,11 @@ class SAClusterPlacer(Annealer):
                 # move them all the way to the old macroblock
                 for next_cluster_id in next_clusters:
                     for smb in next_clusters[next_cluster_id]:
-                        moves.add((next_cluster_id, next_m_id, m_id, smb, smb))
+                        self.moves.add((next_cluster_id, next_m_id, m_id, smb,
+                                        smb))
                 # move over
                 for smb in placement[cluster_id][m_id]:
-                    moves.add((cluster_id, m_id, next_m_id, smb, smb))
-
-                self.__update_state_mb(moves)
+                    self.moves.add((cluster_id, m_id, next_m_id, smb, smb))
 
             if not bypass_count:
                 # notice that we have already re-compute the count
@@ -878,7 +961,8 @@ class SAClusterPlacer(Annealer):
                             break
                         else:
                             filled += 1
-                if different_owner or (filled != self.num_sub_mb and filled > 0):
+                if different_owner or (filled != self.num_sub_mb and
+                                       filled > 0):
                     for i in range(self.num_sub_mb):
                         blocks.add((block_id, i))
 
@@ -928,19 +1012,12 @@ class SAClusterPlacer(Annealer):
                 cluster_mb_count[next_cluster_id] = b_count
 
             # update the state
-            moves.add((cluster_id, m_id, next_block, sub_m_id, next_sm))
+            self.moves.add((cluster_id, m_id, next_block, sub_m_id, next_sm))
 
             if (next_block, next_sm) in state_index:
                 # has assigned
-                moves.add((next_cluster_id, next_block, m_id, next_sm,
-                           sub_m_id))
-
-            self.__update_state_mb(moves)
-
-        # use following code to check correctness
-        if self.debug:
-            self.__check_correctness(cluster_mb_count, placement)
-            self.__check_state_index_correctness(state_index)
+                self.moves.add((next_cluster_id, next_block, m_id, next_sm,
+                               sub_m_id))
 
     def __check_state_index_correctness(self, state_index):
         reference_state_index = self.__build_state_index(self.state)
@@ -1006,10 +1083,10 @@ class SAClusterPlacer(Annealer):
         if y > cord["ymax"]:
             cord["ymax"] = y
 
-    def energy(self):
+    def __init_energy(self, state):
         """we use HPWL as the cost function"""
         blk_pos = self.board_pos
-        placement = self.state["placement"]
+        placement = state["placement"]
         # Keyi:
         # the energy comes with two parts
         # first is the normal HPWL
@@ -1045,8 +1122,20 @@ class SAClusterPlacer(Annealer):
                     s_pos = self.centroid_index[(m_id, sub_m)]
                     self.__update_cord(s_pos, cord_index)
             hpwl += (abs(cord_index["xmax"] - cord_index["xmin"]) +
-                     abs(cord_index["ymax"] - cord_index["ymin"])) * 2
+                     abs(cord_index["ymax"] - cord_index["ymin"])) * \
+                self.intra_cluster_count[cluster_id]
         return hpwl
+
+    def commit_changes(self):
+        self.__update_state_mb(self.moves)
+
+    def energy(self):
+        if len(self.moves) == 0:
+            return self.state["energy"]
+
+        # get a list of clusters to recompute the cost function
+
+        return self.__init_energy(self.state)
 
     def realize(self):
         placement = self.state["placement"]

@@ -48,10 +48,6 @@ class Annealer(object):
     # early termination
     num_nets = 0
 
-    # fast HPWL calculation
-    pre_state = None
-    pre_energy = None
-
     # placeholders
     best_state = None
     best_energy = None
@@ -72,6 +68,8 @@ class Annealer(object):
         self.anneal_rand = random.Random()
         self.anneal_rand.seed(0)
 
+        assert "energy" in self.state
+
     @staticmethod
     def __deepcopy(obj_to_copy):
         if isinstance(obj_to_copy, dict):
@@ -91,7 +89,6 @@ class Annealer(object):
             d = obj_to_copy
         return d
 
-
     @abc.abstractmethod
     def move(self):
         """Create a state change"""
@@ -100,6 +97,10 @@ class Annealer(object):
     @abc.abstractmethod
     def energy(self):
         """Calculate state's energy"""
+        pass
+
+    @abc.abstractmethod
+    def commit_changes(self):
         pass
 
     @staticmethod
@@ -134,12 +135,7 @@ class Annealer(object):
                 "temperature greater than zero.')
         Tfactor = -math.log(self.Tmax / self.Tmin)
 
-        # Note initial state
-        T = self.Tmax
-        self.pre_state = self.copy_state(self.state)
         E = self.energy()
-        self.pre_energy = E
-        self.best_state = self.copy_state(self.state)
         self.best_energy = E
         trials, accepts, improves = 0, 0, 0
 
@@ -149,18 +145,18 @@ class Annealer(object):
             T = self.Tmax * math.exp(Tfactor * step / self.steps)
             self.move()
             E = self.energy()
-            dE = E - self.pre_energy
+            dE = E - self.state["energy"]
             trials += 1
             if dE > 0.0 and math.exp(-dE / T) < self.anneal_rand.random():
-                # Restore previous state
-                self.state = self.copy_state(self.pre_state)
+                # don't commit changes
+                continue
             else:
                 # Accept new state and compare to best state
                 accepts += 1
                 if dE < 0.0:
                     improves += 1
-                self.pre_state = self.copy_state(self.state)
-                self.pre_energy = E
+                self.commit_changes()
+                self.state["energy"] = E
                 if E < self.best_energy:
                     self.best_state = self.copy_state(self.state)
                     self.best_energy = E

@@ -61,8 +61,8 @@ def reduce_cluster_graph(netlists, clusters, fixed_blocks,
         condense_self = False
     current_cluster = clusters[cluster_id]
     new_netlist = {}
-    for netid in netlists:
-        netlist = set(netlists[netid])
+    for net_id in netlists:
+        netlist = set(netlists[net_id])
         if len(netlist.intersection(current_cluster)) > 0:
             # we need to reduce the net
             new_net = []
@@ -90,7 +90,7 @@ def reduce_cluster_graph(netlists, clusters, fixed_blocks,
                     if not found:
                         raise Exception("not found blk", blk_id)
 
-            new_netlist[netid] = new_net
+            new_netlist[net_id] = new_net
     return new_netlist
 
 
