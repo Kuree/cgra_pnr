@@ -149,7 +149,6 @@ class Annealer(object):
             trials += 1
             if dE > 0.0 and math.exp(-dE / T) < self.anneal_rand.random():
                 # don't commit changes
-                self._check_correctness()
                 continue
             else:
                 # Accept new state and compare to best state
@@ -158,7 +157,6 @@ class Annealer(object):
                     improves += 1
                 self.commit_changes()
                 self.state["energy"] = E
-                self._check_correctness()
             # allow early termination
             if self.num_nets > 0 and T < 0.005 * E / self.num_nets:
                 break

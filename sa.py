@@ -1164,7 +1164,6 @@ class SAClusterPlacer(Annealer):
 
     def commit_changes(self):
         self.__update_state_mb(self.moves)
-        self.moves = None
 
     def energy(self):
         if len(self.moves) == 0:
@@ -1185,6 +1184,14 @@ class SAClusterPlacer(Annealer):
         affected_nets = set()
         for cluster_id in cluster_changed:
             affected_nets.update(self.netlist_index[cluster_id])
+
+        # if too many affected nets, fall back to old one
+        if len(affected_nets) * 2.5 > len(self.netlists):
+            pre_state = deepcopy(self.state)
+            self.commit_changes()
+            result = self.__init_energy(self.state)
+            self.state = pre_state
+            return result
 
         # first, recompute the nets that got affected before
         old_hpwl = 0
