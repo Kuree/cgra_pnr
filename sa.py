@@ -9,7 +9,8 @@ import random
 # main class to perform simulated annealing within each cluster
 class SADetailedPlacer(Annealer):
     def __init__(self, blocks, total_cells, netlists, raw_netlist, board,
-                 board_pos, is_legal=None, fold_reg=True, seed=0, debug=True):
+                 board_pos, disallowed_pos,
+                 is_legal=None, fold_reg=True, seed=0, debug=True):
         """Please notice that netlists has to be prepared already, i.e., replace
         the remote partition with a pseudo block.
         Also assumes that available_pos is the same size as blocks. If not,
@@ -22,6 +23,7 @@ class SADetailedPlacer(Annealer):
         self.netlists = netlists
         self.blk_pos = board_pos
         self.board = board
+        self.disallowed_pos = disallowed_pos
 
         p_blocks = [b for b in blocks if b[0] == "p"]
         assert (len(p_blocks) <= len(available_pos))
@@ -134,8 +136,10 @@ class SADetailedPlacer(Annealer):
                     # make sure we're not putting it in the reg net
                 elif len(board[new_pos]) > 0 and board[new_pos][0][0] == "p":
                     p_block = board[new_pos][0]
-                    if blk_id in self.reg_no_pos and \
-                            p_block in self.reg_no_pos[blk_id]:
+                    if (blk_id in self.reg_no_pos and
+                            p_block in self.reg_no_pos[blk_id]) or \
+                            (blk_id[0] == "r" and
+                             new_pos in self.disallowed_pos):
                         continue
                 board[new_pos].append(blk_id)
                 placement[blk_id] = new_pos
@@ -166,6 +170,8 @@ class SADetailedPlacer(Annealer):
                 if reg in self.reg_no_pos and blk in self.reg_no_pos[reg]:
                     return False
         else:
+            if blk[0] == "r" and pos in self.disallowed_pos:
+                return False
             pe = [x for x in board[pos] if x[0] == "p"]
             assert (len(pe) < 2)
             if len(pe) == 1:

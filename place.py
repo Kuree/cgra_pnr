@@ -29,8 +29,9 @@ def detailed_placement(args, context=None):
     fold_reg = args["fold_reg"]
     seed = args["seed"]
     fallback = args["fallback"]
+    disallowed_pos = args["disallowed_pos"]
     detailed = SADetailedPlacer(clusters, cells, netlist, raw_netlist,
-                                board, blk_pos,
+                                board, blk_pos, disallowed_pos,
                                 fold_reg=fold_reg, seed=seed)
     if fallback:
         detailed.steps *= 5
@@ -100,6 +101,7 @@ def main():
     print("INFO: Placing for", board_name)
     num_dim, raw_emb = parse_emb(netlist_embedding)
     board = make_board(board_meta)
+    board_info = board_meta[-1]
     place_on_board = generate_place_on_board(board_meta, fold_reg=fold_reg)
 
     fixed_blk_pos = {}
@@ -137,6 +139,7 @@ def main():
                                            fixed_blk_pos, netlists,
                                            raw_netlist,
                                            fold_reg, seed, fallback,
+                                           board_info,
                                            lambda_url)
 
     for blk_id in board_pos:
@@ -247,9 +250,21 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
 
 def perform_detailed_placement(board, centroids, cluster_cells, clusters,
                                fixed_blk_pos, netlists, raw_netlist,
-                               fold_reg, seed, fallback, lambda_url=""):
+                               fold_reg, seed, fallback, board_info,
+                               lambda_url=""):
     board_pos = fixed_blk_pos.copy()
     map_args = []
+
+    # NOTE:
+    # This is CGRA only. there are corner cases where the reg will put
+    # into one of the corner and the main net routes through all the available
+    # channels. Hence it becomes not routable any more
+    height, width = board_info["height"], board_info["width"]
+    margin = board_info["margin"]
+    disallowed_pos = {(margin, margin), (margin, margin + height),
+                      (margin + width, margin),
+                      (margin + width, margin + height)}
+
     for c_id in cluster_cells:
         cells = cluster_cells[c_id]
         new_netlist = reduce_cluster_graph(netlists, clusters,
@@ -264,7 +279,8 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
         args = {"clusters": clusters[c_id], "cells": cells,
                 "new_netlist": new_netlist, "raw_netlist": raw_netlist,
                 "board": board, "blk_pos": blk_pos, "fold_reg": fold_reg,
-                "seed": seed, "fallback": fallback}
+                "seed": seed, "fallback": fallback,
+                "disallowed_pos": disallowed_pos}
 
         map_args.append(args)
     if lambda_url:
