@@ -1,7 +1,7 @@
 from __future__ import division, print_function
 from simanneal import Annealer
 from util import compute_hpwl, deepcopy
-from util import reduce_cluster_graph, compute_centroids
+from util import compute_centroids
 from arch.netlist import group_reg_nets
 import random
 
@@ -62,7 +62,7 @@ class SADetailedPlacer(Annealer):
         rand = random.Random()
         rand.seed(seed)
         placement = self.__init_placement(rand)
-        current_energy = self.init_energy(placement)
+        current_energy = self.__init_energy(placement)
         board = self.__create_board(placement)
         state = {"placement": placement,
                  "energy": current_energy,
@@ -221,6 +221,8 @@ class SADetailedPlacer(Annealer):
         # use this code to check implementation correctness
         if self.debug:
             self.__check_board_correctness(board, placement)
+            reference_hpwl = self.__init_energy(placement)
+            assert self.state["energy"] == reference_hpwl
 
         blk = self.random.choice(available_ids)
         blk_pos = placement[blk]
@@ -250,8 +252,6 @@ class SADetailedPlacer(Annealer):
                 if (not self.fold_reg) or \
                         (self.__reg_net(next_pos, blk, board) and
                          self.__reg_net(blk_pos, next_blk, board)):
-                    placement[next_blk] = blk_pos
-                    placement[blk] = next_pos
                     self.moves.add((blk, blk_pos, next_pos))
                     self.moves.add((next_blk, next_pos, blk_pos))
 
@@ -316,7 +316,7 @@ class SADetailedPlacer(Annealer):
             board[b_pos].append(blk_id)
         return board
 
-    def init_energy(self, placement):
+    def __init_energy(self, placement):
         """we use HPWL as the cost function"""
         # merge with state + prefixed positions
         board_pos = self.blk_pos.copy()
@@ -344,7 +344,7 @@ class SADetailedPlacer(Annealer):
         for blk, _, blk_pos in self.moves:
             new_pos[blk] = blk_pos
 
-        for blk in self.moves:
+        for blk, _, _ in self.moves:
             change_net_ids.update(self.blk_index[blk])
         for net_id in change_net_ids:
             changed_nets[net_id] = self.netlists[net_id]
@@ -371,13 +371,6 @@ class SADetailedPlacer(Annealer):
             new_hpwl += new_netlist_hpwl[key]
 
         final_hpwl = pre_energy + (new_hpwl - old_hpwl)
-
-        # use the following code to check correctness
-        if self.debug:
-            reference_hpwl = self.init_energy(placement)
-            assert final_hpwl == reference_hpwl
-
-        self.state["energy"] = final_hpwl
 
         return final_hpwl
 
@@ -438,7 +431,7 @@ class SAClusterPlacer(Annealer):
         state["state_index"] = state_index
         state["energy"] = self.__init_energy(state)
 
-        self.netlist_index = self.__index_clusters(clusters, netlists)
+        self.netlist_index = self.__index_clusters(clusters, self.netlists)
 
         Annealer.__init__(self, initial_state=state, rand=rand)
 
@@ -448,6 +441,7 @@ class SAClusterPlacer(Annealer):
 
         self.debug = debug
         self.moves = set()
+        self.count_change = None
 
     @staticmethod
     def __collapse_netlist(clusters, netlist, fixed_position):
@@ -498,13 +492,18 @@ class SAClusterPlacer(Annealer):
     @staticmethod
     def __index_clusters(clusters, netlist):
         result = {}
+        blk_table = {}
         for cluster_id in clusters:
             result[cluster_id] = set()
+            for blk in clusters[cluster_id]:
+                blk_table[blk] = "x" + str(cluster_id)
+
         for cluster_id in clusters:
             for blk in clusters[cluster_id]:
+                blk_id = blk_table[blk]
                 for net_id in netlist:
                     net = netlist[net_id]
-                    if blk in net:
+                    if blk_id in net:
                         result[cluster_id].add(net_id)
         return result
 
@@ -800,6 +799,17 @@ class SAClusterPlacer(Annealer):
                     index[(m_id, sub_m_id)] = cluster_id
         return index
 
+    def _check_correctness(self):
+        if self.debug:
+            placement = self.state["placement"]
+            cluster_mb_count = self.state["cluster_mb_count"]
+            state_index = self.state["state_index"]
+            self.__check_correctness(cluster_mb_count, placement)
+            self.__check_state_index_correctness(state_index)
+
+            reference_hpwl = self.__init_energy(self.state)
+            assert self.state["energy"] == reference_hpwl
+
     def move(self):
         # optimizations for checking sub-macroblocks
         # 1. check their type. if the type is the same then
@@ -809,12 +819,8 @@ class SAClusterPlacer(Annealer):
         cluster_mb_count = self.state["cluster_mb_count"]
         state_index = self.state["state_index"]
 
-        # use following code to check correctness
-        if self.debug:
-            self.__check_correctness(cluster_mb_count, placement)
-            self.__check_state_index_correctness(state_index)
-
         self.moves = set()
+        self.count_change = None
 
         # first we randomly pickup a sub-macroblock
         (m_id, sub_m_id), cluster_id = \
@@ -932,11 +938,9 @@ class SAClusterPlacer(Annealer):
                 # notice that we have already re-compute the count
                 # just need to update the count
                 assert a_count is not None
-                cluster_mb_count[cluster_id] = a_count
+                self.count_change = {cluster_id: a_count}
                 if b_count_dict is not None:
-                    for next_cluster_id in b_count_dict:
-                        cluster_mb_count[next_cluster_id] = \
-                            b_count_dict[next_cluster_id]
+                    self.count_change.update(b_count_dict)
 
         else:
             # we have two choice
@@ -1007,9 +1011,9 @@ class SAClusterPlacer(Annealer):
                 b_count = None
 
             # update the count
-            cluster_mb_count[cluster_id] = a_count
+            self.count_change = {cluster_id: a_count}
             if b_count is not None:
-                cluster_mb_count[next_cluster_id] = b_count
+                self.count_change[next_cluster_id] = b_count
 
             # update the state
             self.moves.add((cluster_id, m_id, next_block, sub_m_id, next_sm))
@@ -1053,6 +1057,7 @@ class SAClusterPlacer(Annealer):
     def __update_state_mb(self, moves):
         placement = self.state["placement"]
         state_index = self.state["state_index"]
+        cluster_mb_count = self.state["cluster_mb_count"]
         for cluster_id, m_id, next_m_id, smb, next_smb in moves:
             # because we may already pop it
             if state_index[(m_id, smb)] == cluster_id:
@@ -1068,6 +1073,10 @@ class SAClusterPlacer(Annealer):
 
             # update stage index
             state_index[(next_m_id, next_smb)] = cluster_id
+        if self.count_change is not None:
+            for next_cluster_id in self.count_change:
+                cluster_mb_count[next_cluster_id] = \
+                    self.count_change[next_cluster_id]
 
         return
 
@@ -1096,46 +1105,210 @@ class SAClusterPlacer(Annealer):
 
         hpwl = 0
         for net_id in self.netlists:
-            cord_index = {"xmin": 10000, "xmax": -1, "ymin": 10000, "ymax": -1}
+            xmin = 10000
+            xmax = -1
+            ymin = 10000
+            ymax = -1
             net = self.netlists[net_id]
             for node_id in net:
                 if node_id in blk_pos:
-                    self.__update_cord(blk_pos[node_id], cord_index)
+                    # instead of call the function use plain comparison
+                    # instead to speed up python
+                    x, y = blk_pos[node_id]
+                    if x < xmin:
+                        xmin = x
+                    if x > xmax:
+                        xmax = x
+                    if y < ymin:
+                        ymin = y
+                    if y > ymax:
+                        ymax = y
                 else:
                     assert node_id[0] == "x"
                     cluster_id = int(node_id[1:])
                     cluster_pos = placement[cluster_id]
                     for m_id in cluster_pos:
                         for sub_m in cluster_pos[m_id]:
-                            s_pos = self.centroid_index[(m_id, sub_m)]
-                            self.__update_cord(s_pos, cord_index)
-            hpwl += abs(cord_index["xmax"] - cord_index["xmin"]) + \
-                abs(cord_index["ymax"] - cord_index["ymin"])
+                            x, y = self.centroid_index[(m_id, sub_m)]
+                            if x < xmin:
+                                xmin = x
+                            if x > xmax:
+                                xmax = x
+                            if y < ymin:
+                                ymin = y
+                            if y > ymax:
+                                ymax = y
+            hpwl += xmax - xmin + ymax - ymin
 
-        # notice that we do double count the wire length here
         # this is necessary to keep all the macro blocks together
         for cluster_id in placement:
-            cord_index = {"xmin": 10000, "xmax": -1, "ymin": 10000, "ymax": -1}
+            xmin = 10000
+            xmax = -1
+            ymin = 10000
+            ymax = -1
             cluster_pos = placement[cluster_id]
             for m_id in cluster_pos:
                 for sub_m in cluster_pos[m_id]:
-                    s_pos = self.centroid_index[(m_id, sub_m)]
-                    self.__update_cord(s_pos, cord_index)
-            hpwl += (abs(cord_index["xmax"] - cord_index["xmin"]) +
-                     abs(cord_index["ymax"] - cord_index["ymin"])) * \
+                    x, y = self.centroid_index[(m_id, sub_m)]
+                    if x < xmin:
+                        xmin = x
+                    if x > xmax:
+                        xmax = x
+                    if y < ymin:
+                        ymin = y
+                    if y > ymax:
+                        ymax = y
+            hpwl += (xmax - xmin + ymax - ymin) * \
                 self.intra_cluster_count[cluster_id]
         return hpwl
 
     def commit_changes(self):
         self.__update_state_mb(self.moves)
+        self.moves = None
 
     def energy(self):
         if len(self.moves) == 0:
             return self.state["energy"]
 
-        # get a list of clusters to recompute the cost function
+        placement = self.state["placement"]
+        blk_pos = self.board_pos
 
-        return self.__init_energy(self.state)
+        # get a list of clusters to recompute the cost function
+        # also build change table
+        cluster_changed = set()
+        smb_change_table = {}
+        for cluster_id, m_id, next_block, sub_m_id, next_sm in self.moves:
+            cluster_changed.add(cluster_id)
+            smb_change_table[(cluster_id, m_id, sub_m_id)] = \
+                self.centroid_index[(next_block, next_sm)]
+
+        affected_nets = set()
+        for cluster_id in cluster_changed:
+            affected_nets.update(self.netlist_index[cluster_id])
+
+        # first, recompute the nets that got affected before
+        old_hpwl = 0
+        for net_id in affected_nets:
+            xmin = 10000
+            xmax = -1
+            ymin = 10000
+            ymax = -1
+            net = self.netlists[net_id]
+            for node_id in net:
+                if node_id in blk_pos:
+                    x, y = blk_pos[node_id]
+                    if x < xmin:
+                        xmin = x
+                    if x > xmax:
+                        xmax = x
+                    if y < ymin:
+                        ymin = y
+                    if y > ymax:
+                        ymax = y
+                else:
+                    assert node_id[0] == "x"
+                    cluster_id = int(node_id[1:])
+                    cluster_pos = placement[cluster_id]
+                    for m_id in cluster_pos:
+                        for sub_m in cluster_pos[m_id]:
+                            x, y = self.centroid_index[(m_id, sub_m)]
+                            if x < xmin:
+                                xmin = x
+                            if x > xmax:
+                                xmax = x
+                            if y < ymin:
+                                ymin = y
+                            if y > ymax:
+                                ymax = y
+            old_hpwl += xmax - xmin + ymax - ymin
+
+        for cluster_id in cluster_changed:
+            xmin = 10000
+            xmax = -1
+            ymin = 10000
+            ymax = -1
+            cluster_pos = placement[cluster_id]
+            for m_id in cluster_pos:
+                for sub_m in cluster_pos[m_id]:
+                    x, y = self.centroid_index[(m_id, sub_m)]
+                    if x < xmin:
+                        xmin = x
+                    if x > xmax:
+                        xmax = x
+                    if y < ymin:
+                        ymin = y
+                    if y > ymax:
+                        ymax = y
+            old_hpwl += (xmax - xmin + ymax - ymin) * \
+                self.intra_cluster_count[cluster_id]
+
+        new_hpwl = 0
+        for net_id in affected_nets:
+            xmin = 10000
+            xmax = -1
+            ymin = 10000
+            ymax = -1
+            net = self.netlists[net_id]
+            for node_id in net:
+                if node_id in blk_pos:
+                    x, y = blk_pos[node_id]
+                    if x < xmin:
+                        xmin = x
+                    if x > xmax:
+                        xmax = x
+                    if y < ymin:
+                        ymin = y
+                    if y > ymax:
+                        ymax = y
+                else:
+                    assert node_id[0] == "x"
+                    cluster_id = int(node_id[1:])
+                    cluster_pos = placement[cluster_id]
+                    for m_id in cluster_pos:
+                        for sub_m in cluster_pos[m_id]:
+                            key_entry = (cluster_id, m_id, sub_m)
+                            if key_entry in smb_change_table:
+                                s_pos = smb_change_table[key_entry]
+                            else:
+                                s_pos = self.centroid_index[(m_id, sub_m)]
+                            x, y = s_pos
+                            if x < xmin:
+                                xmin = x
+                            if x > xmax:
+                                xmax = x
+                            if y < ymin:
+                                ymin = y
+                            if y > ymax:
+                                ymax = y
+            new_hpwl += xmax - xmin + ymax - ymin
+
+        for cluster_id in cluster_changed:
+            xmin = 10000
+            xmax = -1
+            ymin = 10000
+            ymax = -1
+            cluster_pos = placement[cluster_id]
+            for m_id in cluster_pos:
+                for sub_m in cluster_pos[m_id]:
+                    key_entry = (cluster_id, m_id, sub_m)
+                    if key_entry in smb_change_table:
+                        s_pos = smb_change_table[key_entry]
+                    else:
+                        s_pos = self.centroid_index[(m_id, sub_m)]
+                    x, y = s_pos
+                    if x < xmin:
+                        xmin = x
+                    if x > xmax:
+                        xmax = x
+                    if y < ymin:
+                        ymin = y
+                    if y > ymax:
+                        ymax = y
+            new_hpwl += (xmax - xmin + ymax - ymin) * \
+                self.intra_cluster_count[cluster_id]
+
+        energy = self.state["energy"] + (new_hpwl - old_hpwl)
+        return energy
 
     def realize(self):
         placement = self.state["placement"]

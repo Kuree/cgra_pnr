@@ -49,8 +49,6 @@ class Annealer(object):
     num_nets = 0
 
     # placeholders
-    best_state = None
-    best_energy = None
     start = None
 
     def __init__(self, initial_state=None, rand=None):
@@ -103,6 +101,9 @@ class Annealer(object):
     def commit_changes(self):
         pass
 
+    def _check_correctness(self):
+        pass
+
     @staticmethod
     def copy_state(state):
         # FIXME:
@@ -136,7 +137,6 @@ class Annealer(object):
         Tfactor = -math.log(self.Tmax / self.Tmin)
 
         E = self.energy()
-        self.best_energy = E
         trials, accepts, improves = 0, 0, 0
 
         # Attempt moves to new states
@@ -149,6 +149,7 @@ class Annealer(object):
             trials += 1
             if dE > 0.0 and math.exp(-dE / T) < self.anneal_rand.random():
                 # don't commit changes
+                self._check_correctness()
                 continue
             else:
                 # Accept new state and compare to best state
@@ -157,18 +158,15 @@ class Annealer(object):
                     improves += 1
                 self.commit_changes()
                 self.state["energy"] = E
-                if E < self.best_energy:
-                    self.best_state = self.copy_state(self.state)
-                    self.best_energy = E
-
+                self._check_correctness()
             # allow early termination
             if self.num_nets > 0 and T < 0.005 * E / self.num_nets:
                 break
 
-        self.state = self.copy_state(self.best_state)
+        # self.state = self.copy_state(self.best_state)
 
         # Return best state and energy
-        return self.best_state, self.best_energy
+        return self.state, self.state["energy"]
 
     def auto(self, minutes, steps=2000):
         """Explores the annealing landscape and
