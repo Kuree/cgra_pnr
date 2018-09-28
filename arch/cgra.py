@@ -794,10 +794,14 @@ def determine_pin_ports(net, placement, fold_reg=True):
     return pin_directions
 
 
-def build_graph(netlists):
+def build_graph(netlists, no_port=False):
     g = nx.Graph()
     for net_id in netlists:
-        for blk_id, _ in netlists[net_id]:
+        for entry in netlists[net_id]:
+            if no_port:
+                blk_id = entry
+            else:
+                blk_id, _ = entry
             g.add_edge(net_id, blk_id)
     for edge in g.edges():
         g[edge[0]][edge[1]]['weight'] = 1

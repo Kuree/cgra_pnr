@@ -8,6 +8,8 @@ from tqdm import tqdm
 from argparse import ArgumentParser
 from arch.cgra_packer import load_packed_file
 from arch.cgra import build_graph
+from arch.fpga import load_packed_netlist
+
 
 FILE_PATH = os.path.dirname(__file__)
 NETLIST2VEC = os.path.join(FILE_PATH, "./word2vec")
@@ -58,7 +60,8 @@ class Graph():
         for walk_iter in tqdm(range(num_walks)):
                 random.shuffle(nodes)
                 for node in nodes:
-                        walks.append(self.node2vec_walk(walk_length=walk_length, start_node=node))
+                    if node[0] != "x":
+                            walks.append(self.node2vec_walk(walk_length=walk_length, start_node=node))
 
         return walks
 
@@ -160,18 +163,25 @@ def alias_draw(J, q):
         return J[kk]
 
 
-def build_walks(packed_filename, emb_name):
-    netlists, _, _, _ = load_packed_file(packed_filename)
-    nx_g = build_graph(netlists)
+def build_walks(packed_filename, emb_name, is_fpga_packed):
+    if is_fpga_packed:
+        netlists, _ = load_packed_netlist(packed_filename)
+        walk_length = 80
+        num_walks = 10
+    else:
+        netlists, _, _, _ = load_packed_file(packed_filename)
+        walk_length = 40
+        num_walks = 15
+
+    nx_g = build_graph(netlists, is_fpga_packed)
     p = 0.6
     q = 1
-    num_walks = 15
-    walk_length = 20
     num_dim = 12
     G = Graph(nx_g, False, p, q)
     G.preprocess_transition_probs()
     # generate random walks
-    walks = G.simulate_walks(num_walks, walk_length)
+    # because we use star expansion
+    walks = G.simulate_walks(num_walks, walk_length * 2)
     basename = os.path.basename(packed_filename)
     design_name, _ = os.path.splitext(basename)
 
@@ -199,6 +209,9 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--seed", help="Seed for random walk. " +
                         "default is 0", type=int, default=0,
                         required=False, action="store", dest="seed")
+    parser.add_argument("--fpga", action="store_true", dest="is_fpga",
+                        default=False, help="Use this flag when working with"
+                                            "ISPD packed netlist")
     args = parser.parse_args()
     seed = args.seed
     print("Using seed", seed, "for random walk")
@@ -206,5 +219,6 @@ if __name__ == "__main__":
     np.random.seed(seed)
     input_file = args.input
     output_file = args.output
-    build_walks(input_file, output_file)
+    is_fpga = args.is_fpga
+    build_walks(input_file, output_file, is_fpga)
     print()

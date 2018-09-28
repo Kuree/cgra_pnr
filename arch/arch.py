@@ -320,6 +320,59 @@ def generate_is_cell_legal(board_meta, fold_reg=True):
     return is_legal
 
 
+def parse_fpga(fpga_file):
+    """parse ISPD FPGA benchmark"""
+    with open(fpga_file) as f:
+        lines = f.readlines()
+
+    height = 0
+    width = 0
+    board_layout = []
+
+    io_tiles = set()
+    read_site = False
+
+    for line in lines:
+        if not read_site:
+            if "SITEMAP" in line:
+                read_site = True
+                _, raw_width, raw_height = line.split()
+                width = int(raw_width)
+                height = int(raw_height)
+                for j in range(height):
+                    row = [None] * width
+                    board_layout.append(row)
+        else:
+            line = line.strip()
+            if len(line) == 0 or "END" in line:
+                break
+            raw_x, raw_y, site_type = line.split()
+            x = int(raw_x)
+            y = int(raw_y)
+            if site_type == "IO":
+                board_layout[y][x] = "i"
+                io_tiles.add((x, y))
+            elif site_type == "SLICE":
+                board_layout[y][x] = "c"
+            elif site_type == "BRAM":
+                board_layout[y][x] = "m"
+            elif site_type == "DSP":
+                board_layout[y][x] = "d"
+            else:
+                raise Exception("Unknown SITE " + site_type)
+
+    # fill in board info
+    info = {"margin": 1, "clb_type": "c", "arch_type": "fpga",
+            "height": height, "width": width, "id_remap": {},
+            "io": io_tiles}
+    layouts = {}
+    layout_name = "fpga"
+    blk_height = {"i": 1, "c": 1, "d": 1, "m": 1}
+    blk_capacity = blk_height.copy()
+    layouts[layout_name] = (board_layout, blk_height, blk_capacity, info)
+    return layouts
+
+
 def generate_place_on_board(board_meta, fold_reg=True):
     is_legal = generate_is_cell_legal(board_meta, fold_reg=fold_reg)
 
@@ -369,6 +422,7 @@ def print_board_info(board_name, board_meta):
 def main():
     use_vpr = False
     use_cgra = False
+    use_fpga = False
     if len(sys.argv) < 2:
         print("Usage:", sys.argv[0], "[OPTION]", "<arch_file>",
               "\n[OPTION]: -vpr, -cgra", file=sys.stderr)
@@ -376,20 +430,23 @@ def main():
     elif len(sys.argv) > 2:
         for opt in sys.argv[1:]:
             if opt == "-vpr":
-                use_vpr = True
                 use_cgra = False
                 break
             elif opt == "-cgra":
-                use_vpr = False
                 use_cgra = True
                 break
+            elif opt == "-fpga":
+                use_fpga = True
+                break
     filename = sys.argv[1]
-    if (not use_vpr) and (not use_cgra):
+    if (not use_vpr) and (not use_cgra) and not (use_fpga):
         _, ext = os.path.splitext(filename)
         if ext == ".xml":
             use_vpr = True
         elif ext == ".txt":
             use_cgra = True
+        elif ext == ".scl":
+            use_fpga = True
     meta = None
     if use_vpr:
         print("Parsing VPR arch file", filename)
@@ -397,6 +454,9 @@ def main():
     if use_cgra:
         print("Parsing CGRA arch file", filename)
         meta = parse_cgra(filename)
+    if use_fpga:
+        print("Parsing FPGA arch file", filename)
+        meta = parse_fpga(filename)
     if meta is None:
         print("Unexpected state", file=sys.stderr)
         exit(1)

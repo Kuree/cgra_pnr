@@ -139,3 +139,11 @@ test_dataset
 
 # sls
 *_sls
+
+
+# FPGA giles
+*.pl
+*.aux
+*.scl
+benchmark
+layout
