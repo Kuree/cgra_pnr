@@ -803,8 +803,8 @@ def build_graph(netlists, no_port=False):
             else:
                 blk_id, _ = entry
             g.add_edge(net_id, blk_id)
-    for edge in g.edges():
-        g[edge[0]][edge[1]]['weight'] = 1
+    # for edge in g.edges():
+    #    g[edge[0]][edge[1]]['weight'] = 1
     return g.to_undirected()
 
 

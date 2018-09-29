@@ -76,13 +76,13 @@ class Graph():
         unnormalized_probs = []
         for dst_nbr in sorted(G.neighbors(dst)):
                 if dst_nbr == src:
-                        unnormalized_probs.append(G[dst][dst_nbr]['weight']/p)
+                        unnormalized_probs.append(1/p)
                 elif G.has_edge(dst_nbr, src):
-                        unnormalized_probs.append(G[dst][dst_nbr]['weight'])
+                        unnormalized_probs.append(1)
                 else:
-                        unnormalized_probs.append(G[dst][dst_nbr]['weight']/q)
+                        unnormalized_probs.append(1/q)
         norm_const = sum(unnormalized_probs)
-        normalized_probs =  [float(u_prob)/norm_const for u_prob in unnormalized_probs]
+        normalized_probs = [float(u_prob)/norm_const for u_prob in unnormalized_probs]
 
         return alias_setup(normalized_probs)
 
@@ -95,9 +95,8 @@ class Graph():
 
         alias_nodes = {}
         for node in G.nodes():
-                unnormalized_probs = [G[node][nbr]['weight'] for nbr in sorted(G.neighbors(node))]
-                norm_const = sum(unnormalized_probs)
-                normalized_probs =  [float(u_prob)/norm_const for u_prob in unnormalized_probs]
+                # unnormalized_probs = [G[node][nbr]['weight'] for nbr in sorted(G.neighbors(node))]
+                normalized_probs =  [float(1) / len(list(G.neighbors(node)))]
                 alias_nodes[node] = alias_setup(normalized_probs)
 
         alias_edges = {}
@@ -166,7 +165,7 @@ def alias_draw(J, q):
 def build_walks(packed_filename, emb_name, is_fpga_packed):
     if is_fpga_packed:
         netlists, _ = load_packed_fpga_netlist(packed_filename)
-        walk_length = 80
+        walk_length = 40
         num_walks = 10
     else:
         netlists, _, _, _ = load_packed_file(packed_filename)
@@ -181,7 +180,7 @@ def build_walks(packed_filename, emb_name, is_fpga_packed):
     G.preprocess_transition_probs()
     # generate random walks
     # because we use star expansion
-    walks = G.simulate_walks(num_walks, walk_length * 2)
+    walks = G.simulate_walks(num_walks, walk_length)
     basename = os.path.basename(packed_filename)
     design_name, _ = os.path.splitext(basename)
 
