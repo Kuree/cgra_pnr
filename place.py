@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from arch.parser import parse_emb
 from sa import SAClusterPlacer, SADetailedPlacer
 from sa import ClusterException
-from arch import make_board, parse_cgra, generate_place_on_board
+from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
 import numpy as np
 import os
 import pickle
@@ -15,6 +15,7 @@ from multiprocessing import Pool
 import multiprocessing
 from arch.cgra import place_special_blocks, save_placement, prune_netlist
 from arch.cgra_packer import load_packed_file
+from arch.fpga import load_packed_fpga_netlist
 
 
 def detailed_placement(args, context=None):
@@ -30,9 +31,11 @@ def detailed_placement(args, context=None):
     seed = args["seed"]
     fallback = args["fallback"]
     disallowed_pos = args["disallowed_pos"]
+    clb_type = args["clb_type"]
     detailed = SADetailedPlacer(clusters, cells, netlist, raw_netlist,
                                 board, blk_pos, disallowed_pos,
-                                fold_reg=fold_reg, seed=seed)
+                                fold_reg=fold_reg, seed=seed,
+                                clb_type=clb_type)
     if fallback:
         detailed.steps *= 5
     # detailed.steps = 10
@@ -60,7 +63,7 @@ def main():
                         required=True, action="store",
                         dest="placement_filename")
     parser.add_argument("-c", "--cgra", help="CGRA architecture file",
-                        required=True, action="store", dest="arch_filename")
+                        action="store", dest="cgra_arch", default="")
     parser.add_argument("--no-reg-fold", help="If set, the placer will treat " +
                                               "registers as PE tiles",
                         action="store_true",
@@ -78,14 +81,22 @@ def main():
                         "that URL",
                         dest="lambda_url", type=str, required=False,
                         action="store", default="")
+    parser.add_argument("-f", "--fpga", action="store", dest="fpga_arch",
+                        default="", help="ISPD FPGA architecture file")
 
     args = parser.parse_args()
 
-    arch_filename = args.arch_filename
+    cgra_arch = args.cgra_arch
+    fpga_arch = args.fpga_arch
+
+    if len(cgra_arch) == 0 ^ len(fpga_arch) == 0:
+        parser.error("Must provide wither --fpga or --cgra")
+
     packed_filename = args.packed_filename
     netlist_embedding = args.netlist_embedding
     placement_filename = args.placement_filename
     lambda_url = args.lambda_url
+    fpga_place = len(fpga_arch) > 0
 
     seed = args.seed
     print("Using seed", seed, "for placement")
@@ -96,7 +107,14 @@ def main():
     vis_opt = not args.no_vis
     fold_reg = not args.no_reg_fold
 
-    board_meta = parse_cgra(arch_filename, fold_reg=fold_reg)
+    # FPGA params override
+    if fpga_place:
+        fold_reg = False
+        board_meta = parse_fpga(fpga_arch)
+    else:
+        board_meta = parse_cgra(cgra_arch, fold_reg=fold_reg)
+
+    # Common routine
     board_name, board_meta = board_meta.popitem()
     print("INFO: Placing for", board_name)
     num_dim, raw_emb = parse_emb(netlist_embedding)
@@ -105,33 +123,59 @@ def main():
     place_on_board = generate_place_on_board(board_meta, fold_reg=fold_reg)
 
     fixed_blk_pos = {}
-    emb = {}
-    raw_netlist, folded_blocks, id_to_name, changed_pe = \
-        load_packed_file(packed_filename)
-    netlists = prune_netlist(raw_netlist)
     special_blocks = set()
-    for blk_id in raw_emb:
-        if blk_id[0] == "i":
-            special_blocks.add(blk_id)
-        else:
-            emb[blk_id] = raw_emb[blk_id]
-    # place the spacial blocks first
-    place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
-                         id_to_name,
-                         place_on_board,
-                         board_meta)
+    emb = {}
 
+    # FPGA
+    if fpga_place:
+        netlists, fixed_blk_pos = load_packed_fpga_netlist(packed_filename)
+        num_of_kernels = None
+        id_to_name = {}
+        for blk_id in raw_emb:
+            id_to_name[blk_id] = blk_id
+            if blk_id[0] == "i":
+                special_blocks.add(blk_id)
+            else:
+                emb[blk_id] = raw_emb[blk_id]
+        # place fixed IO locations
+        for blk_id in fixed_blk_pos:
+            pos = fixed_blk_pos[blk_id]
+            place_on_board(board, blk_id, pos)
+
+        # set them to empty
+        raw_netlist = {}
+
+        folded_blocks = {}
+        changed_pe = {}
+
+    else:
+        # CGRA
+        raw_netlist, folded_blocks, id_to_name, changed_pe = \
+            load_packed_file(packed_filename)
+        num_of_kernels = get_num_clusters(id_to_name)
+        netlists = prune_netlist(raw_netlist)
+
+        for blk_id in raw_emb:
+            if blk_id[0] == "i":
+                special_blocks.add(blk_id)
+            else:
+                emb[blk_id] = raw_emb[blk_id]
+        # place the spacial blocks first
+        place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
+                             id_to_name,
+                             place_on_board,
+                             board_meta)
+
+    # common routine
     data_x = np.zeros((len(emb), num_dim))
     blks = list(emb.keys())
     for i in range(len(blks)):
         data_x[i] = emb[blks[i]]
 
-    num_of_kernels = get_num_clusters(id_to_name)
-
     centroids, cluster_cells, clusters, fallback = perform_global_placement(
         blks, data_x, emb, fixed_blk_pos, netlists, board,
         board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
-        seed=seed)
+        seed=seed, fpga_place=fpga_place)
 
     # anneal with each cluster
     board_pos = perform_detailed_placement(board, centroids,
@@ -169,10 +213,16 @@ def get_num_clusters(id_to_name):
 
 def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                              board_meta, fold_reg, seed,
-                             num_clusters=None):
+                             num_clusters=None, fpga_place=False):
     # simple heuristics to calculate the clusters
-    if num_clusters is None or num_clusters == 0:
+    if fpga_place:
+        num_clusters = int(np.ceil(len(emb) / 600)) + 1
+        num_mb = 400
+    elif num_clusters is None or num_clusters == 0:
         num_clusters = int(np.ceil(len(emb) / 40)) + 1
+        num_mb = 16
+    else:
+        num_mb = 16
     # extra careful
     num_clusters = min(num_clusters, len(blks))
     clusters = {}
@@ -198,7 +248,8 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                                              fixed_blk_pos,
                                              board_meta=board_meta,
                                              fold_reg=fold_reg,
-                                             seed=seed)
+                                             seed=seed,
+                                             num_mb=num_mb)
             break
         except ClusterException as _:
             num_clusters -= 1
@@ -208,6 +259,8 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
         cluster_cells, centroids = cluster_placer.realize()
         fallback = False
     else:
+        if fpga_place:
+            raise Exception("Full board placement not supported in FPGA")
         # it exceeds the algorithm's limit
         # fall back to full-size annealing
         print("Netlist too big. Fall back to full-board annealing")
@@ -261,6 +314,7 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
     # channels. Hence it becomes not routable any more
     height, width = board_info["height"], board_info["width"]
     margin = board_info["margin"]
+    clb_type = board_info["clb_type"]
     disallowed_pos = {(margin, margin), (margin, margin + height),
                       (margin + width, margin),
                       (margin + width, margin + height)}
@@ -279,7 +333,7 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
         args = {"clusters": clusters[c_id], "cells": cells,
                 "new_netlist": new_netlist, "raw_netlist": raw_netlist,
                 "board": board, "blk_pos": blk_pos, "fold_reg": fold_reg,
-                "seed": seed, "fallback": fallback,
+                "seed": seed, "fallback": fallback, "clb_type": clb_type,
                 "disallowed_pos": disallowed_pos}
 
         map_args.append(args)

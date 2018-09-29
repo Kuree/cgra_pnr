@@ -10,7 +10,8 @@ import random
 class SADetailedPlacer(Annealer):
     def __init__(self, blocks, total_cells, netlists, raw_netlist, board,
                  board_pos, disallowed_pos,
-                 is_legal=None, fold_reg=True, seed=0, debug=True):
+                 is_legal=None, fold_reg=True, seed=0, debug=False,
+                 clb_type="p"):
         """Please notice that netlists has to be prepared already, i.e., replace
         the remote partition with a pseudo block.
         Also assumes that available_pos is the same size as blocks. If not,
@@ -18,15 +19,16 @@ class SADetailedPlacer(Annealer):
         The board can be an empty board.
         """
         self.blocks = blocks
-        available_pos = total_cells["p"]
+        available_pos = total_cells[clb_type]
         self.total_cells = total_cells
         self.netlists = netlists
         self.blk_pos = board_pos
         self.board = board
         self.disallowed_pos = disallowed_pos
+        self.clb_type = clb_type
 
-        p_blocks = [b for b in blocks if b[0] == "p"]
-        assert (len(p_blocks) <= len(available_pos))
+        clb_blocks = [b for b in blocks if b[0] == clb_type]
+        assert (len(clb_blocks) <= len(available_pos))
 
         if is_legal is None:
             if fold_reg:
@@ -94,10 +96,10 @@ class SADetailedPlacer(Annealer):
 
     def __init_placement(self, rand):
         # filling in PE tiles first
-        pos = list(self.total_cells["p"])
+        pos = list(self.total_cells[self.clb_type])
         num_pos = len(pos)
         placement = {}
-        pe_blocks = [b for b in self.blocks if b[0] == "p"]
+        pe_blocks = [b for b in self.blocks if b[0] == self.clb_type]
         pe_blocks.sort(key=lambda x: int(x[1:]))
         reg_blocks = [b for b in self.blocks if b[0] == "r"]
         reg_blocks.sort(key=lambda x: int(x[1:]))
@@ -118,8 +120,9 @@ class SADetailedPlacer(Annealer):
                 board[new_pos] = []
             if len(board[new_pos]) > 1:
                 continue
-            if blk_id[0] == "p":
-                if len(board[new_pos]) > 0 and board[new_pos][0][0] == "p":
+            if blk_id[0] == self.clb_type:
+                if len(board[new_pos]) > 0 and board[new_pos][0][0] ==\
+                        self.clb_type:
                     continue
                 # make sure we're not putting it in the reg net
                 elif len(board[new_pos]) > 0 and board[new_pos][0][0] == "r":
@@ -134,7 +137,8 @@ class SADetailedPlacer(Annealer):
                 if len(board[new_pos]) > 0 and board[new_pos][0][0] == "r":
                     continue
                     # make sure we're not putting it in the reg net
-                elif len(board[new_pos]) > 0 and board[new_pos][0][0] == "p":
+                elif len(board[new_pos]) > 0 and board[new_pos][0][0] ==\
+                        self.clb_type:
                     p_block = board[new_pos][0]
                     if (blk_id in self.reg_no_pos and
                             p_block in self.reg_no_pos[blk_id]) or \
@@ -162,7 +166,7 @@ class SADetailedPlacer(Annealer):
     def __reg_net(self, pos, blk, board):
         # the board will always be occupied
         # this one doesn't check if the board if over populated or not
-        if blk[0] == "p":
+        if blk[0] == self.clb_type:
             reg = [x for x in board[pos] if x[0] == "r"]
             assert (len(reg) < 2)
             if len(reg) == 1:
@@ -172,7 +176,7 @@ class SADetailedPlacer(Annealer):
         else:
             if blk[0] == "r" and pos in self.disallowed_pos:
                 return False
-            pe = [x for x in board[pos] if x[0] == "p"]
+            pe = [x for x in board[pos] if x[0] == self.clb_type]
             assert (len(pe) < 2)
             if len(pe) == 1:
                 pe = pe[0]
@@ -214,9 +218,13 @@ class SADetailedPlacer(Annealer):
         self.moves = set()
         placement = self.state["placement"]
         board = self.state["board"]
-        available_ids = list(placement.keys())
-        available_ids.sort(key=lambda x: int(x[1:]))
-        available_pos = list(self.total_cells["p"])
+        if self.debug:
+            available_ids = list(placement.keys())
+            available_ids.sort(key=lambda x: int(x[1:]))
+            available_pos = list(self.total_cells[self.clb_type])
+        else:
+            available_ids = placement.keys()
+            available_pos = self.total_cells[self.clb_type]
 
         # use this code to check implementation correctness
         if self.debug:
@@ -224,7 +232,7 @@ class SADetailedPlacer(Annealer):
             reference_hpwl = self.__init_energy(placement)
             assert self.state["energy"] == reference_hpwl
 
-        blk = self.random.choice(available_ids)
+        blk = self.random.sample(available_ids, 1)[0]
         blk_pos = placement[blk]
 
         # if blk is a special block
@@ -323,12 +331,8 @@ class SADetailedPlacer(Annealer):
         for blk_id in placement:
             pos = placement[blk_id]
             board_pos[blk_id] = pos
-        hpwl = 0
-        netlist_hpwl = compute_hpwl(self.netlists, board_pos)
-        for key in netlist_hpwl:
-            hpwl += netlist_hpwl[key]
 
-        return hpwl
+        return compute_hpwl(self.netlists, board_pos)
 
     def energy(self):
         """we use HPWL as the cost function"""
@@ -353,10 +357,7 @@ class SADetailedPlacer(Annealer):
         for blk_id in placement:
             pos = placement[blk_id]
             board_pos[blk_id] = pos
-        old_netlist_hpwl = compute_hpwl(changed_nets, board_pos)
-        old_hpwl = 0
-        for key in old_netlist_hpwl:
-            old_hpwl += old_netlist_hpwl[key]
+        old_hpwl = compute_hpwl(changed_nets, board_pos)
 
         board_pos = self.blk_pos.copy()
         for blk_id in placement:
@@ -365,10 +366,7 @@ class SADetailedPlacer(Annealer):
             else:
                 pos = placement[blk_id]
             board_pos[blk_id] = pos
-        new_netlist_hpwl = compute_hpwl(changed_nets, board_pos)
-        new_hpwl = 0
-        for key in new_netlist_hpwl:
-            new_hpwl += new_netlist_hpwl[key]
+        new_hpwl = compute_hpwl(changed_nets, board_pos)
 
         final_hpwl = pre_energy + (new_hpwl - old_hpwl)
 
@@ -382,7 +380,7 @@ class SADetailedPlacer(Annealer):
 class SAClusterPlacer(Annealer):
     def __init__(self, clusters, netlists, board, board_pos, board_meta,
                  is_cell_legal=None, fold_reg=True, seed=0,
-                 num_sub_mb=4, debug=True):
+                 num_mb=16, num_sub_mb=4, debug=False):
         """Notice that each clusters has to be a condensed node in a networkx graph
         whose edge denotes how many intra-cluster connections.
         """
@@ -414,7 +412,9 @@ class SAClusterPlacer(Annealer):
         cluster_ids = list(clusters.keys())
         self.m_partitions, self.centroid_index, type_table, index_table \
             = self.partition_board(self.board_layout, board_info,
-                                   num_sm_side=self.sub_mb_side)
+                                   num_sm_side=self.sub_mb_side,
+                                   total_mb_size=num_mb,
+                                   clb_type=self.clb_type)
 
         # obtain index and table information
         self.mb_table = type_table["mb"]
@@ -509,7 +509,7 @@ class SAClusterPlacer(Annealer):
 
     @staticmethod
     def partition_board(board_layout, board_info, total_mb_size=16,
-                        num_sm_side=2):
+                        num_sm_side=2, clb_type="p"):
         width = board_info["width"]
         height = board_info["height"]
         margin = board_info["margin"]
@@ -573,9 +573,16 @@ class SAClusterPlacer(Annealer):
                         if blk_type not in blk_entry:
                             blk_entry[blk_type] = 0
                         blk_entry[blk_type] += 1
-                # clean up block entry if it's empty ?
 
+                # clean up block entry if it's empty
+                entry_to_remove = set()
+                for sub_m_id in sub_blocks:
+                    if len(sub_blocks[sub_m_id]) == 0:
+                        entry_to_remove.add(sub_m_id)
+                for sub_m_id in entry_to_remove:
+                    sub_blocks.pop(sub_m_id)
                 sub_blocks.update(blk_entry)
+
         for m_id in m_partitions:
             for sub_m_id in m_partitions[m_id]:
                 if not isinstance(sub_m_id, int):
@@ -589,6 +596,8 @@ class SAClusterPlacer(Annealer):
                         xx += x
                         yy += y
                         count += 1
+                if count == 0:
+                    continue
                 center_x = xx // count
                 center_y = yy // count
                 centroid_index[(m_id, sub_m_id)] = (center_x, center_y)
@@ -610,6 +619,8 @@ class SAClusterPlacer(Annealer):
                 found = False
                 for mb_type in sub_mb_table:
                     table_entry = sub_mb_table[mb_type]
+                    if len(table_entry) == 0:
+                        raise Exception("Cannot be empty")
                     found = True
                     for blk_type in table_entry:
                         if blk_type not in entry:
@@ -627,29 +638,27 @@ class SAClusterPlacer(Annealer):
                     sub_mb_table[mb_type] = entry
 
         # add mb type info
-        # NOTE: this can be improved further if clock/power down is used
+        # NOTE: this can be improved further if clock/power domain is used
         mb_index = {}
         mb_smb_table = {}
         for m_id in m_partitions:
             entry = {}
             # get the flatten version
-            for mb_id, sub_mb_id in sub_mb_index:
-                if m_id != mb_id:
+            for sub_mb_id in m_partitions[m_id]:
+                if (m_id, sub_mb_id) not in sub_mb_index:
                     continue
-                smb_type = sub_mb_index[(mb_id, sub_mb_id)]
-                if smb_type not in entry:
-                    entry[smb_type] = 0
-                entry[smb_type] += 1
+                smb_type = sub_mb_index[(m_id, sub_mb_id)]
+                entry[sub_mb_id] = smb_type
 
             found = False
             for mb_type in mb_smb_table:
                 table_entry = mb_smb_table[mb_type]
                 found = True
-                for smb_type in table_entry:
-                    if smb_type not in entry:
+                for smb_id in table_entry:
+                    if smb_id not in entry:
                         found = False
                         break
-                    if entry[smb_type] != table_entry[smb_type]:
+                    if entry[smb_id] != table_entry[smb_id]:
                         found = False
                         break
                 if found:
@@ -662,18 +671,17 @@ class SAClusterPlacer(Annealer):
                 mb_smb_table[mb_type] = entry
                 mb_index[m_id] = mb_type
 
-        # FIXME: check the location of the smb as well
         mb_table = {}
         for mb_type in mb_smb_table:
             entry = mb_smb_table[mb_type]
             table_entry = {}
-            for smb_type in entry:
-                smb_count = entry[smb_type]
+            for smb_id in entry:
+                smb_type = entry[smb_id]
                 smb_entry = sub_mb_table[smb_type]
                 for blk_type in smb_entry:
                     if blk_type not in table_entry:
                         table_entry[blk_type] = 0
-                    table_entry[blk_type] += smb_count * smb_entry[blk_type]
+                    table_entry[blk_type] += smb_entry[blk_type]
             mb_table[mb_type] = table_entry
         # check the table built for mb and smb is correct
         for mb_id in mb_index:
@@ -681,12 +689,16 @@ class SAClusterPlacer(Annealer):
             for blk_type in m_partitions[mb_id]:
                 if isinstance(blk_type, int):
                     continue
+                if blk_type == "i":
+                    continue
                 assert mb_entry[blk_type] == m_partitions[mb_id][blk_type]
         for m_id, smb_m_id in sub_mb_index:
             smb_entry = sub_mb_table[sub_mb_index[(m_id, smb_m_id)]]
             for blk_type in m_partitions[m_id][smb_m_id]:
+                if blk_type == "i":
+                    continue
                 assert smb_entry[blk_type] == \
-                       len(m_partitions[m_id][smb_m_id][blk_type])
+                    len(m_partitions[m_id][smb_m_id][blk_type])
 
         type_table = {"mb": mb_table, "smb": sub_mb_table}
         index_table = {"mb": mb_index, "smb": sub_mb_index}
@@ -968,7 +980,8 @@ class SAClusterPlacer(Annealer):
                 if different_owner or (filled != self.num_sub_mb and
                                        filled > 0):
                     for i in range(self.num_sub_mb):
-                        blocks.add((block_id, i))
+                        if (block_id, i) in state_index:
+                            blocks.add((block_id, i))
 
             assert (m_id, sub_m_id) in blocks
             blocks.remove((m_id, sub_m_id))
@@ -1333,7 +1346,7 @@ class SAClusterPlacer(Annealer):
                         entry[blk_type] += blks[blk_type]
 
         # return centroids as well
-        centroids = compute_centroids(result_cells, "p")
+        centroids = compute_centroids(result_cells, self.clb_type)
 
         return result_cells, centroids
 

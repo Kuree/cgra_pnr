@@ -51,7 +51,7 @@ def draw_cell(draw, pos, color, scale=None, width_frac=1):
 
 
 def visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe):
-    color_index = "imopr"
+    color_index = "imoprcd"
     scale = 30
     board_info = board_meta[-1]
     height, width = board_info["height"], board_info["width"]

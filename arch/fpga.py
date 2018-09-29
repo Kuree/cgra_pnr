@@ -130,7 +130,7 @@ def save_packed_netlist(arch_file, design_net_file, placement_file,
             f.write("{} {} {}\n".format(blk_id, x, y))
 
 
-def load_packed_netlist(packed_filename):
+def load_packed_fpga_netlist(packed_filename):
     netlists = {}
     blk_pos = {}
     with open(packed_filename) as f:

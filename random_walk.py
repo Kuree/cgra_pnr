@@ -8,7 +8,7 @@ from tqdm import tqdm
 from argparse import ArgumentParser
 from arch.cgra_packer import load_packed_file
 from arch.cgra import build_graph
-from arch.fpga import load_packed_netlist
+from arch.fpga import load_packed_fpga_netlist
 
 
 FILE_PATH = os.path.dirname(__file__)
@@ -165,7 +165,7 @@ def alias_draw(J, q):
 
 def build_walks(packed_filename, emb_name, is_fpga_packed):
     if is_fpga_packed:
-        netlists, _ = load_packed_netlist(packed_filename)
+        netlists, _ = load_packed_fpga_netlist(packed_filename)
         walk_length = 80
         num_walks = 10
     else:

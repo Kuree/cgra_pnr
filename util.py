@@ -3,7 +3,7 @@ import six
 
 
 def compute_hpwl(netlists, blk_pos):
-    netlist_wirelength = {}
+    hpwl = 0
     for netid in netlists:
         min_x = 10000
         max_x = -1
@@ -19,9 +19,8 @@ def compute_hpwl(netlists, blk_pos):
                 min_y = y
             if y > max_y:
                 max_y = y
-        hpwl = max_x + max_y - min_x - min_y
-        netlist_wirelength[netid] = hpwl
-    return netlist_wirelength
+        hpwl += max_x + max_y - min_x - min_y
+    return hpwl
 
 
 def deepcopy(obj_to_copy):
