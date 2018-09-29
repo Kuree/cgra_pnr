@@ -1,5 +1,5 @@
 """
-Original code from https://github.com/perrygeo/simanneal
+Original code from https://github.com/perrygeo/anneal
 Minor changes made by me (Keyi Zhang) to allow multi-processing and
 deterministic annealing.
 """
