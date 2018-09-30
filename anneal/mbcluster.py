@@ -2,7 +2,7 @@ from __future__ import division, print_function
 import random
 
 from anneal import Annealer
-from util import deepcopy, compute_centroids
+from .util import deepcopy, compute_centroids, collapse_netlist
 
 
 class SAMBClusterPlacer(Annealer):
@@ -52,7 +52,7 @@ class SAMBClusterPlacer(Annealer):
 
         # reduce netlists
         self.netlists, self.intra_cluster_count = \
-            self.__collapse_netlist(clusters, netlists, board_pos)
+            collapse_netlist(clusters, netlists, board_pos)
 
         state = self.__init_placement(cluster_ids)
         state_index = self.__build_state_index(state)
@@ -71,51 +71,7 @@ class SAMBClusterPlacer(Annealer):
         self.moves = set()
         self.count_change = None
 
-    @staticmethod
-    def __collapse_netlist(clusters, netlist, fixed_position):
-        netlist_1 = {}
-        intra_cluster_count = {}
-        for cluster_id in clusters:
-            intra_cluster_count[cluster_id] = 0
-        blk_index = {}
-        for cluster_id in clusters:
-            for blk in clusters[cluster_id]:
-                blk_index[blk] = cluster_id
 
-        # first pass
-        # remove self connection
-        for net_id in netlist:
-            net = netlist[net_id]
-            same_net = True
-            first_blk = net[0]
-            for blk in net:
-                if blk not in blk_index or \
-                        blk_index[blk] != blk_index[first_blk]:
-                    same_net = False
-                    break
-            if same_net:
-                cluster_id = blk_index[first_blk]
-                intra_cluster_count[cluster_id] += 1
-            else:
-                netlist_1[net_id] = net
-        # second pass
-        # change into x format, as well as remove redundancy
-        netlist_2 = {}
-        for net_id in netlist_1:
-            net = netlist_1[net_id]
-            new_net = set()
-            for blk in net:
-                if blk in blk_index:
-                    cluster_id = blk_index[blk]
-                    node_id = "x" + str(cluster_id)
-                else:
-                    assert blk in fixed_position
-                    node_id = blk
-                new_net.add(node_id)
-            assert len(new_net) > 1
-            netlist_2[net_id] = new_net
-
-        return netlist_2, intra_cluster_count
 
     @staticmethod
     def __index_clusters(clusters, netlist):
@@ -357,6 +313,8 @@ class SAMBClusterPlacer(Annealer):
                 for m_id in partitions:
                     if terminate:
                         break
+                    if blk_type not in partitions[m_id]:
+                        continue
                     num_blocks = partitions[m_id][blk_type]
                     if num_blocks <= 0:
                         continue

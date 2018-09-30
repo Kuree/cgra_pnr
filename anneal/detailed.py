@@ -3,7 +3,7 @@ import random
 
 from arch import group_reg_nets
 from anneal import Annealer
-from util import deepcopy, compute_hpwl
+from .util import deepcopy, compute_hpwl
 
 
 class SADetailedPlacer(Annealer):
@@ -160,6 +160,7 @@ class SADetailedPlacer(Annealer):
             for i in range(len(blks)):
                 placement[blks[i]] = cells[i]
 
+        assert len(placement) == len(self.blocks)
         return placement
 
     def __reg_net(self, pos, blk, board):
@@ -358,13 +359,8 @@ class SADetailedPlacer(Annealer):
             board_pos[blk_id] = pos
         old_hpwl = compute_hpwl(changed_nets, board_pos)
 
-        board_pos = self.blk_pos.copy()
-        for blk_id in placement:
-            if blk_id in new_pos:
-                pos = new_pos[blk_id]
-            else:
-                pos = placement[blk_id]
-            board_pos[blk_id] = pos
+        for blk_id in new_pos:
+            board_pos[blk_id] = new_pos[blk_id]
         new_hpwl = compute_hpwl(changed_nets, board_pos)
 
         final_hpwl = pre_energy + (new_hpwl - old_hpwl)
