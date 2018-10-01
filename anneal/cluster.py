@@ -300,7 +300,7 @@ class SAClusterPlacer(Annealer):
         # this is to reduce the penalty of overlapping
         box = self.random.sample(self.cluster_boxes, 1)[0]
         old_height = box.xmax - box.xmin
-        new_height = old_height + self.random.randrange(-2, 2 + 1)
+        new_height = max(old_height + self.random.randrange(-2, 2 + 1), 1)
         new_box = Box.copy_box(box)
         new_box.ymax = new_box.ymin + new_height
         self.__update_box(new_box, compute_special=False)
