@@ -262,11 +262,6 @@ class SADetailedPlacer(Annealer):
                          self.__reg_net(blk_pos, next_blk, board)):
                     self.moves.add((blk, blk_pos, next_pos))
                     self.moves.add((next_blk, next_pos, blk_pos))
-
-                    # update board
-                    # board[blk] = next_pos
-                    # self.__update_board(board, blk, blk_pos, next_pos)
-                    # self.__update_board(board, next_blk, next_pos, blk_pos)
             return
 
         if self.fold_reg:
