@@ -56,7 +56,7 @@ class SAClusterPlacer(Annealer):
 
         self.overlap_factor = 1.0 / 8
         # energy control
-        self.overlap_energy = 0
+        self.overlap_energy = 10
         self.legal_penalty = {"m": 30, "d": 100}
 
         rand = random.Random()
