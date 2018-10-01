@@ -248,12 +248,12 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                                              fixed_blk_pos,
                                              board_meta=board_meta,
                                              fold_reg=fold_reg,
-                                             seed=seed)
-                                               #num_mb=num_mb)
+                                             seed=seed)  # num_mb=num_mb)
             break
         except ClusterException as _:
             num_clusters -= 1
     if num_clusters > 0:
+        # use the following code to debug
         # cluster_placer.steps = 0
         cluster_placer.anneal()
         cluster_cells, centroids = cluster_placer.realize()

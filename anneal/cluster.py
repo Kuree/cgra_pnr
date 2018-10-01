@@ -5,7 +5,7 @@ import numpy as np
 
 from anneal import Annealer
 from .util import compute_centroids, collapse_netlist,\
-    ClusterException, compute_hpwl
+    ClusterException, compute_hpwl, manhattan_distance
 
 
 class Box:
@@ -54,9 +54,9 @@ class SAClusterPlacer(Annealer):
 
         self.debug = debug
 
-        self.overlap_factor = 1.0 / 4
+        self.overlap_factor = 1.0 / 8
         # energy control
-        self.overlap_energy = 30 / 2
+        self.overlap_energy = 0
         self.legal_penalty = {"m": 30, "d": 100}
 
         rand = random.Random()
@@ -70,8 +70,6 @@ class SAClusterPlacer(Annealer):
         for cluster_id in clusters:
             self.boxes[cluster_id] = Box()
 
-        self.complex_block_cost = 200
-
         placement = self.__init_placement(rand)
         # we don't want to recompute this, if init placement fails
         self.netlists, self.intra_cluster_count = \
@@ -79,8 +77,12 @@ class SAClusterPlacer(Annealer):
 
         energy = self.__init_energy(placement)
         state = {"placement": placement, "energy": energy}
+        print("Initial Energy", energy)
 
         Annealer.__init__(self, initial_state=state, rand=rand)
+
+        self.changes = 0
+        self.has_changed = False
 
         # speed up move
         self.cluster_boxes = []
@@ -93,7 +95,7 @@ class SAClusterPlacer(Annealer):
 
         # some scheduling stuff?
         # self.Tmax = 10
-        # self.steps = 1000
+        self.steps *= 30
 
     def __build_box_netlist_index(self):
         index = {}
@@ -246,7 +248,7 @@ class SAClusterPlacer(Annealer):
         self.moves = set()
         placement = self.state["placement"]
 
-        if self.debug:
+        if self.debug and self.has_changed:
             reference_energy = self.__init_energy(placement)
             assert reference_energy == self.state["energy"]
 
@@ -254,54 +256,51 @@ class SAClusterPlacer(Annealer):
         # first, move
         # second, swap
         # third, change shape
-        if self.random.random() < 1 / 2.0:
-            box = self.random.sample(self.cluster_boxes, 1)[0]
-            dx = self.random.randrange(-3, 3 + 1)
-            dy = self.random.randrange(-3, 3 + 1)
-            new_box = Box()
-            new_box.xmin = box.xmin + dx
-            new_box.ymin = box.ymin + dy
-            new_box.ymax = box.ymax + dy
-            new_box.total_clb_size = box.total_clb_size
-            new_box.c_id = box.c_id
-            self.__update_box(new_box, compute_special=False)
-            # to see if it's legal
-            if self.__is_legal(new_box, placement):
-                self.moves.add(new_box)
-                return
-        if self.random.random() < 1 / 3.0:
-            box1, box2 = self.random.sample(self.cluster_boxes, 2)
-            # swap their location
-            new_box1 = Box.copy_box(box1)
-            new_box2 = Box.copy_box(box2)
+        box = self.random.sample(self.cluster_boxes, 1)[0]
+        dx = self.random.randrange(-3, 3 + 1)
+        dy = self.random.randrange(-3, 3 + 1)
+        new_box = Box()
+        new_box.xmin = box.xmin + dx
+        new_box.ymin = box.ymin + dy
+        new_box.ymax = box.ymax + dy
+        new_box.total_clb_size = box.total_clb_size
+        new_box.c_id = box.c_id
+        self.__update_box(new_box, compute_special=False)
+        # to see if it's legal
+        if self.__is_legal(new_box, placement):
+            self.moves.add(new_box)
+            return
+        box1, box2 = self.random.sample(self.cluster_boxes, 2)
+        # swap their location
+        new_box1 = Box.copy_box(box1)
+        new_box2 = Box.copy_box(box2)
 
-            new_box1.xmin = box2.xmin
-            new_box1.ymin = box2.ymin
-            # compute the new end y
-            new_box1.ymax = box2.ymin + (box1.ymax - box1.ymin)
+        new_box1.xmin = box2.xmin
+        new_box1.ymin = box2.ymin
+        # compute the new end y
+        new_box1.ymax = box2.ymin + (box1.ymax - box1.ymin)
 
-            new_box2.xmin = box1.xmin
-            new_box2.ymin = box1.ymin
-            # compute the new end y
-            new_box2.ymax = box1.ymin + (box2.ymax - box2.ymin)
-            # recompute the x
-            self.__update_box(new_box1, compute_special=False)
-            self.__update_box(new_box2, compute_special=False)
-            if self.__is_legal(new_box1, placement, box2.c_id) and \
-               self.__is_legal(new_box2, placement, box1.c_id):
-                self.moves.add(new_box1)
-                self.moves.add(new_box2)
-                return
-        else:
-            # this is to reduce the penalty of overlapping
-            box = self.random.sample(self.cluster_boxes, 1)[0]
-            old_height = box.xmax - box.xmin
-            new_height = old_height + self.random.randrange(-2, 2 + 1)
-            new_box = Box.copy_box(box)
-            new_box.ymax = new_box.ymin + new_height
-            self.__update_box(new_box, compute_special=False)
-            if self.__is_legal(new_box, placement):
-                self.moves.add(new_box)
+        new_box2.xmin = box1.xmin
+        new_box2.ymin = box1.ymin
+        # compute the new end y
+        new_box2.ymax = box1.ymin + (box2.ymax - box2.ymin)
+        # recompute the x
+        self.__update_box(new_box1, compute_special=False)
+        self.__update_box(new_box2, compute_special=False)
+        if self.__is_legal(new_box1, placement, box2.c_id) and \
+           self.__is_legal(new_box2, placement, box1.c_id):
+            self.moves.add(new_box1)
+            self.moves.add(new_box2)
+            return
+        # this is to reduce the penalty of overlapping
+        box = self.random.sample(self.cluster_boxes, 1)[0]
+        old_height = box.xmax - box.xmin
+        new_height = old_height + self.random.randrange(-2, 2 + 1)
+        new_box = Box.copy_box(box)
+        new_box.ymax = new_box.ymin + new_height
+        self.__update_box(new_box, compute_special=False)
+        if self.__is_legal(new_box, placement):
+            self.moves.add(new_box)
 
     def __compute_special_blocks(self, box):
         result = {}
@@ -473,30 +472,40 @@ class SAClusterPlacer(Annealer):
     def commit_changes(self):
         for box in self.moves:
             self.state["placement"][box.c_id] = box
-
+        if len(self.moves) > 0:
+            self.changes += 1
+            self.has_changed = True
+        else:
+            self.has_changed = False
         self.moves = set()
 
-    def __get_exterior_set(self, cluster_id, cluster_cells, board,
+    def __is_cell_legal(self, pos, blk_type):
+        x, y = pos
+        if x < self.clb_margin or y < self.clb_margin:
+            return False
+        if x > self.width - self.clb_margin or \
+           y > self.height - self.clb_margin:
+            return False
+        return self.board_layout[y][x] == blk_type
+
+    def __get_exterior_set(self, cluster_id, current_cells, board,
                            max_dist=4, search_all=False):
         """board is a boolean map showing everything been taken, which doesn't
            care about overlap
         """
-        current_cells = cluster_cells[cluster_id]
         # put it on the actual board so that we can do a brute-force search
         # so we need to offset with pos
-        box = self.state[cluster_id]
+        box = self.state["placement"][cluster_id]
 
-        # leave 1 for each side
-        # TODO: be more careful about the boundaries
         result = set()
         if search_all:
             x_min, x_max = self.clb_margin, len(board[0]) - self.clb_margin
             y_min, y_max = self.clb_margin, len(board) - self.clb_margin
         else:
-            x_min, x_max = offset_x - 1, offset_x + bbox[0] + 1
-            y_min, y_max = offset_y - 1, offset_y + bbox[1] + 1
-        for y in range(y_min, y_max):
-            for x in range(x_min, x_max):
+            x_min, x_max = box.xmin - 1, box.xmax + 1
+            y_min, y_max = box.ymin - 1, box.ymax + 1
+        for y in range(y_min, y_max + 1):
+            for x in range(x_min, x_max + 1):
                 if (x, y) not in current_cells:
                     # make sure it's its own exterior
                     continue
@@ -507,59 +516,181 @@ class SAClusterPlacer(Annealer):
                     for j in range(-max_dist - 1, max_dist + 1):
                         if abs(i) + abs(j) > max_dist:
                             continue
-                        if not self.is_cell_legal(None, (x + j, y + i),
-                                                  self.clb_type):
+                        if not self.__is_cell_legal((x + j, y + i),
+                                                    self.clb_type):
                             continue
                         if (not board[y + i][x + j]) and board[y][x]:
                             p = (x + j, y + i)
-                        if (p is not None) and self.is_cell_legal(None, p,
-                                                                  self.clb_type):
+                        if (p is not None) and \
+                                self.__is_cell_legal(p, self.clb_type):
                             result.add(p)
         for p in result:
             if board[p[1]][p[0]]:
                 raise Exception("unknown error" + str(p))
         return result
 
-    def realize(self):
-        # the idea is to pull every cell positions to the center of the board
-
-
-
-        # return centroids as well
-        centroids = compute_centroids(cluster_cells)
-
-        return cluster_cells, centroids
-
     def __get_bboard(self, cluster_cells, check=True):
         bboard = np.zeros((self.height, self.width), dtype=np.bool)
         for cluster_id in cluster_cells:
-            for x, y in cluster_cells[cluster_id]:
-                if check:
-                    assert(not bboard[y][x])
-                bboard[y][x] = True
+            for blk_type in cluster_cells[cluster_id]:
+                for x, y in cluster_cells[cluster_id][blk_type]:
+                    if check:
+                        assert(not bboard[y][x])
+                    bboard[y][x] = True
         return bboard
 
-    def deoverlap(self, cluster_cells, cluster_id, overlap_set):
+    @staticmethod
+    def __compute_overlap_cells(a, b):
+        dx = min(a.xmax, b.xmax) - max(a.xmin, b.xmin)
+        dy = min(a.ymax, b.ymax) - max(a.ymin, b.ymin)
+        if (dx >= 0) and (dy >= 0):
+            # brute force compute the overlaps
+            a_pos, b_pos = set(), set()
+            for y in range(a.ymin, a.ymax + 1):
+                for x in range(a.xmin, a.xmax + 1):
+                    a_pos.add((x, y))
+            for y in range(b.ymin, b.ymax + 1):
+                for x in range(b.xmin, b.xmax + 1):
+                    b_pos.add((x, y))
+            result = a_pos.intersection(b_pos)
+            return result
+        else:
+            return set()
+
+    def realize(self):
+        # the idea is to pull every cell positions to the center of the board
+        used_special_blocks_pos = set()
+        cluster_cells = {}
+        placement = self.state["placement"]
+        # first assign special blocks
+        for c_id in self.clusters:
+            cluster = self.clusters[c_id]
+            box = placement[c_id]
+            cluster_special_blocks = \
+                self.assign_special_blocks(cluster, box,
+                                           used_special_blocks_pos)
+            cluster_cells[c_id] = cluster_special_blocks
+
+        overlaps = {}
+        bboard = self.__get_bboard(cluster_cells, False)
+        for cluster_id1 in cluster_cells:
+            box1 = placement[cluster_id1]
+            overlaps[cluster_id1] = set()
+            for cluster_id2 in cluster_cells:
+                if cluster_id1 == cluster_id2:
+                    continue
+                box2 = placement[cluster_id2]
+                overlaps[cluster_id1].update(self.__compute_overlap_cells(box1,
+                                                                          box2))
+
+        # resolve overlapping from the most overlapped region
+        cluster_ids = list(overlaps.keys())
+        cluster_ids.sort(key=lambda entry: len(overlaps[entry]) /
+                         float(placement[entry].total_clb_size),
+                         reverse=True)
+
+        for c_id in cluster_ids:
+            # assign non-overlap cells
+            box = placement[c_id]
+            cluster_overlap_cells = overlaps[c_id]
+            cluster_cells[c_id][self.clb_type] = set()
+            for y in range(box.ymin, box.ymax + 1):
+                for x in range(box.xmin, box.xmax + 1):
+                    pos = (x, y)
+                    if pos in cluster_overlap_cells:
+                        continue
+                    cluster_cells[c_id][self.clb_type].add(pos)
+            self.de_overlap(cluster_cells[c_id][self.clb_type],
+                            bboard, c_id,
+                            cluster_overlap_cells)
+
+        # return centroids as well
+        centroids = compute_centroids(cluster_cells, b_type=self.clb_type)
+
+        return cluster_cells, centroids
+
+    def assign_special_blocks(self, cluster, box, used_spots):
+        special_blks = {}
+        cells = {}
+        for blk_id in cluster:
+            blk_type = blk_id[0]
+            if blk_type != self.clb_type and blk_type != "r" and \
+                    blk_type != "i":
+                if blk_type not in special_blks:
+                    special_blks[blk_type] = 0
+                special_blks[blk_type] += 1
+
+        pos_x, pos_y = box.xmin, box.ymin
+        width, height = box.xmax - box.xmin, box.ymax - box.ymin
+        centroid = pos_x + width / 2.0, pos_y + height / 2.0
+        for x in range(pos_x, pos_x + width):
+            for y in range(pos_y, pos_y + width):
+                blk_type = self.board_layout[y][x]
+                pos = (x, y)
+                if blk_type in special_blks and pos not in used_spots:
+                    # we found one
+                    if blk_type not in cells:
+                        cells[blk_type] = set()
+                    cells[blk_type].add(pos)
+                    used_spots.add(pos)
+                    if special_blks[blk_type] > 0:
+                        special_blks[blk_type] -= 1
+
+        # here is the difficult part. if we still have blocks left to assign,
+        # we need to do an brute force search
+        available_pos = {}
+        for blk_type in special_blks:
+            available_pos[blk_type] = []
+        for y in range(len(self.board_layout)):
+            for x in range(len(self.board_layout[y])):
+                pos = (x, y)
+                blk_type = self.board_layout[y][x]
+                if pos not in used_spots and blk_type in special_blks:
+                    available_pos[blk_type].append(pos)
+        for blk_type in special_blks:
+            num_blocks = special_blks[blk_type]
+            pos_list = available_pos[blk_type]
+            if len(pos_list) < num_blocks:
+                raise Exception("Not enough blocks left for type: " + blk_type)
+            pos_list.sort(key=lambda p: manhattan_distance(p, centroid))
+            for i in range(num_blocks):
+                if blk_type not in cells:
+                    cells[blk_type] = set()
+                cells[blk_type].add(pos_list[i])
+                used_spots.add(pos_list[i])
+
+        return cells
+
+    def de_overlap(self, current_cell, bboard, cluster_id, overlap_set):
         effort_count = 0
         old_overlap_set = len(overlap_set)
-        while len(overlap_set) > 0 and effort_count < 5:
+        needed = len([x for x in self.clusters[cluster_id]
+                      if x[0] == self.clb_type])
+        cells_have = 0
+        for x, y in current_cell:
+            if self.board_layout[y][x] == self.clb_type:
+                cells_have += 1
+        while cells_have < needed and effort_count < 5:
             # boolean board
-            bboard = self.__get_bboard(cluster_cells, False)
-            ext = self.__get_exterior_set(cluster_id, cluster_cells, bboard)
+            ext = self.__get_exterior_set(cluster_id, current_cell, bboard,
+                                          max_dist=2)
             ext_list = list(ext)
             ext_list.sort(key=lambda p: manhattan_distance(p,
-                                                            self.center_of_board
-                                                            ))
+                                                           self.center_of_board
+                                                           ))
             for ex in ext_list:
                 if len(overlap_set) == 0:
                     break
-                cell = overlap_set.pop()
-                cluster_cells[cluster_id].remove(cell)
-                cluster_cells[cluster_id].add(ex)
+                overlap_set.pop()
+                current_cell.add(ex)
+                x, y = ex
+                assert not bboard[y][x]
+                bboard[y][x] = True
+                cells_have += 1
             if len(overlap_set) == old_overlap_set:
                 effort_count += 1
             else:
                 effort_count = 0
             old_overlap_set = len(overlap_set)
-        assert (len(cluster_cells[cluster_id]) == len(
-            self.clusters[cluster_id]))
+        assert (cells_have >= len(
+            [x for x in self.clusters[cluster_id] if x[0] == self.clb_type]))
