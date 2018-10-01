@@ -245,16 +245,16 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
               np.std(cluster_sizes), "total:", np.sum(cluster_sizes))
         try:
             cluster_placer = SAClusterPlacer(clusters, netlists, board,
-                                               fixed_blk_pos,
-                                               board_meta=board_meta,
-                                               fold_reg=fold_reg,
-                                               seed=seed)
+                                             fixed_blk_pos,
+                                             board_meta=board_meta,
+                                             fold_reg=fold_reg,
+                                             seed=seed)
                                                #num_mb=num_mb)
             break
         except ClusterException as _:
             num_clusters -= 1
     if num_clusters > 0:
-        cluster_placer.steps = 0
+        # cluster_placer.steps = 0
         cluster_placer.anneal()
         cluster_cells, centroids = cluster_placer.realize()
         fallback = False
@@ -354,7 +354,7 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
         num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
         pool = Pool(num_of_cpus)
         # use the following code to debug
-        detailed_placement(map_args[0])
+        # detailed_placement(map_args[0])
         results = pool.map(detailed_placement, map_args)
         pool.close()
         pool.join()

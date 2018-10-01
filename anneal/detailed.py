@@ -270,7 +270,7 @@ class SADetailedPlacer(Annealer):
             return
 
         if self.fold_reg:
-            next_pos = self.random.choice(available_pos)
+            next_pos = self.random.sample(available_pos, 1)[0]
             if next_pos in board:
                 blks = board[next_pos]
                 same_type_blocks = [b for b in blks if b[0] == blk[0]]
