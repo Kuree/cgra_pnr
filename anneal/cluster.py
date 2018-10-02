@@ -37,10 +37,7 @@ class Box:
 
 class SAClusterPlacer(Annealer):
     def __init__(self, clusters, netlists, board, fixed_pos, board_meta,
-                 fold_reg=True, seed=0, debug=True):
-        """Notice that each clusters has to be a condensed node in a networkx graph
-        whose edge denotes how many intra-cluster connections.
-        """
+                 fold_reg=True, seed=0, debug=False):
         self.clusters = clusters
         self.board = board
         self.fixed_pos = fixed_pos.copy()
@@ -99,7 +96,7 @@ class SAClusterPlacer(Annealer):
 
         # some scheduling stuff?
         # self.Tmax = 10
-        self.steps = 100000 * len(self.clusters)
+        self.steps = 10000 * len(self.clusters)
 
     def __build_box_netlist_index(self):
         index = {}
@@ -309,7 +306,8 @@ class SAClusterPlacer(Annealer):
                 if self.__is_legal(box, state):
                     state[cluster_id] = box
                     x += rand.randrange(height, height + 3)
-                    current_rows.append(height + y)
+                    spacing = rand.randrange(min(self.height // 4, 8))
+                    current_rows.append(height + y + spacing)
                     col += 1
                     break
                 x += 1
