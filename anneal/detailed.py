@@ -9,7 +9,7 @@ from .util import deepcopy, compute_hpwl
 class SADetailedPlacer(Annealer):
     def __init__(self, blocks, total_cells, netlists, raw_netlist, board,
                  board_pos, disallowed_pos,
-                 is_legal=None, fold_reg=True, seed=0, debug=False,
+                 is_legal=None, fold_reg=True, seed=0, debug=True,
                  clb_type="p"):
         """Please notice that netlists has to be prepared already, i.e., replace
         the remote partition with a pseudo block.

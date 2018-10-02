@@ -37,7 +37,7 @@ class Box:
 
 class SAClusterPlacer(Annealer):
     def __init__(self, clusters, netlists, board, fixed_pos, board_meta,
-                 fold_reg=True, seed=0, debug=False):
+                 fold_reg=True, seed=0, debug=True):
         """Notice that each clusters has to be a condensed node in a networkx graph
         whose edge denotes how many intra-cluster connections.
         """
@@ -54,7 +54,7 @@ class SAClusterPlacer(Annealer):
 
         self.debug = debug
 
-        self.overlap_factor = 1.0 / 8
+        self.overlap_factor = 1.0 / 4
         # energy control
         self.overlap_energy = 10
         self.legal_penalty = {"m": 30, "d": 100}
@@ -99,7 +99,7 @@ class SAClusterPlacer(Annealer):
 
         # some scheduling stuff?
         # self.Tmax = 10
-        self.steps = 10000 * len(self.clusters)
+        self.steps = 100000 * len(self.clusters)
 
     def __build_box_netlist_index(self):
         index = {}
@@ -138,7 +138,7 @@ class SAClusterPlacer(Annealer):
         else:
             return 0
 
-    def __is_legal(self, box, state, ignore_c_id=None):
+    def __is_legal(self, box, placement):
         # check two things
         # first, it's within the boundaries
         if box.xmin < self.clb_margin:
@@ -151,12 +151,89 @@ class SAClusterPlacer(Annealer):
             return False
 
         # second, overlapping area is under threshold
-        total_overlap = 0
-        for c_id in state:
-            if c_id == box.c_id or c_id == ignore_c_id:
-                continue
-            total_overlap += self.__compute_overlap(box, state[c_id])
-        return float(total_overlap) / box.total_clb_size < self.overlap_factor
+
+        if box.c_id not in placement:
+            # initial placement
+            # assume the current placement is legal
+            total_overlap = 0
+            for c_id in placement:
+                overlap = self.__compute_overlap(box, placement[c_id])
+                if overlap > 0:
+                    total_overlap += overlap
+            if float(total_overlap) / box.total_clb_size > self.overlap_factor:
+                return False
+            overlap_boxes = [placement[c] for c in placement if
+                             placement[c].xmax > box.xmin and
+                             placement[c].xmin < box.xmax and
+                             placement[c].ymax > box.ymin and
+                             placement[c].ymin < box.ymax]
+            revert = False
+            box_temp = None
+        else:
+            # that's movement
+            box_temp = placement[box.c_id]
+            placement[box.c_id] = box_temp
+            # recompute the entire overlap
+            # however, only recompute if there's a chance of overlap
+            overlap_boxes = [placement[c] for c in placement if
+                             placement[c].xmax > box.xmin and
+                             placement[c].xmin < box.xmax and
+                             placement[c].ymax > box.ymin and
+                             placement[c].ymin < box.ymax]
+            revert = True
+        for box1 in overlap_boxes:
+            overlap = 0
+            for c_id2 in placement:
+                if c_id2 == box1.c_id:
+                    continue
+                box2 = placement[c_id2]
+                overlap += self.__compute_overlap(box1, box2)
+            if float(overlap) / box1.total_clb_size > self.overlap_factor:
+                if revert:
+                    placement[box.c_id] = box_temp
+                return False
+            # revert back
+        if revert:
+            placement[box.c_id] = box_temp
+        return True
+
+    def __is_swap_legal(self, box1, box2, placement):
+        boxes = {box1, box2}
+        for box in boxes:
+            if not self.__is_legal(box, placement):
+                return False
+
+        # override the placement
+        old_boxes = {}
+        for box in boxes:
+            old_boxes[box.c_id] = placement[box.c_id]
+
+        for c_id1 in placement:
+            box = placement[c_id1]
+            overlap_boxes = [placement[c] for c in placement if
+                             placement[c].xmax > box.xmin and
+                             placement[c].xmin < box.xmax and
+                             placement[c].ymax > box.ymin and
+                             placement[c].ymin < box.ymax]
+            for overlap_box in overlap_boxes:
+                overlap = 0
+                for c_id2 in placement:
+                    if c_id2 == box1.c_id:
+                        continue
+                    box2 = placement[c_id2]
+                    overlap += self.__compute_overlap(overlap_box, box2)
+                if float(overlap) / overlap_box.total_clb_size > \
+                        self.overlap_factor:
+                    # revert back
+                    for c_id in old_boxes:
+                        placement[c_id] = old_boxes[c_id]
+                    return False
+
+        # revert back
+        for c_id in old_boxes:
+            placement[c_id] = old_boxes[c_id]
+
+        return True
 
     def __update_box(self, box, compute_special=True):
         # notice that this one doesn't check the legality
@@ -261,6 +338,7 @@ class SAClusterPlacer(Annealer):
         # second, swap
         # third, change shape
         box = self.random.sample(self.cluster_boxes, 1)[0]
+
         dx = self.random.randrange(-3, 3 + 1)
         dy = self.random.randrange(-3, 3 + 1)
         new_box = Box()
@@ -292,8 +370,7 @@ class SAClusterPlacer(Annealer):
             # recompute the x
             self.__update_box(new_box1, compute_special=False)
             self.__update_box(new_box2, compute_special=False)
-            if self.__is_legal(new_box1, placement, box2.c_id) and \
-               self.__is_legal(new_box2, placement, box1.c_id):
+            if self.__is_swap_legal(new_box1, new_box2, placement):
                 self.moves.add(new_box1)
                 self.moves.add(new_box2)
                 return
@@ -607,10 +684,11 @@ class SAClusterPlacer(Annealer):
             for y in range(box.ymin, box.ymax + 1):
                 for x in range(box.xmin, box.xmax + 1):
                     pos = (x, y)
-                    if pos in cluster_overlap_cells or \
+                    if bboard[y][x] or pos in cluster_overlap_cells or \
                             self.board_layout[y][x] != self.clb_type:
                         continue
                     cluster_cells[c_id][self.clb_type].add(pos)
+                    bboard[y][x] = True
             self.de_overlap(cluster_cells[c_id][self.clb_type],
                             bboard, c_id,
                             cluster_overlap_cells)
@@ -684,7 +762,7 @@ class SAClusterPlacer(Annealer):
         while cells_have < needed and effort_count < 5:
             # boolean board
             ext = self.__get_exterior_set(cluster_id, current_cell, bboard,
-                                          max_dist=effort_count + 2)
+                                          max_dist=(effort_count + 1) * 2)
             ext_list = list(ext)
             ext_list.sort(key=lambda p: manhattan_distance(p,
                                                            self.center_of_board
@@ -699,10 +777,11 @@ class SAClusterPlacer(Annealer):
                     assert not bboard[y][x]
                     bboard[y][x] = True
                     cells_have += 1
+                if cells_have > needed:
+                    break
             if len(overlap_set) == old_overlap_set:
                 effort_count += 1
             else:
                 effort_count = 0
             old_overlap_set = len(overlap_set)
-        assert (cells_have >= len(
-            [x for x in self.clusters[cluster_id] if x[0] == self.clb_type]))
+        assert (cells_have >= needed)
