@@ -74,6 +74,8 @@ def convert_netlist(board_layout, raw_result, ripple_result, skip_clk_net=True):
     sites = sites.copy()
     sites.update(fixed_sites)
 
+    blk_to_site = {}
+
     for x, y in sites:
         blk_type = board_layout[y][x]
         blk_id = blk_type + str(count)
@@ -81,6 +83,7 @@ def convert_netlist(board_layout, raw_result, ripple_result, skip_clk_net=True):
         for instance_name, slot in sites[(x, y)]:
             instance_table[instance_name] = blk_id
             instance_slot_index[instance_name] = slot
+        blk_to_site[blk_id] = (x, y)
 
     # first pass to convert instance to block id
     if not skip_clk_net:
@@ -109,7 +112,8 @@ def convert_netlist(board_layout, raw_result, ripple_result, skip_clk_net=True):
             assert blk_id == instance_table[blk]
         assert blk_id[0] == "i"
         blk_pos[blk_id] = pos
-    return final_netlist, blk_pos
+        assert blk_id in blk_to_site
+    return final_netlist, blk_pos, blk_to_site
 
 
 def save_packed_netlist(arch_file, design_net_file, placement_file,
@@ -118,7 +122,8 @@ def save_packed_netlist(arch_file, design_net_file, placement_file,
 
     raw_result = parse_raw_netlist(design_net_file)
     ripple_result = parse_ripple_placer(placement_file)
-    netlist, blk_pos = convert_netlist(board_layout, raw_result, ripple_result)
+    netlist, blk_pos, blk_to_site = \
+        convert_netlist(board_layout, raw_result, ripple_result)
 
     with open(output_file, "w+") as f:
         f.write("Netlist {0}\n".format(len(netlist)))
@@ -128,11 +133,16 @@ def save_packed_netlist(arch_file, design_net_file, placement_file,
         for blk_id in blk_pos:
             x, y = blk_pos[blk_id]
             f.write("{} {} {}\n".format(blk_id, x, y))
+        f.write("Block to Site: {0}\n".format(len(blk_to_site)))
+        for blk_id in blk_to_site:
+            x, y = blk_to_site[blk_id]
+            f.write("{} {} {}\n".format(blk_id, x, y))
 
 
 def load_packed_fpga_netlist(packed_filename):
     netlists = {}
     blk_pos = {}
+    blk_to_site = {}
     with open(packed_filename) as f:
         line = f.readline().strip()
         assert "Netlist" in line
@@ -151,7 +161,16 @@ def load_packed_fpga_netlist(packed_filename):
             blk_id, x, y = line.split()
             x, y = int(x), int(y)
             blk_pos[blk_id] = (x, y)
-    return netlists, blk_pos
+        line = f.readline()
+        assert "Block to Site: " in line
+        num_blocks = int(line[len("Block to Site: "):])
+        for i in range(num_blocks):
+            line = f.readline()
+            blk, x, y = line.split()
+            x, y = int(x), int(y)
+            blk_to_site[blk] = (x, y)
+
+    return netlists, blk_pos, blk_to_site
 
 
 if __name__ == "__main__":

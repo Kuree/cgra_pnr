@@ -128,7 +128,7 @@ def main():
 
     # FPGA
     if fpga_place:
-        netlists, fixed_blk_pos = load_packed_fpga_netlist(packed_filename)
+        netlists, fixed_blk_pos, _ = load_packed_fpga_netlist(packed_filename)
         num_of_kernels = None
         id_to_name = {}
         for blk_id in raw_emb:
