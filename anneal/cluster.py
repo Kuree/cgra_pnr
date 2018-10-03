@@ -49,6 +49,8 @@ class SAClusterPlacer(Annealer):
         self.height = board_info["height"]
         self.width = board_info["width"]
 
+        self.board_type = board_info["arch_type"]
+
         self.debug = debug
 
         self.overlap_factor = 1.0 / 4
@@ -72,7 +74,25 @@ class SAClusterPlacer(Annealer):
         for cluster_id in clusters:
             self.boxes[cluster_id] = Box()
 
-        placement = self.__init_placement(rand)
+        num_clusters = len(clusters)
+        cluster_ids = list(clusters.keys())
+        placement = None
+        if num_clusters < 2:
+            loop_range = 1
+        elif num_clusters <= 6:
+            loop_range = math.factorial(num_clusters)
+        else:
+            loop_range = num_clusters * (num_clusters - 1)
+        for i in range(loop_range):
+            try:
+                placement = self.__init_placement(cluster_ids, rand)
+                break
+            except ClusterException as _:
+                placement = None
+                rand.shuffle(cluster_ids)
+        if placement is None:
+            raise ClusterException(num_clusters)
+
         # we don't want to recompute this, if init placement fails
         self.netlists, self.intra_cluster_count = \
             collapse_netlist(clusters, netlists, fixed_pos)
@@ -96,7 +116,12 @@ class SAClusterPlacer(Annealer):
 
         # some scheduling stuff?
         # self.Tmax = 10
-        self.steps = 20000 * len(self.clusters)
+        if self.board_type == "fpga":
+            self.steps = 30000 * len(self.clusters)
+        elif self.board_type == "cgra":
+            self.steps = 60000 * len(self.clusters)
+        else:
+            raise Exception("Unrecognized board type " + self.board_type)
 
     def __build_box_netlist_index(self):
         index = {}
@@ -259,14 +284,14 @@ class SAClusterPlacer(Annealer):
                     special_blocks[blk_type] += 1
             box.special_blocks = special_blocks
 
-    def __init_placement(self, rand):
+    def __init_placement(self, cluster_ids, rand):
         state = {}
         initial_x = self.clb_margin
         x, y = initial_x, self.clb_margin
         rows = []
         current_rows = []
         col = 0
-        for cluster_id in self.clusters:
+        for cluster_id in cluster_ids:
             box = self.boxes[cluster_id]
             cluster = self.clusters[cluster_id]
             box.total_clb_size = len([c for c in cluster if c[0] ==
