@@ -45,6 +45,8 @@ class Annealer(object):
     copy_strategy = 'deepcopy'
     user_exit = False
 
+    current_step = 0
+
     # early termination
     num_nets = 0
 
@@ -143,6 +145,7 @@ class Annealer(object):
         for step in tqdm(range(self.steps)):
             step += 1
             T = self.Tmax * math.exp(Tfactor * step / self.steps)
+            self.current_step = step
             self.move()
             E = self.energy()
             dE = E - self.state["energy"]

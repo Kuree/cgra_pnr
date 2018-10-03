@@ -53,8 +53,8 @@ class SAClusterPlacer(Annealer):
 
         self.overlap_factor = 1.0 / 4
         # energy control
-        self.overlap_energy = 10
-        self.legal_penalty = {"m": 30, "d": 100}
+        self.overlap_energy = 20
+        self.legal_penalty = {"m": 30, "d": 200}
         if fold_reg:
             self.legal_ignore = {"r"}
         else:
@@ -96,7 +96,7 @@ class SAClusterPlacer(Annealer):
 
         # some scheduling stuff?
         # self.Tmax = 10
-        self.steps = 10000 * len(self.clusters)
+        self.steps = 20000 * len(self.clusters)
 
     def __build_box_netlist_index(self):
         index = {}
@@ -178,6 +178,7 @@ class SAClusterPlacer(Annealer):
                              placement[c].ymax > box.ymin and
                              placement[c].ymin < box.ymax]
             revert = True
+        overlap_boxes.append(box)
         for box1 in overlap_boxes:
             overlap = 0
             for c_id2 in placement:
@@ -268,7 +269,7 @@ class SAClusterPlacer(Annealer):
         for cluster_id in self.clusters:
             box = self.boxes[cluster_id]
             cluster = self.clusters[cluster_id]
-            box.total_clb_size = len([x for x in cluster if x[0] ==
+            box.total_clb_size = len([c for c in cluster if c[0] ==
                                       self.clb_type])
             height = int(math.ceil(box.total_clb_size ** 0.5))
             # put it on the board. notice that most of the blocks will span
@@ -305,7 +306,8 @@ class SAClusterPlacer(Annealer):
                 self.__update_box(box)
                 if self.__is_legal(box, state):
                     state[cluster_id] = box
-                    x += rand.randrange(height, height + 3)
+                    width = box.xmax - box.xmin
+                    x += width + rand.randrange(min(3, self.width // 4))
                     spacing = rand.randrange(min(self.height // 4, 8))
                     current_rows.append(height + y + spacing)
                     col += 1
@@ -332,19 +334,36 @@ class SAClusterPlacer(Annealer):
             assert reference_energy == self.state["energy"]
 
         # we have three options here
-        # first, move
-        # second, swap
-        # third, change shape
+        # 1 jump (only if steps are low)
+        # 2, move
+        # 3, swap
+        # 4, change shape
         box = self.random.sample(self.cluster_boxes, 1)[0]
+        new_box = Box()
+        new_box.total_clb_size = box.total_clb_size
+        new_box.c_id = box.c_id
+
+        if random.random() > (float(self.current_step) / self.steps * 2):
+            new_x = self.random.randrange(self.clb_margin,
+                                          self.width - self.clb_margin)
+            new_y = self.random.randrange(self.clb_margin,
+                                          self.height - self.clb_margin)
+            new_box.xmin = new_x
+            new_box.ymin = new_y
+            new_box.ymax = new_y + box.ymax - box.ymin
+            self.__update_box(new_box, compute_special=False)
+            # to see if it's legal
+            if self.__is_legal(new_box, placement):
+                self.moves.add(new_box)
+                return
 
         dx = self.random.randrange(-3, 3 + 1)
         dy = self.random.randrange(-3, 3 + 1)
-        new_box = Box()
+
         new_box.xmin = box.xmin + dx
         new_box.ymin = box.ymin + dy
         new_box.ymax = box.ymax + dy
-        new_box.total_clb_size = box.total_clb_size
-        new_box.c_id = box.c_id
+
         self.__update_box(new_box, compute_special=False)
         # to see if it's legal
         if self.__is_legal(new_box, placement):
@@ -688,8 +707,7 @@ class SAClusterPlacer(Annealer):
                     cluster_cells[c_id][self.clb_type].add(pos)
                     bboard[y][x] = True
             self.de_overlap(cluster_cells[c_id][self.clb_type],
-                            bboard, c_id,
-                            cluster_overlap_cells)
+                            bboard, c_id)
 
         # return centroids as well
         centroids = compute_centroids(cluster_cells, b_type=self.clb_type)
@@ -748,11 +766,12 @@ class SAClusterPlacer(Annealer):
 
         return cells
 
-    def de_overlap(self, current_cell, bboard, cluster_id, overlap_set):
+    def de_overlap(self, current_cell, bboard, cluster_id):
         effort_count = 0
-        old_overlap_set = len(overlap_set)
+
         needed = len([x for x in self.clusters[cluster_id]
                       if x[0] == self.clb_type])
+        old_needed = needed
         cells_have = 0
         for x, y in current_cell:
             if self.board_layout[y][x] == self.clb_type:
@@ -766,20 +785,17 @@ class SAClusterPlacer(Annealer):
                                                            self.center_of_board
                                                            ))
             for ex in ext_list:
-                if len(overlap_set) == 0:
-                    break
                 x, y = ex
                 if self.board_layout[y][x] == self.clb_type:
-                    overlap_set.pop()
                     current_cell.add(ex)
                     assert not bboard[y][x]
                     bboard[y][x] = True
                     cells_have += 1
                 if cells_have > needed:
                     break
-            if len(overlap_set) == old_overlap_set:
+            if old_needed == needed:
                 effort_count += 1
             else:
                 effort_count = 0
-            old_overlap_set = len(overlap_set)
+            old_needed = needed
         assert (cells_have >= needed)
