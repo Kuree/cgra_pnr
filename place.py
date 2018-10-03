@@ -217,12 +217,8 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
     # simple heuristics to calculate the clusters
     if fpga_place:
         num_clusters = int(np.ceil(len(emb) / 300)) + 1
-        num_mb = 400
     elif num_clusters is None or num_clusters == 0:
         num_clusters = int(np.ceil(len(emb) / 40)) + 1
-        num_mb = 16
-    else:
-        num_mb = 16
     # extra careful
     num_clusters = min(num_clusters, len(blks))
     clusters = {}

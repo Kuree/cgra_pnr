@@ -80,7 +80,7 @@ class SAClusterPlacer(Annealer):
         if num_clusters < 2:
             loop_range = 1
         elif num_clusters <= 6:
-            loop_range = math.factorial(num_clusters)
+            loop_range = int(math.factorial(num_clusters) * 1.5)
         else:
             loop_range = num_clusters * (num_clusters - 1)
         for i in range(loop_range):

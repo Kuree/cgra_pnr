@@ -4,6 +4,8 @@ import tempfile
 import random
 import subprocess
 import os
+from multiprocessing import Pool
+import multiprocessing
 from tqdm import tqdm
 from argparse import ArgumentParser
 from arch.cgra_packer import load_packed_file
@@ -15,6 +17,24 @@ FILE_PATH = os.path.dirname(__file__)
 NETLIST2VEC = os.path.join(FILE_PATH, "./word2vec")
 
 
+def parallel_generate_walk(argv):
+    walk_length = argv["walk_length"]
+    nodes = argv["nodes"]
+    rand_seed = argv["seed"]
+    obj = argv["self"]
+    rand = random.Random()
+    rand.seed(rand_seed)
+    walk = []
+
+    rand.shuffle(nodes)
+    for node in tqdm(nodes, leave=False):
+        if node[0] != "x":
+            walk.append(obj.node2vec_walk(walk_length=walk_length,
+                                          start_node=node,
+                                          rand=rand))
+    return walk
+
+
 # copied from node2vec
 class Graph():
     def __init__(self, nx_G, is_directed, p, q):
@@ -23,7 +43,7 @@ class Graph():
         self.p = p
         self.q = q
 
-    def node2vec_walk(self, walk_length, start_node):
+    def node2vec_walk(self, walk_length, start_node, rand):
         '''
         Simulate a random walk starting from start node.
         '''
@@ -38,10 +58,10 @@ class Graph():
                 cur_nbrs = sorted(G.neighbors(cur))
                 if len(cur_nbrs) > 0:
                         if len(walk) == 1:
-                                walk.append(cur_nbrs[alias_draw(alias_nodes[cur][0], alias_nodes[cur][1])])
+                                walk.append(cur_nbrs[alias_draw(rand, alias_nodes[cur][0], alias_nodes[cur][1])])
                         else:
                                 prev = walk[-2]
-                                next = cur_nbrs[alias_draw(alias_edges[(prev, cur)][0],
+                                next = cur_nbrs[alias_draw(rand, alias_edges[(prev, cur)][0],
                                         alias_edges[(prev, cur)][1])]
                                 walk.append(next)
                 else:
@@ -56,12 +76,18 @@ class Graph():
         G = self.G
         walks = []
         nodes = list(G.nodes())
-        print('Walk iteration:')
-        for walk_iter in tqdm(range(num_walks)):
-                random.shuffle(nodes)
-                for node in nodes:
-                    if node[0] != "x":
-                            walks.append(self.node2vec_walk(walk_length=walk_length, start_node=node))
+        num_of_cpus = min(multiprocessing.cpu_count(), num_walks)
+        pool = Pool(num_of_cpus)
+        map_args = []
+        for i in range(walk_length):
+            arg = {"walk_length": walk_length, "nodes": nodes, "seed": i,
+                   "self": self}
+            map_args.append(arg)
+        results = pool.map(parallel_generate_walk, map_args)
+        pool.close()
+        pool.join()
+        for r in results:
+            walks += r
 
         return walks
 
@@ -96,7 +122,7 @@ class Graph():
         alias_nodes = {}
         for node in G.nodes():
                 # unnormalized_probs = [G[node][nbr]['weight'] for nbr in sorted(G.neighbors(node))]
-                normalized_probs =  [float(1) / len(list(G.neighbors(node)))]
+                normalized_probs = [float(1) / len(list(G.neighbors(node)))]
                 alias_nodes[node] = alias_setup(normalized_probs)
 
         alias_edges = {}
@@ -149,14 +175,14 @@ def alias_setup(probs):
     return J, q
 
 
-def alias_draw(J, q):
+def alias_draw(rand, J, q):
     '''
     Draw sample from a non-uniform discrete distribution using alias sampling.
     '''
     K = len(J)
 
-    kk = int(np.floor(np.random.rand()*K))
-    if np.random.rand() < q[kk]:
+    kk = int(np.floor(rand.random()*K))
+    if random.random() < q[kk]:
         return kk
     else:
         return J[kk]
@@ -164,13 +190,13 @@ def alias_draw(J, q):
 
 def build_walks(packed_filename, emb_name, is_fpga_packed):
     if is_fpga_packed:
-        netlists, _ = load_packed_fpga_netlist(packed_filename)
+        netlists, _, _ = load_packed_fpga_netlist(packed_filename)
         walk_length = 40
         num_walks = 10
     else:
         netlists, _, _, _ = load_packed_file(packed_filename)
-        walk_length = 40
-        num_walks = 15
+        walk_length = 50
+        num_walks = 10
 
     nx_g = build_graph(netlists, is_fpga_packed)
     p = 0.6
@@ -205,17 +231,10 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="Output embedding file, " +
                         "e.g. harris.emb",
                         required=True, action="store", dest="output")
-    parser.add_argument("-s", "--seed", help="Seed for random walk. " +
-                        "default is 0", type=int, default=0,
-                        required=False, action="store", dest="seed")
     parser.add_argument("--fpga", action="store_true", dest="is_fpga",
                         default=False, help="Use this flag when working with"
                                             "ISPD packed netlist")
     args = parser.parse_args()
-    seed = args.seed
-    print("Using seed", seed, "for random walk")
-    random.seed(seed)
-    np.random.seed(seed)
     input_file = args.input
     output_file = args.output
     is_fpga = args.is_fpga
