@@ -2,6 +2,7 @@ from __future__ import division, print_function
 import random
 import math
 import numpy as np
+import itertools
 
 from anneal import Annealer
 from .util import compute_centroids, collapse_netlist,\
@@ -33,6 +34,9 @@ class Box:
         new_box.special_blocks = box.special_blocks
 
         return new_box
+
+    def __repr__(self):
+        return "x {} y {}".format(self.xmin, self.ymin)
 
 
 class SAClusterPlacer(Annealer):
@@ -77,10 +81,11 @@ class SAClusterPlacer(Annealer):
         num_clusters = len(clusters)
         cluster_ids = list(clusters.keys())
         placement = None
+        cluster_it = itertools.permutations(cluster_ids)
         if num_clusters < 2:
             loop_range = 1
         elif num_clusters <= 6:
-            loop_range = int(math.factorial(num_clusters) * 1.5)
+            loop_range = int(math.factorial(num_clusters))
         else:
             loop_range = num_clusters * (num_clusters - 1)
         for i in range(loop_range):
@@ -89,7 +94,7 @@ class SAClusterPlacer(Annealer):
                 break
             except ClusterException as _:
                 placement = None
-                rand.shuffle(cluster_ids)
+                cluster_ids = next(cluster_it)
         if placement is None:
             raise ClusterException(num_clusters)
 
@@ -368,7 +373,7 @@ class SAClusterPlacer(Annealer):
         new_box.total_clb_size = box.total_clb_size
         new_box.c_id = box.c_id
 
-        if random.random() > (float(self.current_step) / self.steps * 2):
+        if self.random.random() > (float(self.current_step) / self.steps * 2):
             new_x = self.random.randrange(self.clb_margin,
                                           self.width - self.clb_margin)
             new_y = self.random.randrange(self.clb_margin,

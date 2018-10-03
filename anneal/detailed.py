@@ -72,7 +72,7 @@ class SADetailedPlacer(Annealer):
         Annealer.__init__(self, initial_state=state, rand=rand)
 
         # schedule
-        self.steps = len(blocks) * 500
+        self.steps = len(blocks) * 600
         self.num_nets = len(netlists)
 
         # fast calculation
@@ -155,8 +155,11 @@ class SADetailedPlacer(Annealer):
             if len(blks) == 0:
                 continue
             # random pick up some blocks
-            available_cells = special_cells[blk_type]
+            available_cells = list(special_cells[blk_type])
+            available_cells.sort(key=lambda p: p[0])
+            available_cells.sort(key=lambda p: p[1])
             cells = rand.sample(available_cells, len(blks))
+            blks.sort(key=lambda x: int(x[1:]))
             for i in range(len(blks)):
                 placement[blks[i]] = cells[i]
 

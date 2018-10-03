@@ -32,7 +32,7 @@ def parallel_generate_walk(argv):
             walk.append(obj.node2vec_walk(walk_length=walk_length,
                                           start_node=node,
                                           rand=rand))
-    return walk
+    return {"index": argv["index"], "walk": walk}
 
 
 # copied from node2vec
@@ -81,13 +81,14 @@ class Graph():
         map_args = []
         for i in range(walk_length):
             arg = {"walk_length": walk_length, "nodes": nodes, "seed": i,
-                   "self": self}
+                   "index": i, "self": self}
             map_args.append(arg)
         results = pool.map(parallel_generate_walk, map_args)
         pool.close()
         pool.join()
+        results.sort(key=lambda x: x["index"])
         for r in results:
-            walks += r
+            walks += r["walk"]
 
         return walks
 
@@ -182,7 +183,7 @@ def alias_draw(rand, J, q):
     K = len(J)
 
     kk = int(np.floor(rand.random()*K))
-    if random.random() < q[kk]:
+    if rand.random() < q[kk]:
         return kk
     else:
         return J[kk]
@@ -195,8 +196,8 @@ def build_walks(packed_filename, emb_name, is_fpga_packed):
         num_walks = 10
     else:
         netlists, _, _, _ = load_packed_file(packed_filename)
-        walk_length = 50
-        num_walks = 10
+        walk_length = 20
+        num_walks = 8
 
     nx_g = build_graph(netlists, is_fpga_packed)
     p = 0.6
