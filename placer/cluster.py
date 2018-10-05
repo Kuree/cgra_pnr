@@ -5,38 +5,10 @@ import numpy as np
 import itertools
 
 from placer import Annealer
+from placer.util import Box
 from .util import compute_centroids, collapse_netlist,\
-    ClusterException, compute_hpwl, manhattan_distance
-
-
-class Box:
-    xmin = 10000
-    xmax = -1
-    ymin = 10000
-    ymax = -1
-
-    total_clb_size = 0
-    c_id = 0
-
-    special_blocks = {}
-
-    @staticmethod
-    def copy_box(box):
-        new_box = Box()
-        new_box.xmin = box.xmin
-        new_box.ymin = box.ymin
-        new_box.xmax = box.xmax
-        new_box.ymax = box.ymax
-
-        new_box.total_clb_size = box.total_clb_size
-        new_box.c_id = box.c_id
-        # no need to copy since this will never change
-        new_box.special_blocks = box.special_blocks
-
-        return new_box
-
-    def __repr__(self):
-        return "x {} y {}".format(self.xmin, self.ymin)
+    ClusterException, compute_hpwl, manhattan_distance,\
+    analyze_lanes
 
 
 class SAClusterPlacer(Annealer):
@@ -72,8 +44,8 @@ class SAClusterPlacer(Annealer):
         self.fold_reg = fold_reg
 
         self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)
-        self.block_lanes = self.analyze_lanes(self.clb_margin,
-                                              self.board_layout)
+        self.block_lanes = analyze_lanes(self.clb_margin,
+                                         self.board_layout)
         self.boxes = {}
         for cluster_id in clusters:
             self.boxes[cluster_id] = Box()
@@ -137,24 +109,6 @@ class SAClusterPlacer(Annealer):
                     index[c_id] = set()
                 index[c_id].add(net_id)
         return index
-
-    @staticmethod
-    def analyze_lanes(clb_margin, board):
-        height = len(board)
-        width = len(board[0])
-        lane_type = [None for _ in range(width)]
-        for x in range(clb_margin, width - clb_margin):
-            for y in range(clb_margin, height - clb_margin):
-                blk_type = board[y][x]
-                if blk_type is None:
-                    continue
-                if lane_type[x] is None:
-                    lane_type[x] = blk_type
-                else:
-                    # for CGRA
-                    if lane_type[x] != "i":
-                        assert lane_type[x] == blk_type
-        return lane_type
 
     @staticmethod
     def __compute_overlap(a, b):

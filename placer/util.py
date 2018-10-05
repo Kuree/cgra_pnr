@@ -1,4 +1,5 @@
 import six
+import numpy as np
 
 
 def compute_hpwl(netlists, blk_pos):
@@ -133,3 +134,72 @@ def collapse_netlist(clusters, netlist, fixed_position):
 class ClusterException(Exception):
     def __init__(self, num_clusters):
         self.num_clusters = num_clusters
+
+
+class Box:
+    xmin = 10000
+    xmax = -1
+    ymin = 10000
+    ymax = -1
+
+    total_clb_size = 0
+    c_id = 0
+
+    special_blocks = {}
+
+    @staticmethod
+    def copy_box(box):
+        new_box = Box()
+        new_box.xmin = box.xmin
+        new_box.ymin = box.ymin
+        new_box.xmax = box.xmax
+        new_box.ymax = box.ymax
+
+        new_box.total_clb_size = box.total_clb_size
+        new_box.c_id = box.c_id
+        # no need to copy since this will never change
+        new_box.special_blocks = box.special_blocks
+
+        return new_box
+
+    def __repr__(self):
+        return "x {} y {}".format(self.xmin, self.ymin)
+
+
+def analyze_lanes(clb_margin, board_layout):
+    height = len(board_layout)
+    width = len(board_layout[0])
+    lane_type = [None for _ in range(width)]
+    for x in range(clb_margin, width - clb_margin):
+        for y in range(clb_margin, height - clb_margin):
+            blk_type = board_layout[y][x]
+            if blk_type is None:
+                continue
+            if lane_type[x] is None:
+                lane_type[x] = blk_type
+            else:
+                # for CGRA
+                if lane_type[x] != "i":
+                    assert lane_type[x] == blk_type
+    return lane_type
+
+
+def compute_connections(blocks, netlists):
+    num_blocks = len(blocks)
+    index_result = np.zeros((num_blocks, num_blocks))
+    blk_index = {}
+    for i, blk in enumerate(blocks):
+        blk_index[blk] = i
+
+    for net_id in netlists:
+        net = netlists[net_id]
+        for blk1 in net:
+            for blk2 in net:
+                if blk1 == blk2:
+                    continue
+                index1 = blk_index[blk1]
+                index2 = blk_index[blk2]
+                index_result[index1, index2] += 1
+                index_result[index2, index1] += 1
+
+    return index_result, blk_index
