@@ -4,7 +4,7 @@ import math
 import numpy as np
 import itertools
 
-from anneal import Annealer
+from placer import Annealer
 from .util import compute_centroids, collapse_netlist,\
     ClusterException, compute_hpwl, manhattan_distance
 

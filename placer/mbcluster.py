@@ -1,7 +1,7 @@
 from __future__ import division, print_function
 import random
 
-from anneal import Annealer
+from placer import Annealer
 from .util import deepcopy, compute_centroids, collapse_netlist
 
 

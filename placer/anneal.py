@@ -1,5 +1,5 @@
 """
-Original code from https://github.com/perrygeo/anneal
+Original code from https://github.com/perrygeo/placer
 Minor changes made by me (Keyi Zhang) to allow multi-processing and
 deterministic annealing.
 """
@@ -201,7 +201,7 @@ class Annealer(object):
         step = 0
         self.start = time.time()
 
-        # Attempting automatic simulated anneal...
+        # Attempting automatic simulated placer...
         # Find an initial guess for temperature
         T = 0.0
         E = self.energy()
@@ -231,10 +231,10 @@ class Annealer(object):
             step += steps
         Tmin = T
 
-        # Calculate anneal duration
+        # Calculate placer duration
         elapsed = time.time() - self.start
         duration = round_figures(int(60.0 * minutes * step / elapsed), 2)
 
-        # Don't perform anneal, just return params
+        # Don't perform placer, just return params
         return {'tmax': Tmax, 'tmin': Tmin, 'steps': duration, 'updates':
                  self.updates}

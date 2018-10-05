@@ -2,8 +2,8 @@ from __future__ import print_function
 from util import reduce_cluster_graph
 from argparse import ArgumentParser
 from arch.parser import parse_emb
-from anneal import SAMBClusterPlacer, ClusterException
-from anneal import SADetailedPlacer, SAClusterPlacer
+from placer import SAMBClusterPlacer, ClusterException
+from placer import SADetailedPlacer, SAClusterPlacer
 from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
 import numpy as np
 import os
@@ -177,7 +177,7 @@ def main():
         board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
         seed=seed, fpga_place=fpga_place)
 
-    # anneal with each cluster
+    # placer with each cluster
     board_pos = perform_detailed_placement(board, centroids,
                                            cluster_cells, clusters,
                                            fixed_blk_pos, netlists,

@@ -173,9 +173,30 @@ def load_packed_fpga_netlist(packed_filename):
     return netlists, blk_pos, blk_to_site
 
 
+def convert_to_ispd_placement(ripple_placement_fn, fpga_placement_fn,
+                              output_fn):
+    from .cgra import parse_placement
+    sites, fixed_sites = parse_ripple_placer(ripple_placement_fn)
+    sites.update(fixed_sites)
+    placements, _ = parse_placement(fpga_placement_fn)
+    packing_file = fpga_placement_fn.replace(".place", ".packed")
+    _, _, blk_to_site = load_packed_fpga_netlist(packing_file)
+    with open(output_fn, "w+") as f:
+        for blk_id in placements:
+            pos = placements[blk_id]
+            site_pos = blk_to_site[blk_id]
+            x, y = pos
+            for instance in sites[site_pos]:
+                f.write("{} {} {} {}\n".format(instance[0], x, y, instance[1]))
+
+
 if __name__ == "__main__":
     import sys
     import arch
+
+    if len(sys.argv) == 4:
+        convert_to_ispd_placement(sys.argv[1], sys.argv[2], sys.argv[3])
+        exit(0)
 
     if len(sys.argv) != 5:
         print("Usage:", sys.argv[0], "<design.scl>", "<design.nets>",

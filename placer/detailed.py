@@ -2,7 +2,7 @@ from __future__ import division, print_function
 import random
 
 from arch import group_reg_nets
-from anneal import Annealer
+from placer import Annealer
 from .util import deepcopy, compute_hpwl
 
 
