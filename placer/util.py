@@ -165,6 +165,9 @@ class Box:
     def __repr__(self):
         return "x {} y {}".format(self.xmin, self.ymin)
 
+    def __eq__(self, other):
+        return self.c_id == other.c_id
+
 
 def analyze_lanes(clb_margin, board_layout):
     height = len(board_layout)
@@ -197,8 +200,16 @@ def compute_connections(blocks, netlists):
             for blk2 in net:
                 if blk1 == blk2:
                     continue
-                index1 = blk_index[blk1]
-                index2 = blk_index[blk2]
+                if blk1[0] != "i":
+                    blk1_id = int(blk1[1:])
+                else:
+                    blk1_id = blk1
+                if blk2[0] != "i":
+                    blk2_id = int(blk2[1:])
+                else:
+                    blk2_id = blk2
+                index1 = blk_index[blk1_id]
+                index2 = blk_index[blk2_id]
                 index_result[index1, index2] += 1
                 index_result[index2, index1] += 1
 

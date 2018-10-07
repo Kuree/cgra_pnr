@@ -243,61 +243,6 @@ class SAClusterPlacer(Annealer):
                     special_blocks[blk_type] += 1
             box.special_blocks = special_blocks
 
-    def __init_placement(self, cluster_ids, rand):
-        state = {}
-        initial_x = self.clb_margin
-        x, y = initial_x, self.clb_margin
-        rows = []
-        current_rows = []
-        col = 0
-        for cluster_id in cluster_ids:
-            box = self.boxes[cluster_id]
-            cluster = self.clusters[cluster_id]
-            box.total_clb_size = len([c for c in cluster if c[0] ==
-                                      self.clb_type])
-            height = int(math.ceil(box.total_clb_size ** 0.5))
-            # put it on the board. notice that most of the blocks will span
-            # the complex lanes. hence we need to be extra careful
-
-            # aggressively packed them into the board
-            # NOTE some of the info here are board specific
-            # this avoids infinite loop, as well as allow searching for the
-            # entire board
-            visited = set()
-            while True:
-                if x >= self.width:
-                    x = initial_x
-                    rows = current_rows
-                    current_rows = []
-                    col = 0
-                if len(rows) > 0:
-                    if col < len(rows):
-                        y = rows[col]
-                    else:
-                        y = rows[-1]
-                else:
-                    y = self.clb_margin
-
-                pos = (x, y)
-                if pos in visited:
-                    raise ClusterException(cluster_id)
-                else:
-                    visited.add(pos)
-                box.xmin = x
-                box.ymin = y
-                box.ymax = y + height
-                box.c_id = cluster_id
-                self.__update_box(box)
-                if self.__is_legal(box, state):
-                    state[cluster_id] = box
-                    width = box.xmax - box.xmin
-                    x += width + rand.randrange(min(3, self.width // 4))
-                    spacing = rand.randrange(min(self.height // 4, 8))
-                    current_rows.append(height + y + spacing)
-                    col += 1
-                    break
-                x += 1
-        return state
 
     @staticmethod
     def compute_center(placement):
