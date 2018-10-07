@@ -2,20 +2,19 @@ from __future__ import division, print_function
 import random
 import math
 import numpy as np
-import itertools
+from .analytical import GlobalPlacer
 
 from placer import Annealer
 from placer.util import Box
 from .util import compute_centroids, collapse_netlist,\
-    ClusterException, compute_hpwl, manhattan_distance,\
+    compute_hpwl, manhattan_distance,\
     analyze_lanes
 
 
 class SAClusterPlacer(Annealer):
-    def __init__(self, clusters, netlists, board, fixed_pos, board_meta,
-                 fold_reg=True, seed=0, debug=False):
+    def __init__(self, clusters, netlists, fixed_pos, board_meta,
+                 fold_reg=True, seed=0, debug=True):
         self.clusters = clusters
-        self.board = board
         self.fixed_pos = fixed_pos.copy()
 
         board_info = board_meta[-1]
@@ -24,14 +23,14 @@ class SAClusterPlacer(Annealer):
         self.clb_margin = board_info["margin"]
         self.height = board_info["height"]
         self.width = board_info["width"]
-
         self.board_type = board_info["arch_type"]
+        self.center_of_board = (self.width / 2, self.height / 2)
 
         self.debug = debug
 
         self.overlap_factor = 1.0 / 4
         # energy control
-        self.overlap_energy = 20
+        self.overlap_energy = 30
         self.legal_penalty = {"m": 30, "d": 200}
         if fold_reg:
             self.legal_ignore = {"r"}
@@ -43,39 +42,24 @@ class SAClusterPlacer(Annealer):
 
         self.fold_reg = fold_reg
 
-        self.center_of_board = (len(self.board[0]) // 2, len(self.board) // 2)
         self.block_lanes = analyze_lanes(self.clb_margin,
                                          self.board_layout)
         self.boxes = {}
         for cluster_id in clusters:
             self.boxes[cluster_id] = Box()
 
-        num_clusters = len(clusters)
-        cluster_ids = list(clusters.keys())
-        placement = None
-        cluster_it = itertools.permutations(cluster_ids)
-        if num_clusters < 2:
-            loop_range = 1
-        elif num_clusters <= 6:
-            loop_range = int(math.factorial(num_clusters))
-        else:
-            loop_range = num_clusters * (num_clusters - 1)
-        for i in range(loop_range):
-            try:
-                placement = self.__init_placement(cluster_ids, rand)
-                break
-            except ClusterException as _:
-                placement = None
-                cluster_ids = next(cluster_it)
-        if placement is None:
-            raise ClusterException(num_clusters)
-
-        # we don't want to recompute this, if init placement fails
         self.netlists, self.intra_cluster_count = \
             collapse_netlist(clusters, netlists, fixed_pos)
 
+        self.global_placer = GlobalPlacer(clusters, self.netlists, fixed_pos,
+                                          board_meta,
+                                          block_lanes=self.block_lanes,
+                                          fold_reg=fold_reg)
+        placement = self.global_placer.place()
+
         energy = self.__init_energy(placement)
         state = {"placement": placement, "energy": energy}
+        self.init_energy = energy
 
         Annealer.__init__(self, initial_state=state, rand=rand)
 
@@ -91,14 +75,10 @@ class SAClusterPlacer(Annealer):
         self.cluster_index = self.__build_box_netlist_index()
         self.moves = set()
 
-        # some scheduling stuff?
-        # self.Tmax = 10
-        if self.board_type == "fpga":
-            self.steps = 30000 * len(self.clusters)
-        elif self.board_type == "cgra":
-            self.steps = 60000 * len(self.clusters)
-        else:
-            raise Exception("Unrecognized board type " + self.board_type)
+        # low temperature annealing
+        self.Tmax = 10
+        self.Tmin = 0.1
+        self.steps = 3000 * len(self.clusters)
 
     def __build_box_netlist_index(self):
         index = {}
@@ -119,7 +99,7 @@ class SAClusterPlacer(Annealer):
         else:
             return 0
 
-    def __is_legal(self, box, placement):
+    def __is_legal(self, box):
         # check two things
         # first, it's within the boundaries
         if box.xmin < self.clb_margin:
@@ -131,89 +111,13 @@ class SAClusterPlacer(Annealer):
         if box.ymax >= self.height - self.clb_margin:
             return False
 
-        # second, overlapping area is under threshold
-
-        if box.c_id not in placement:
-            # initial placement
-            # assume the current placement is legal
-            total_overlap = 0
-            for c_id in placement:
-                overlap = self.__compute_overlap(box, placement[c_id])
-                if overlap > 0:
-                    total_overlap += overlap
-            if float(total_overlap) / box.total_clb_size > self.overlap_factor:
-                return False
-            overlap_boxes = [placement[c] for c in placement if
-                             placement[c].xmax > box.xmin and
-                             placement[c].xmin < box.xmax and
-                             placement[c].ymax > box.ymin and
-                             placement[c].ymin < box.ymax]
-            revert = False
-            box_temp = None
-        else:
-            # that's movement
-            box_temp = placement[box.c_id]
-            placement[box.c_id] = box_temp
-            # recompute the entire overlap
-            # however, only recompute if there's a chance of overlap
-            overlap_boxes = [placement[c] for c in placement if
-                             placement[c].xmax > box.xmin and
-                             placement[c].xmin < box.xmax and
-                             placement[c].ymax > box.ymin and
-                             placement[c].ymin < box.ymax]
-            revert = True
-        overlap_boxes.append(box)
-        for box1 in overlap_boxes:
-            overlap = 0
-            for c_id2 in placement:
-                if c_id2 == box1.c_id:
-                    continue
-                box2 = placement[c_id2]
-                overlap += self.__compute_overlap(box1, box2)
-            if float(overlap) / box1.total_clb_size > self.overlap_factor:
-                if revert:
-                    placement[box.c_id] = box_temp
-                return False
-            # revert back
-        if revert:
-            placement[box.c_id] = box_temp
         return True
 
-    def __is_swap_legal(self, box1, box2, placement):
+    def __is_swap_legal(self, box1, box2):
         boxes = {box1, box2}
         for box in boxes:
-            if not self.__is_legal(box, placement):
+            if not self.__is_legal(box):
                 return False
-
-        # override the placement
-        old_boxes = {}
-        for box in boxes:
-            old_boxes[box.c_id] = placement[box.c_id]
-
-        for c_id1 in placement:
-            box = placement[c_id1]
-            overlap_boxes = [placement[c] for c in placement if
-                             placement[c].xmax > box.xmin and
-                             placement[c].xmin < box.xmax and
-                             placement[c].ymax > box.ymin and
-                             placement[c].ymin < box.ymax]
-            for overlap_box in overlap_boxes:
-                overlap = 0
-                for c_id2 in placement:
-                    if c_id2 == box1.c_id:
-                        continue
-                    box2 = placement[c_id2]
-                    overlap += self.__compute_overlap(overlap_box, box2)
-                if float(overlap) / overlap_box.total_clb_size > \
-                        self.overlap_factor:
-                    # revert back
-                    for c_id in old_boxes:
-                        placement[c_id] = old_boxes[c_id]
-                    return False
-
-        # revert back
-        for c_id in old_boxes:
-            placement[c_id] = old_boxes[c_id]
 
         return True
 
@@ -243,7 +147,6 @@ class SAClusterPlacer(Annealer):
                     special_blocks[blk_type] += 1
             box.special_blocks = special_blocks
 
-
     @staticmethod
     def compute_center(placement):
         result = {}
@@ -258,7 +161,7 @@ class SAClusterPlacer(Annealer):
         self.moves = set()
         placement = self.state["placement"]
 
-        if self.debug and self.has_changed:
+        if self.debug:
             reference_energy = self.__init_energy(placement)
             assert reference_energy == self.state["energy"]
 
@@ -268,26 +171,10 @@ class SAClusterPlacer(Annealer):
         # 3, swap
         # 4, change shape
         box = self.random.sample(self.cluster_boxes, 1)[0]
-        new_box = Box()
-        new_box.total_clb_size = box.total_clb_size
-        new_box.c_id = box.c_id
+        new_box = Box.copy_box(box)
 
-        if self.random.random() > (float(self.current_step) / self.steps * 2):
-            new_x = self.random.randrange(self.clb_margin,
-                                          self.width - self.clb_margin)
-            new_y = self.random.randrange(self.clb_margin,
-                                          self.height - self.clb_margin)
-            new_box.xmin = new_x
-            new_box.ymin = new_y
-            new_box.ymax = new_y + box.ymax - box.ymin
-            self.__update_box(new_box, compute_special=False)
-            # to see if it's legal
-            if self.__is_legal(new_box, placement):
-                self.moves.add(new_box)
-                return
-
-        dx = self.random.randrange(-3, 3 + 1)
-        dy = self.random.randrange(-3, 3 + 1)
+        dx = self.random.randrange(-1, 1 + 1)
+        dy = self.random.randrange(-1, 1 + 1)
 
         new_box.xmin = box.xmin + dx
         new_box.ymin = box.ymin + dy
@@ -295,39 +182,7 @@ class SAClusterPlacer(Annealer):
 
         self.__update_box(new_box, compute_special=False)
         # to see if it's legal
-        if self.__is_legal(new_box, placement):
-            self.moves.add(new_box)
-            return
-        if len(self.cluster_boxes) > 1:
-            box1, box2 = self.random.sample(self.cluster_boxes, 2)
-            # swap their location
-            new_box1 = Box.copy_box(box1)
-            new_box2 = Box.copy_box(box2)
-
-            new_box1.xmin = box2.xmin
-            new_box1.ymin = box2.ymin
-            # compute the new end y
-            new_box1.ymax = box2.ymin + (box1.ymax - box1.ymin)
-
-            new_box2.xmin = box1.xmin
-            new_box2.ymin = box1.ymin
-            # compute the new end y
-            new_box2.ymax = box1.ymin + (box2.ymax - box2.ymin)
-            # recompute the x
-            self.__update_box(new_box1, compute_special=False)
-            self.__update_box(new_box2, compute_special=False)
-            if self.__is_swap_legal(new_box1, new_box2, placement):
-                self.moves.add(new_box1)
-                self.moves.add(new_box2)
-                return
-        # this is to reduce the penalty of overlapping
-        box = self.random.sample(self.cluster_boxes, 1)[0]
-        old_height = box.xmax - box.xmin
-        new_height = max(old_height + self.random.randrange(-2, 2 + 1), 1)
-        new_box = Box.copy_box(box)
-        new_box.ymax = new_box.ymin + new_height
-        self.__update_box(new_box, compute_special=False)
-        if self.__is_legal(new_box, placement):
+        if self.__is_legal(new_box):
             self.moves.add(new_box)
 
     def __compute_special_blocks(self, box):
@@ -401,15 +256,11 @@ class SAClusterPlacer(Annealer):
         placement = self.state["placement"]
         energy = self.state["energy"]
         changed_nets = {}
-        changed_boxes = {}
-        for box in self.moves:
-            changed_boxes[box.c_id] = placement[box.c_id]
+        assert len(self.moves) == 1
+        box = self.moves.pop()
 
         # first, compute the new HWPL
-        changed_net_id = set()
-        for new_box in self.moves:
-            c_id = new_box.c_id
-            changed_net_id.update(self.cluster_index[c_id])
+        changed_net_id = self.cluster_index[box.c_id]
 
         for net_id in changed_net_id:
             changed_nets[net_id] = self.netlists[net_id]
@@ -421,78 +272,62 @@ class SAClusterPlacer(Annealer):
             blk_pos[c_id] = centers[node_id]
         old_hpwl = compute_hpwl(changed_nets, blk_pos)
 
-        if len(self.moves) == 1:
-            old_overlap = 0
-            for c_id in changed_boxes:
-                box1 = changed_boxes[c_id]
-                for c_id_next in placement:
-                    if c_id == c_id_next:
-                        continue
-                    box2 = placement[c_id_next]
-                    old_overlap += self.__compute_overlap(box1, box2)
-            for c_id in placement:
-                box1 = placement[c_id]
-                for next_c_id in changed_boxes:
-                    if c_id == next_c_id:
-                        continue
-                    box2 = changed_boxes[next_c_id]
-                    old_overlap += self.__compute_overlap(box1, box2)
-        else:
-            assert len(self.moves) == 2
-            old_overlap = self.__compute_total_overlap(placement)
+        old_overlap = 0
+        for c_id_next in placement:
+            if box.c_id == c_id_next:
+                continue
+            box2 = placement[c_id_next]
+            old_overlap += self.__compute_overlap(box, box2)
+        for c_id in placement:
+            box1 = placement[c_id]
+            if c_id == box.c_id:
+                continue
+            old_overlap += self.__compute_overlap(box1, box)
 
-        old_legalize_energy = self.__compute_legal_energy(changed_boxes)
+        old_legalize_energy = self.__compute_legal_energy({box.c_id: box})
 
         # compute the new energy
         # some implementation details:
         # 1. we temporarily override the placement and then restore it
         # 2. only compute the old/new energy for changed boxes
 
-        new_placement = {}
-        for box in self.moves:
-            placement[box.c_id] = box
-            new_placement[box.c_id] = box
+        new_placement = {box.c_id: box}
+        placement[box.c_id] = box
 
         centers = self.compute_center(new_placement)
-        for box in self.moves:
-            node_id = box.c_id
-            c_id = "x" + str(node_id)
-            blk_pos[c_id] = centers[node_id]
+
+        node_id = box.c_id
+        c_id = "x" + str(node_id)
+        blk_pos[c_id] = centers[node_id]
         new_hpwl = compute_hpwl(changed_nets, blk_pos)
         # new_hpwl = compute_hpwl(self.netlists, blk_pos)
 
-        if len(self.moves) == 1:
-            new_overlap = 0
-            for box1 in self.moves:
-                c_id = box1.c_id
-                for c_id_next in placement:
-                    if c_id == c_id_next:
-                        continue
-                    box2 = placement[c_id_next]
-                    new_overlap += self.__compute_overlap(box1, box2)
-            for c_id in placement:
-                box1 = placement[c_id]
-                for box2 in self.moves:
-                    if c_id == box2.c_id:
-                        continue
-                    new_overlap += self.__compute_overlap(box1, box2)
-        else:
-            new_overlap = self.__compute_total_overlap(placement)
+        new_overlap = 0
+        c_id = box.c_id
+        for c_id_next in placement:
+            if c_id == c_id_next:
+                continue
+            box2 = placement[c_id_next]
+            new_overlap += self.__compute_overlap(box, box2)
+        for c_id in placement:
+            box1 = placement[c_id]
+            if c_id == box.c_id:
+                continue
+            new_overlap += self.__compute_overlap(box1, box)
 
         new_legalize_energy = 0
-        for box in self.moves:
-            blk_count = self.__compute_special_blocks(box)
-            for blk_type in blk_count:
-                if blk_type in self.legal_ignore:
-                    continue
-                remaining = blk_count[blk_type] - box.special_blocks[blk_type]
-                if remaining < 0:
-                    new_legalize_energy += abs(remaining) * \
-                                           self.legal_penalty[blk_type]
+
+        blk_count = self.__compute_special_blocks(box)
+        for blk_type in blk_count:
+            if blk_type in self.legal_ignore:
+                continue
+            remaining = blk_count[blk_type] - box.special_blocks[blk_type]
+            if remaining < 0:
+                new_legalize_energy += abs(remaining) * \
+                                       self.legal_penalty[blk_type]
         # new_legalize_energy = self.__compute_legal_energy(placement)
         # restore
-        for c_id in changed_boxes:
-            placement[c_id] = changed_boxes[c_id]
+        placement[c_id] = box
 
         hpwl_diff = new_hpwl - old_hpwl
         energy += hpwl_diff
@@ -594,7 +429,10 @@ class SAClusterPlacer(Annealer):
         used_special_blocks_pos = set()
         cluster_cells = {}
         placement = self.state["placement"]
-        print("Total swaps:", self.changes, "energy:", self.state["energy"])
+        improvement = (self.init_energy - self.state["energy"]) /\
+            self.init_energy * 100
+        print("Total moves:", self.changes, "improvement:",
+              "{:.2f}".format(improvement))
         # first assign special blocks
         for c_id in self.clusters:
             cluster = self.clusters[c_id]

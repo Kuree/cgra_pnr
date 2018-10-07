@@ -168,6 +168,9 @@ class Box:
     def __eq__(self, other):
         return self.c_id == other.c_id
 
+    def __hash__(self):
+        return self.c_id
+
 
 def analyze_lanes(clb_margin, board_layout):
     height = len(board_layout)

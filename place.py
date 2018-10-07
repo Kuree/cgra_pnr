@@ -2,7 +2,7 @@ from __future__ import print_function
 from util import reduce_cluster_graph
 from argparse import ArgumentParser
 from arch.parser import parse_emb
-from placer import GlobalPlacer, ClusterException,  SADetailedPlacer
+from placer import SAClusterPlacer, ClusterException,  SADetailedPlacer
 from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
 import numpy as np
 import os
@@ -239,11 +239,11 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
         print("cluster average:", np.average(cluster_sizes), "std:",
               np.std(cluster_sizes), "total:", np.sum(cluster_sizes))
         try:
-            cluster_placer = GlobalPlacer(clusters, netlists,
-                                          fixed_blk_pos,
-                                          board_meta=board_meta,
-                                          fold_reg=fold_reg,
-                                          seed=seed)  # num_mb=num_mb)
+            cluster_placer = SAClusterPlacer(clusters, netlists,
+                                             fixed_blk_pos,
+                                             board_meta=board_meta,
+                                             fold_reg=fold_reg,
+                                             seed=seed)  # num_mb=num_mb)
             break
         except ClusterException as _:
             num_clusters -= 1

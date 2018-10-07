@@ -8,7 +8,7 @@ from .util import analyze_lanes, Box, collapse_netlist, compute_connections
 class GlobalPlacer:
     """Analytical placer with two stages"""
     def __init__(self, clusters, netlists, fixed_pos, board_meta,
-                 fold_reg=True, seed=0):
+                 fold_reg=True, seed=0, block_lanes=None):
         self.clusters = clusters
         self.fixed_pos = fixed_pos.copy()
 
@@ -30,11 +30,13 @@ class GlobalPlacer:
         self.random = random.Random()
         self.random.seed(seed)
 
-        self.block_lanes = analyze_lanes(self.clb_margin,
-                                         self.board_layout)
+        if block_lanes is None:
+            self.block_lanes = analyze_lanes(self.clb_margin,
+                                             self.board_layout)
+        else:
+            self.block_lanes = block_lanes
 
-        self.netlists, self.intra_cluster_count = \
-            collapse_netlist(clusters, netlists, fixed_pos)
+        self.netlists = netlists
 
         self.cluster_ids = list(clusters.keys())
         self.cluster_ids.sort()
@@ -255,7 +257,10 @@ class GlobalPlacer:
         # change it back to the placement blk_id -> box
         result_placement = {}
         for blk_id in init_placement:
-            result_placement[blk_id] = placement[self.block_index[blk_id]]
+            box = placement[self.block_index[blk_id]]
+            # use int
+            box.ymax = int(box.ymax)
+            result_placement[blk_id] = box
         return result_placement
 
     def __compute_special_blocks(self, box):
