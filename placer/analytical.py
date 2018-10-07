@@ -48,7 +48,7 @@ class GlobalPlacer:
         self.cluster_connection, self.block_index =\
             compute_connections(self.blocks, self.netlists)
 
-        self.overlap_spring = 15.0 / (self.height * self.width)
+        self.overlap_spring = 1 / math.sqrt(self.height * self.width)
         self.connection_spring = 1.0 / len(self.netlists)
         self.fixed_spring = self.connection_spring * 5
         # percentage of nets that have DSP connections
@@ -77,6 +77,7 @@ class GlobalPlacer:
             box.ymin = y
             box.ymax = y + height
             box.xmax = x + height
+            box.c_id = int(cluster_id)
             self.__compute_special_blocks(box)
             placement[cluster_id] = box
         return placement
