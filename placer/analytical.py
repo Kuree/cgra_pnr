@@ -8,7 +8,7 @@ from .util import analyze_lanes, Box, collapse_netlist, compute_connections
 class GlobalPlacer:
     """Analytical placer with two stages"""
     def __init__(self, clusters, netlists, fixed_pos, board_meta,
-                 fold_reg=True, seed=0, block_lanes=None):
+                 fold_reg=True, seed=0, block_lanes=None, max_iter=10000):
         self.clusters = clusters
         self.fixed_pos = fixed_pos.copy()
 
@@ -29,6 +29,7 @@ class GlobalPlacer:
 
         self.random = random.Random()
         self.random.seed(seed)
+        self.max_iter = max_iter
 
         if block_lanes is None:
             self.block_lanes = analyze_lanes(self.clb_margin,
@@ -139,7 +140,7 @@ class GlobalPlacer:
             pos_matrix[index] = (x, y)
 
         it = 0
-        while True:
+        while it < self.max_iter:
             net_force = np.zeros((num_blocks, num_blocks, 2), dtype=float)
             overlap_force = np.zeros((num_blocks, num_blocks, 2), dtype=float)
             dsp_force = np.zeros((num_blocks, 2), dtype=float)
@@ -261,6 +262,9 @@ class GlobalPlacer:
             box = placement[self.block_index[blk_id]]
             # use int
             box.ymax = int(box.ymax)
+            box.xmax = int(box.xmax)
+            box.xmin = int(box.xmin)
+            box.ymin = int(box.ymin)
             result_placement[blk_id] = box
         return result_placement
 

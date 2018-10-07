@@ -8,7 +8,7 @@ from placer import Annealer
 from placer.util import Box
 from .util import compute_centroids, collapse_netlist,\
     compute_hpwl, manhattan_distance,\
-    analyze_lanes
+    analyze_lanes, ClusterException
 
 
 class SAClusterPlacer(Annealer):
@@ -27,7 +27,6 @@ class SAClusterPlacer(Annealer):
         self.center_of_board = (self.width / 2, self.height / 2)
 
         self.debug = debug
-
 
         self.legal_penalty = {"m": 30, "d": 200}
         if fold_reg:
@@ -481,7 +480,7 @@ class SAClusterPlacer(Annealer):
         width, height = box.xmax - box.xmin, box.ymax - box.ymin
         centroid = pos_x + width / 2.0, pos_y + height / 2.0
         for x in range(pos_x, pos_x + width):
-            for y in range(pos_y, pos_y + width):
+            for y in range(pos_y, pos_y + height):
                 blk_type = self.board_layout[y][x]
                 pos = (x, y)
                 if blk_type in special_blks and pos not in used_spots:
@@ -543,11 +542,12 @@ class SAClusterPlacer(Annealer):
                     assert not bboard[y][x]
                     bboard[y][x] = True
                     cells_have += 1
-                if cells_have > needed:
+                if cells_have >= needed:
                     break
             if old_needed == needed:
                 effort_count += 1
             else:
                 effort_count = 0
             old_needed = needed
-        assert (cells_have >= needed)
+        if cells_have < needed:
+            raise ClusterException(len(self.clusters))

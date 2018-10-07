@@ -221,6 +221,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
     # extra careful
     num_clusters = min(num_clusters, len(blks))
     clusters = {}
+    cluster_cells, centroids = None, None
     while True:     # this just enforce we can actually place it
         if num_clusters == 0:
             cluster_placer = None
@@ -244,14 +245,14 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                                              board_meta=board_meta,
                                              fold_reg=fold_reg,
                                              seed=seed)  # num_mb=num_mb)
+            # use the following code to debug
+            # cluster_placer.steps = 0
+            cluster_placer.anneal()
+            cluster_cells, centroids = cluster_placer.realize()
             break
         except ClusterException as _:
             num_clusters -= 1
     if num_clusters > 0:
-        # use the following code to debug
-        # cluster_placer.steps = 0
-        cluster_placer.anneal()
-        cluster_cells, centroids = cluster_placer.realize()
         fallback = False
     else:
         if fpga_place:
@@ -293,6 +294,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
         centroids = {0: (len(board_layout[0]) // 2, len(board_layout) // 2)}
         fallback = True
 
+    assert(cluster_cells is not None and centroids is not None)
     return centroids, cluster_cells, clusters, fallback
 
 
