@@ -2,6 +2,7 @@ from __future__ import print_function, division
 import random
 import math
 import numpy as np
+import time
 from .util import analyze_lanes, Box, collapse_netlist, compute_connections
 
 
@@ -49,8 +50,11 @@ class GlobalPlacer:
         self.cluster_connection, self.block_index =\
             compute_connections(self.blocks, self.netlists)
 
-        self.overlap_spring = 1 / math.sqrt(self.height * self.width)
         self.connection_spring = 1.0 / len(self.netlists)
+        # overlapping spring need to counteract the netlist force
+        total_c_size = sum([len(clusters[c]) for c in clusters])
+        self.overlap_spring = self.connection_spring * \
+            len(self.netlists) / total_c_size * 5
         self.fixed_spring = self.connection_spring * 5
         # percentage of nets that have DSP connections
         self.dsp_ratio = 0.01
@@ -87,7 +91,11 @@ class GlobalPlacer:
         # first stage do a force solver with distance based.
         # then de-overlap and refine the blocks
         init_placement = self.__init_placement()
+        start = time.time()
         placement = self.__block_solve(init_placement)
+        end = time.time()
+        print("Analytical solver takes {:.2f} seconds to solve".format(
+            end - start))
         return placement
 
     def __block_solve(self, init_placement):

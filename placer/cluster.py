@@ -74,10 +74,15 @@ class SAClusterPlacer(Annealer):
         self.cluster_index = self.__build_box_netlist_index()
         self.moves = None
 
+        anneal_step_size = int(max(1, min(self.width / 20, self.height / 20)))
+        self.move_dist = [i for i in range(-anneal_step_size,
+                                           anneal_step_size + 1)
+                          if i != 0]
+
         # low temperature annealing
         self.Tmax = 10
         self.Tmin = 0.1
-        self.steps = len(self.netlists) * len(self.clusters)
+        self.steps = 300 * len(self.clusters)
 
     def __build_box_netlist_index(self):
         index = {}
@@ -172,8 +177,8 @@ class SAClusterPlacer(Annealer):
         box = self.random.sample(self.cluster_boxes, 1)[0]
         new_box = Box.copy_box(box)
 
-        dx = self.random.choice([-1, 1])
-        dy = self.random.choice([-1, 1])
+        dx = self.random.choice(self.move_dist)
+        dy = self.random.choice(self.move_dist)
 
         new_box.xmin = box.xmin + dx
         new_box.ymin = box.ymin + dy
@@ -449,14 +454,19 @@ class SAClusterPlacer(Annealer):
             box = placement[c_id]
             cluster_overlap_cells = overlaps[c_id]
             cluster_cells[c_id][self.clb_type] = set()
+            needed = len([x for x in self.clusters[c_id]
+                          if x[0] == self.clb_type])
             for y in range(box.ymin, box.ymax + 1):
                 for x in range(box.xmin, box.xmax + 1):
+                    if len(cluster_cells[c_id][self.clb_type]) >= needed:
+                        break
                     pos = (x, y)
                     if bboard[y][x] or \
                             self.board_layout[y][x] != self.clb_type:
                         continue
                     cluster_cells[c_id][self.clb_type].add(pos)
                     bboard[y][x] = True
+                    # terminate early
             self.de_overlap(cluster_cells[c_id][self.clb_type],
                             bboard, c_id)
 
