@@ -141,10 +141,12 @@ test_dataset
 # sls
 *_sls
 
-
 # FPGA giles
 *.pl
 *.aux
 *.scl
 benchmark
 layout
+
+# ntu test files
+ntu_dataset
