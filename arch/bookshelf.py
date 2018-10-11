@@ -138,13 +138,50 @@ def write_aux(aux_filename, design_name):
         f.write(" ".join(names))
 
 
+def mock_board_meta(size, memory_repeat=5):
+    height = size
+    width = size
+
+    margin = 1
+
+    board_layout = []
+    io_tiles = []
+    for y in range(height):
+        row = []
+        for x in range(width):
+            row.append(None)
+        for x in range(width):
+            if (x == 0 and y == 0) or (x == width - 1 and y == height - 1):
+                continue
+            if (y == 0 and x == margin) or (y == 0 and x == (width - margin)):
+                row[x] = "i"
+                io_tiles.append((x, y))
+            elif (y == (height - margin) and x == margin) or \
+                 (y == (height - margin) and (x == width - margin - 1)):
+                row[x] = "i"
+                io_tiles.append((x, y))
+            elif x % memory_repeat == margin and x != margin:
+                row[x] = "m"
+            else:
+                row[x] = "p"
+        board_layout.append(row)
+    info = {"margin": margin, "clb_type": "p", "arch_type": "cgra",
+            "height": height, "width": width, "id_remap": {},
+            "io": io_tiles, "io_pad_name": {},
+            "io_pad_bit": {}, "io16_tile": {}}
+    blk_height = {"i": 1, "p": 1, "m": 1}
+    blk_capacity = {"i": 1, "p": 1, "m": 1}
+    layouts = {"CGRA": (board_layout, blk_height, blk_capacity, info)}
+    return layouts
+
+
 def main():
     if len(sys.argv) != 4:
-        print("Usage:", sys.argv[0], "<placement> <arch_file> <output_dir",
+        print("Usage:", sys.argv[0], "<arch_size> <placement> <output_dir>",
               file=sys.stderr)
         exit(1)
-    placement_file = sys.argv[1]
-    arch_file = sys.argv[2]
+    arch_size = int(sys.argv[1])
+    placement_file = sys.argv[2]
     output_dir = sys.argv[3]
 
     if not os.path.isdir(output_dir):
@@ -160,7 +197,7 @@ def main():
 
     # scl files
     scl_filename = os.path.join(output_dir, design_name + ".scl")
-    board_layout, _, _, info = parse_cgra(arch_file, fold_reg=False)["CGRA"]
+    board_layout, _, _, _ = mock_board_meta(arch_size)["CGRA"]
     write_scl(scl_filename, board_layout, placement)
 
     # net and nodes files

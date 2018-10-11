@@ -90,6 +90,12 @@ def save_packing_result(netlist_filename, pack_filename, fold_reg=True):
     rename_id_changed(id_to_name, changed_pe)
     track_mode = determine_track_bus(netlists, id_to_name)
 
+    write_packing_result(changed_pe, folded_blocks, id_to_name, netlists,
+                         pack_filename, track_mode)
+
+
+def write_packing_result(changed_pe, folded_blocks, id_to_name, netlists,
+                         pack_filename, track_mode):
     with open(pack_filename, "w+") as f:
         def tuple_to_str(t_val):
             return "(" + ", ".join([str(val) for val in t_val]) + ")"
@@ -532,3 +538,103 @@ def read_netlist_json(netlist_filename):
     # the standard json input is not a netlist
     connections = convert2netlist(connections)
     return connections, instances
+
+
+def load_unmapped_netlist(netlist_filename):
+    with open(netlist_filename) as f:
+        data = json.load(f)
+
+    design = data["namespaces"]["global"]["modules"]["DesignTop"]
+    instances = design["instances"]
+    connections = design["connections"]
+
+    pe_count = 0
+    name_to_id = {}
+    for blk_name in instances:
+        instance = instances[blk_name]
+        if "genref" not in instance:
+            assert "modref" in instance
+            instance_type = instance["modref"]
+        else:
+            instance_type = instance["genref"]
+        if instance_type == "coreir.mem":
+            blk_type = "m"
+        else:
+            blk_type = "p"
+        blk_id = blk_type + str(pe_count)
+        pe_count += 1
+        name_to_id[blk_name] = blk_id
+
+    # produce the netlist
+    io_count = 0
+    connection_pairs = []
+    io_names = {}
+    for conn1, conn2 in connections:
+        conn1_names = conn1.split(".")
+        conn2_names = conn2.split(".")
+        if len(conn2_names) != 2:
+            if len(conn2_names) == 3:
+                conn2_names.pop(2)
+            assert len(conn2_names) == 2
+        if len(conn1_names) != 2:
+            if conn1_names[0] != "self":
+                # print(conn1)
+                continue
+            assert conn1_names[0] == "self"
+            if conn1 not in io_names:
+                blk1_name = "io_" + str(io_count)
+                blk1_id = "i" + str(io_count)
+                io_count += 1
+                name_to_id[blk1_name] = blk1_id
+                io_names[conn1] = blk1_name
+            else:
+                blk1_name = io_names[conn1]
+
+            port1 = conn1_names[1]
+            assert port1 in ["in", "out"]
+            # flip the port name
+            if port1 == "in":
+                port1 = "out"
+            else:
+                port1 = "in"
+            blk1_id = name_to_id[blk1_name]
+        else:
+            blk1_id = name_to_id[conn1_names[0]]
+            port1 = conn1_names[1]
+        blk2_name, port2 = conn2_names
+        blk2_id = name_to_id[blk2_name]
+        connection_pairs.append([blk1_id + "." + port1, blk2_id + "." + port2])
+
+    # convert to netlist
+    temp_netlist = convert2netlist(connection_pairs)
+    netlist = []
+    for raw_net in temp_netlist:
+        net = []
+        for conn in raw_net:
+            blk, port = conn.split(".")
+            net.append((blk, port))
+        netlist.append(net)
+
+    # convert name_to_id to id_to_name
+    id_to_name = {}
+    for name in name_to_id:
+        id_to_name[name_to_id[name]] = name
+
+    return netlist, id_to_name
+
+
+def save_unmapped_netlist(netlist_filename, packed_filename):
+    raw_netlists, id_to_name = load_unmapped_netlist(netlist_filename)
+    netlists = {}
+    net_count = 0
+    for net in raw_netlists:
+        net_id = "e" + str(net_count)
+        netlists[net_id] = net
+        net_count += 1
+    empty = {}
+    write_packing_result(empty, empty, id_to_name, netlists,
+                         packed_filename, empty)
+
+
+if __name__ == "__main__" and len(sys.argv) == 3:
+    save_unmapped_netlist(sys.argv[1], sys.argv[2])

@@ -15,6 +15,7 @@ import multiprocessing
 from arch.cgra import place_special_blocks, save_placement, prune_netlist
 from arch.cgra_packer import load_packed_file
 from arch.fpga import load_packed_fpga_netlist
+from arch import mock_board_meta
 
 
 def detailed_placement(args, context=None):
@@ -82,13 +83,16 @@ def main():
                         action="store", default="")
     parser.add_argument("-f", "--fpga", action="store", dest="fpga_arch",
                         default="", help="ISPD FPGA architecture file")
-
+    parser.add_argument("--mock", action="store", dest="mock_size",
+                        default=0, type=int, help="Mock CGRA board with "
+                        "provided size")
     args = parser.parse_args()
 
     cgra_arch = args.cgra_arch
     fpga_arch = args.fpga_arch
+    mock_size = args.mock_size
 
-    if len(cgra_arch) == 0 ^ len(fpga_arch) == 0:
+    if len(cgra_arch) == 0 ^ len(fpga_arch) == 0 and mock_size == 0:
         parser.error("Must provide wither --fpga or --cgra")
 
     packed_filename = args.packed_filename
@@ -107,7 +111,10 @@ def main():
     fold_reg = not args.no_reg_fold
 
     # FPGA params override
-    if fpga_place:
+    if mock_size > 0:
+        fold_reg = False
+        board_meta = mock_board_meta(mock_size)
+    elif fpga_place:
         fold_reg = False
         board_meta = parse_fpga(fpga_arch)
     else:
