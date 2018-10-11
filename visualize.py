@@ -86,6 +86,22 @@ def visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe):
         print("Image saved to", output_path)
 
 
+def visualize_clustering_cgra(board_meta, cluster_cells):
+    scale = 30
+    board_info = board_meta[-1]
+    height, width = board_info["height"], board_info["width"]
+    im, draw = draw_board(width, height, scale)
+    for c_id in cluster_cells:
+        cells = cluster_cells[c_id]
+        color = color_palette[c_id]
+        for blk_type in cells:
+            for pos in cells[blk_type]:
+                draw_cell(draw, pos, color, scale)
+
+    plt.imshow(im)
+    plt.show()
+
+
 def visualize_routing(cgra_filename, board_meta, packed_filename,
                       routing_result, fold_reg):
     from router import Router

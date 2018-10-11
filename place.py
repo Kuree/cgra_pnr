@@ -7,7 +7,7 @@ from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
 import numpy as np
 import os
 import pickle
-from visualize import visualize_placement_cgra
+from visualize import visualize_placement_cgra, visualize_clustering_cgra
 from sklearn.cluster import KMeans
 import random
 from multiprocessing import Pool
@@ -181,7 +181,7 @@ def main():
     centroids, cluster_cells, clusters, fallback = perform_global_placement(
         blks, data_x, emb, fixed_blk_pos, netlists, board,
         board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
-        seed=seed, fpga_place=fpga_place)
+        seed=seed, fpga_place=fpga_place, vis=vis_opt)
 
     # placer with each cluster
     board_pos = perform_detailed_placement(board, centroids,
@@ -219,7 +219,7 @@ def get_num_clusters(id_to_name):
 
 def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
                              board_meta, fold_reg, seed,
-                             num_clusters=None, fpga_place=False):
+                             num_clusters=None, fpga_place=False, vis=True):
     # simple heuristics to calculate the clusters
     if fpga_place:
         num_clusters = int(np.ceil(len(emb) / 300)) + 1
@@ -233,6 +233,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
         if num_clusters == 0:
             cluster_placer = None
             break
+        # num_clusters = 7
         print("Trying: num of clusters", num_clusters)
         kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(data_x)
         cluster_ids = kmeans.labels_
@@ -300,7 +301,8 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
         cluster_cells[0]["m"] = mem_cells
         centroids = {0: (len(board_layout[0]) // 2, len(board_layout) // 2)}
         fallback = True
-
+    if vis:
+        visualize_clustering_cgra(board_meta, cluster_cells)
     assert(cluster_cells is not None and centroids is not None)
     return centroids, cluster_cells, clusters, fallback
 
