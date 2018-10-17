@@ -72,26 +72,30 @@ class SADetailedPlacer(Annealer):
         Annealer.__init__(self, initial_state=state, rand=rand)
 
         # schedule
-        self.steps = len(blocks) * 600
+        self.steps = len(blocks) * 60
         self.num_nets = len(netlists)
 
         # fast calculation
         self.moves = set()
-        self.blk_index = self.__index_netlists(netlists, blocks)
+        self.blk_index, self.net_blks = self.__index_netlists(netlists, blocks)
 
         self.debug = debug
 
     @staticmethod
     def __index_netlists(netlists, blocks):
         result = {}
+        net_blks = {}
         for net_id in netlists:
+            if net_id not in net_blks:
+                net_blks[net_id] = set()
             for blk in netlists[net_id]:
                 if blk not in blocks:
                     continue
                 if blk not in result:
                     result[blk] = set()
                 result[blk].add(net_id)
-        return result
+                net_blks[net_id].add(blk)
+        return result, net_blks
 
     def __init_placement(self, rand):
         # filling in PE tiles first
@@ -343,16 +347,19 @@ class SADetailedPlacer(Annealer):
         placement = self.state["placement"]
 
         new_pos = {}
+
         for blk, _, blk_pos in self.moves:
             new_pos[blk] = blk_pos
-
-        for blk, _, _ in self.moves:
-            change_net_ids.update(self.blk_index[blk])
+            if blk in self.blk_index:
+                change_net_ids.update(self.blk_index[blk])
         for net_id in change_net_ids:
             changed_nets[net_id] = self.netlists[net_id]
 
         board_pos = self.blk_pos.copy()
-        for blk_id in placement:
+        net_blks = set()
+        for net_id in change_net_ids:
+            net_blks.update(self.net_blks[net_id])
+        for blk_id in net_blks:
             pos = placement[blk_id]
             board_pos[blk_id] = pos
         old_hpwl = compute_hpwl(changed_nets, board_pos)

@@ -310,35 +310,36 @@ def main():
                         default=0, type=int, action="store", dest="seed")
     parser.add_argument("--const-rate", help="How often does const value " +
                         "appear", default=0.2, action="store",
-                        dest="const_rate")
+                        dest="const_rate", type=float)
     parser.add_argument("--reg_reg_rate", help="How likely to build up " +
                         "reg to reg chain", default=0.2, action="store",
-                        dest="reg_reg_rate")
+                        dest="reg_reg_rate", type=float)
     parser.add_argument("--num_kernel", help="Number of kernels",
                         default=5, type=int, action="store", dest="num_kernel")
     parser.add_argument("--kernel_size", help="Expected kernel size",
-                        default=20, action="store", dest="kernel_size")
+                        default=20, action="store", dest="kernel_size",
+                        type=int)
     parser.add_argument("--kernel_size_variance",
                         help="Variance of kernel size (uniform distribution)",
                         default=4, action="store",
-                        dest="num_kernel_variance")
+                        dest="num_kernel_variance", type=int)
     parser.add_argument("--expected_num_reg",
                         help="Expected number of registers per kernel",
-                        default=5, action="store",
+                        default=5, action="store", type=int,
                         dest="expected_num_reg")
     parser.add_argument("--num_reg_variance",
                         help="Variance of number of registers per kernel " +
-                        "(uniform distribution)",
+                        "(uniform distribution)", type=int,
                         default=2, action="store",
                         dest="num_reg_variance")
     parser.add_argument("--expected_num_mem",
                         help="Expected number of line buffers per kernel",
-                        default=2, action="store",
+                        default=2, action="store", type=int,
                         dest="expected_num_mem")
     parser.add_argument("--num_mem_variance",
                         help="Variance of number of line buffers per kernel " +
                         "(uniform distribution)", default=1, action="store",
-                        dest="num_mem_variance")
+                        dest="num_mem_variance", type=int)
 
     args = parser.parse_args()
     # random seed
@@ -362,6 +363,7 @@ def main():
 
     names_list = []
     connections_list = []
+    clusters = {}
     # first pass to create kernel connections
     num_blocks = 0
     for i in range(num_kernels):
@@ -378,6 +380,7 @@ def main():
         names_list.append(names)
         connections_list.append(connections)
         num_blocks += len(names)
+        clusters[i] = names[:]
     kernel_connections = []
     working_num_kernels = list(range(num_kernels))
     random.shuffle(working_num_kernels)
@@ -415,6 +418,7 @@ def main():
         extra_connections.append((".".join((io_name, io_port)),
                                   ".".join((names_list[kernel_id][0],
                                             "wdata"))))
+        clusters[kernel_id].append(io_name)
     for kernel_id in kernel_connections[-1]:
         io_name = "io_16_{}".format(io_count)
         io_count += 1
@@ -424,6 +428,7 @@ def main():
         out_port = get_out_port(out_name)
         extra_connections.append((".".join((out_name, out_port)),
                                   ".".join((io_name, io_port))))
+        clusters[kernel_id].append(io_name)
 
     # third pass, create random alu to glue them together
     for i in range(0, len(kernel_connections) - 1):
@@ -457,6 +462,7 @@ def main():
                                           ".".join((new_alu,
                                                     "data.in.1"))))
                 extra_names.append(new_alu)
+                clusters[k].append(new_alu)
             out_port = get_out_port(new_alu)
             in_name = names_list[kernel_to[num_to - 1]][0]
             in_port = "wdata"
@@ -483,8 +489,20 @@ def main():
     result_connections += extra_connections
     result = create_design_top(result_names, result_connections)
 
+    # sanity check
+    instance_count = 0
+    for c_id in clusters:
+        instance_count += len(clusters[c_id])
+
+    assert (instance_count == len(result_names))
+
     with open(output_file, "w+") as f:
         json.dump(result, f, separators=(',', ': '))
+
+    # cluster_file
+    cluster_file = output_file + ".cluster"
+    with open(cluster_file, "w+") as f:
+        json.dump(clusters, f)
 
 
 def direct_connect_kernel(extra_connections, out_index, in_index,

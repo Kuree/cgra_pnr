@@ -17,6 +17,11 @@ from arch.cgra_packer import load_packed_file
 from arch.fpga import load_packed_fpga_netlist
 from arch import mock_board_meta
 import pythunder
+import json
+import sys
+from arch.bookshelf import write_detailed_placement, parse_pl
+import tempfile
+import subprocess
 
 
 def detailed_placement(args, context=None):
@@ -78,14 +83,79 @@ def detailed_placement_thunder(blks, cells, netlist, blk_pos, clb_type):
     return placement
 
 
+def detailed_placement_ntuplace(args, context=None):
+    if context is not None:
+        args = pickle.loads(args["body"])
+    clusters = args["clusters"]
+    cells = args["cells"]
+    netlist = args["new_netlist"]
+    raw_netlist = args["raw_netlist"]
+    board = args["board"]
+    blk_pos = args["blk_pos"]
+    fold_reg = args["fold_reg"]
+    seed = args["seed"]
+    disallowed_pos = args["disallowed_pos"]
+    clb_type = args["clb_type"]
+    ntuplace_path = args["ntu_place"]
+    detailed = SADetailedPlacer(clusters, cells, netlist, raw_netlist,
+                                board, blk_pos, disallowed_pos,
+                                fold_reg=fold_reg, seed=seed,
+                                clb_type=clb_type)
+    init_placement = detailed.realize()
+    # write make a random folder
+    output_folder = tempfile.mkdtemp()
+    cluster_cells = cells["p"]
+    for blk_id in init_placement:
+        if blk_id[0] == "m":
+            cluster_cells.add(init_placement[blk_id])
+    design_name = str(seed)
+    write_detailed_placement(cluster_cells, netlist, init_placement, blk_pos,
+                             design_name, output_folder)
+    sym_ntu_path = os.path.join(output_folder, "ntuplace")
+    os.symlink(ntuplace_path, sym_ntu_path)
+    print(sym_ntu_path)
+    exit(0)
+    # call the program
+    subprocess.check_call([sym_ntu_path, "-aux", design_name + ".aux"],
+                          shell=True)
+
+    output_path = os.path.join(output_folder, "out.ntup.pl")
+    placement = parse_pl(output_path)
+    # remove fixed positions
+    cell_to_remove = set()
+    for blk in placement:
+        if blk[0] == "i" or blk[0] == "x":
+            cell_to_remove.add(blk)
+    for cell in cell_to_remove:
+        placement.pop(cell)
+    return placement
+
+
+def setup_embeddings(netlist_embedding):
+    num_dim, raw_emb = parse_emb(netlist_embedding)
+    emb = {}
+    for blk_id in raw_emb:
+        if blk_id[0] == "i":
+            continue
+        else:
+            emb[blk_id] = raw_emb[blk_id]
+    # common routine
+    data_x = np.zeros((len(emb), num_dim))
+    blks = list(emb.keys())
+    for i in range(len(blks)):
+        data_x[i] = emb[blks[i]]
+    return blks, data_x, emb
+
+
 def main():
     parser = ArgumentParser("CGRA Placer")
     parser.add_argument("-i", "--input", help="Packed netlist file, " +
                                               "e.g. harris.packed",
                         required=True, action="store", dest="packed_filename")
     parser.add_argument("-e", "--embedding", help="Netlist embedding file, " +
-                        "e.g. harris.emb",
-                        required=True, action="store", dest="netlist_embedding")
+                        "e.g. harris.emb", default="",
+                        required=False, action="store",
+                        dest="netlist_embedding")
     parser.add_argument("-o", "--output", help="Placement result, " +
                                                "e.g. harris.place",
                         required=True, action="store",
@@ -114,19 +184,31 @@ def main():
     parser.add_argument("--mock", action="store", dest="mock_size",
                         default=0, type=int, help="Mock CGRA board with "
                         "provided size")
+    parser.add_argument("--cluster", help="Provide cluster file instead of "
+                                          "embeddings", type=str,
+                        action="store", dest="cluster_file", default="")
+    parser.add_argument("--ntu-place", help="Use modified NTUPlace for"
+                                            "detailed placement with "
+                                            "given path",
+                        action="store", default="", dest="ntuplace_path")
     args = parser.parse_args()
 
     cgra_arch = args.cgra_arch
     fpga_arch = args.fpga_arch
     mock_size = args.mock_size
+    netlist_embedding = args.netlist_embedding
+    cluster_file = args.cluster_file
 
     if len(cgra_arch) == 0 ^ len(fpga_arch) == 0 and mock_size == 0:
-        parser.error("Must provide wither --fpga or --cgra")
+        parser.error("Must provide either --fpga or --cgra")
+
+    if len(cluster_file) == 0 ^ len(netlist_embedding) == 0:
+        parser.error("Must provide either --embedding or --cluster")
 
     packed_filename = args.packed_filename
-    netlist_embedding = args.netlist_embedding
     placement_filename = args.placement_filename
     lambda_url = args.lambda_url
+    ntuplace_path = args.ntuplace_path
     fpga_place = len(fpga_arch) > 0
 
     seed = args.seed
@@ -151,26 +233,23 @@ def main():
     # Common routine
     board_name, board_meta = board_meta.popitem()
     print("INFO: Placing for", board_name)
-    num_dim, raw_emb = parse_emb(netlist_embedding)
     board = make_board(board_meta)
     board_info = board_meta[-1]
     place_on_board = generate_place_on_board(board_meta, fold_reg=fold_reg)
 
     fixed_blk_pos = {}
     special_blocks = set()
-    emb = {}
 
     # FPGA
     if fpga_place:
-        netlists, fixed_blk_pos, _ = load_packed_fpga_netlist(packed_filename)
+        netlists, fixed_blk_pos, blk_to_site = \
+            load_packed_fpga_netlist(packed_filename)
         num_of_kernels = None
         id_to_name = {}
-        for blk_id in raw_emb:
+        for blk_id in blk_to_site:
             id_to_name[blk_id] = blk_id
             if blk_id[0] == "i":
                 special_blocks.add(blk_id)
-            else:
-                emb[blk_id] = raw_emb[blk_id]
         # place fixed IO locations
         for blk_id in fixed_blk_pos:
             pos = fixed_blk_pos[blk_id]
@@ -189,28 +268,28 @@ def main():
         num_of_kernels = get_num_clusters(id_to_name)
         netlists = prune_netlist(raw_netlist)
 
-        for blk_id in raw_emb:
+        for blk_id in id_to_name:
             if blk_id[0] == "i":
                 special_blocks.add(blk_id)
-            else:
-                emb[blk_id] = raw_emb[blk_id]
         # place the spacial blocks first
         place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
                              id_to_name,
                              place_on_board,
                              board_meta)
 
-    # common routine
-    data_x = np.zeros((len(emb), num_dim))
-    blks = list(emb.keys())
-    for i in range(len(blks)):
-        data_x[i] = emb[blks[i]]
-
-    centroids, cluster_cells, clusters, fallback = perform_global_placement(
-        blks, data_x, emb, fixed_blk_pos, netlists, board,
-        board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
-        seed=seed, fpga_place=fpga_place, vis=vis_opt)
-
+    if len(netlist_embedding) > 0:
+        centroids, cluster_cells, clusters, fallback = \
+            perform_global_placement_emb(netlist_embedding, fixed_blk_pos,
+                                         netlists, board_meta,
+                                         fold_reg=fold_reg,
+                                         num_clusters=num_of_kernels,
+                                         seed=seed, fpga_place=fpga_place,
+                                         vis=vis_opt)
+    else:
+        centroids, cluster_cells, clusters, fallback = \
+            perform_global_placement_cluster(cluster_file, fixed_blk_pos,
+                                             netlists, id_to_name, board_meta,
+                                             fold_reg, seed, vis=vis_opt)
     # placer with each cluster
     board_pos = perform_detailed_placement(board, centroids,
                                            cluster_cells, clusters,
@@ -218,7 +297,8 @@ def main():
                                            raw_netlist,
                                            fold_reg, seed, fallback,
                                            board_info,
-                                           lambda_url)
+                                           lambda_url,
+                                           ntuplace_path)
 
     for blk_id in board_pos:
         pos = board_pos[blk_id]
@@ -245,9 +325,40 @@ def get_num_clusters(id_to_name):
     return sum(count)
 
 
-def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
-                             board_meta, fold_reg, seed,
-                             num_clusters=None, fpga_place=False, vis=True):
+def perform_global_placement_cluster(cluster_file, fixed_blk_pos, netlists,
+                                     id_to_name, board_meta, fold_reg, seed,
+                                     vis=True):
+    with open(cluster_file) as f:
+        cluster_names = json.load(f)
+    name_to_id = {}
+    for blk_id in id_to_name:
+        name_to_id[id_to_name[blk_id]] = blk_id
+    clusters = {}
+    for c_id in cluster_names:
+        c_id = int(c_id)
+        clusters[c_id] = set()
+        for blk_name in cluster_names[str(c_id)]:
+            if blk_name not in name_to_id:
+                print(blk_name, "not found", file=sys.stderr)
+                continue
+            clusters[c_id].add(name_to_id[blk_name])
+    cluster_placer = SAClusterPlacer(clusters, netlists,
+                                     fixed_blk_pos,
+                                     board_meta=board_meta,
+                                     fold_reg=fold_reg,
+                                     seed=seed)
+    cluster_placer.anneal()
+    cluster_cells, centroids = cluster_placer.realize()
+    # if vis:
+    #    visualize_clustering_cgra(board_meta, cluster_cells)
+
+    return centroids, cluster_cells, clusters, False
+
+
+def perform_global_placement_emb(emb_filename, fixed_blk_pos, netlists,
+                                 board_meta, fold_reg, seed,
+                                 num_clusters=None, fpga_place=False, vis=True):
+    blks, data_x, emb = setup_embeddings(emb_filename)
     # simple heuristics to calculate the clusters
     if fpga_place:
         num_clusters = int(np.ceil(len(emb) / 300)) + 1
@@ -259,7 +370,6 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
     cluster_cells, centroids = None, None
     while True:     # this just enforce we can actually place it
         if num_clusters == 0:
-            cluster_placer = None
             break
         # num_clusters = 7
         print("Trying: num of clusters", num_clusters)
@@ -356,7 +466,7 @@ def detailed_placement_thunder_wrapper(args):
 def perform_detailed_placement(board, centroids, cluster_cells, clusters,
                                fixed_blk_pos, netlists, raw_netlist,
                                fold_reg, seed, fallback, board_info,
-                               lambda_url=""):
+                               lambda_url="", ntu_place=""):
     board_pos = fixed_blk_pos.copy()
     map_args = []
 
@@ -385,8 +495,8 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
         args = {"clusters": clusters[c_id], "cells": cells,
                 "new_netlist": new_netlist, "raw_netlist": raw_netlist,
                 "board": board, "blk_pos": blk_pos, "fold_reg": fold_reg,
-                "seed": seed, "fallback": fallback, "clb_type": clb_type,
-                "disallowed_pos": disallowed_pos}
+                "seed": seed + c_id, "fallback": fallback, "clb_type": clb_type,
+                "disallowed_pos": disallowed_pos, "ntu_place": ntu_place}
 
         map_args.append(args)
     if not lambda_url:
@@ -407,9 +517,15 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
     else:
         num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
         pool = Pool(num_of_cpus)
-        # use the following code to debug
-        # detailed_placement(map_args[0])
-        results = pool.map(detailed_placement, map_args)
+
+        if len(ntu_place) > 0:
+            # use the following code to debug
+            detailed_placement_ntuplace(map_args[0])
+            results = pool.map(detailed_placement_ntuplace, map_args)
+        else:
+            # use the following code to debug
+            # detailed_placement(map_args[0])
+            results = pool.map(detailed_placement, map_args)
         pool.close()
         pool.join()
         for r in results:

@@ -360,8 +360,8 @@ class SAClusterPlacer(Annealer):
         else:
             x_min, x_max = box.xmin - 1, box.xmax + 1
             y_min, y_max = box.ymin - 1, box.ymax + 1
-        for y in range(y_min, y_max + 1):
-            for x in range(x_min, x_max + 1):
+        for y in range(y_min, y_max + 1 + max_dist, max_dist):
+            for x in range(x_min, x_max + 1 + max_dist, max_dist):
                 if (x, y) not in current_cells:
                     # make sure it's its own exterior
                     continue
@@ -532,32 +532,32 @@ class SAClusterPlacer(Annealer):
 
         needed = len([x for x in self.clusters[cluster_id]
                       if x[0] == self.clb_type])
-        old_needed = needed
+
         cells_have = 0
         for x, y in current_cell:
             if self.board_layout[y][x] == self.clb_type:
                 cells_have += 1
-        while cells_have < needed and effort_count < 5:
+        search_radius = 1
+        old_have = cells_have
+        while cells_have < needed and effort_count < 20:
             # boolean board
             ext = self.__get_exterior_set(cluster_id, current_cell, bboard,
-                                          max_dist=(effort_count + 1) * 2)
+                                          max_dist=search_radius)
             ext_list = list(ext)
-            ext_list.sort(key=lambda p: manhattan_distance(p,
-                                                           self.center_of_board
-                                                           ))
+
             for ex in ext_list:
                 x, y = ex
-                if self.board_layout[y][x] == self.clb_type:
-                    current_cell.add(ex)
-                    assert not bboard[y][x]
-                    bboard[y][x] = True
-                    cells_have += 1
-                if cells_have >= needed:
-                    break
-            if old_needed == needed:
+                current_cell.add(ex)
+                assert not bboard[y][x]
+                bboard[y][x] = True
+                cells_have += 1
+                # if cells_have >= needed:
+                #     break
+            if old_have == cells_have:
                 effort_count += 1
             else:
                 effort_count = 0
-            old_needed = needed
+            search_radius *= 2
+            old_have = cells_have
         if cells_have < needed:
             raise ClusterException(len(self.clusters))
