@@ -1,0 +1,40 @@
+//
+// Created by keyi on 10/17/18.
+//
+
+#ifndef THUNDER_ANNEAL_HH
+#define THUNDER_ANNEAL_HH
+
+#include <set>
+#include <map>
+#include "include/randutils.hpp"
+#include "util.hh"
+
+
+class SimAnneal {
+public:
+    SimAnneal();
+
+    virtual void move() {}
+    virtual double init_energy() { return 0; }
+    virtual double energy() { return 0; }
+    virtual void commit_changes() {}
+    void anneal();
+    void refine(int num_iter, double threshold);
+
+    // attributes
+    // default values
+    int steps = 50000;
+    float tmax = 25000;
+    float tmin = 3;
+
+protected:
+    double curr_energy = 0;
+    int current_step = 0;
+private:
+    std::random_device rd_;
+    randutils::random_generator<std::mt19937> rand_;
+};
+
+
+#endif //THUNDER_ANNEAL_HH
