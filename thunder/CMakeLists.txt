@@ -13,5 +13,5 @@ add_library(thunder src/anneal.cc src/anneal.hh src/util.cc
 add_subdirectory(python/pybind11)
 add_subdirectory(python)
 
-add_executable(test test.cc)
-target_link_libraries(test thunder)
+add_executable(demo_test test.cc)
+target_link_libraries(demo_test thunder)

@@ -17,6 +17,8 @@ addons:
       - realpath
 
 install:
+  - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 99
+  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-7 99
   - pip install -r requirements.txt
   - pip install thunder/
 
