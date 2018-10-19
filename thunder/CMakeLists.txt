@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 project(thunder)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread -g")
 
 add_library(thunder src/anneal.cc src/anneal.hh src/util.cc
