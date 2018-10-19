@@ -1,24 +1,41 @@
-#include "src/detailed.hh"
+#include "src/util.hh"
+#include "src/multi_place.hh"
 #include <iostream>
 using namespace std;
 
 int main() {
-    auto blks = vector<string>{"p1", "p2", "p3", "p4"};
-    auto available_pos = map<char, vector<pair<int, int>>>();
-    available_pos['p'] = vector<pair<int, int>>{make_pair(1, 1),
+    auto blks1 = set<string>{"p1", "p2", "p3", "p4"};
+    auto blks2 = set<string>{"p5", "p6", "p7", "p8"};
+    auto available_pos1 = map<char, set<pair<int, int>>>();
+    available_pos1['p'] = set<pair<int, int>>{make_pair(1, 1),
                                                 make_pair(1, 2),
                                                 make_pair(1, 3),
                                                 make_pair(1, 4)};
-    std::map<std::string, std::pair<int, int>> fixed_pos;
+    auto available_pos2 = map<char, set<pair<int, int>>>();
+    available_pos2['p'] = set<pair<int, int>>{make_pair(2, 1),
+                                                 make_pair(2, 2),
+                                                 make_pair(2, 3),
+                                                 make_pair(2, 4)};
+    map<int, map<std::string, std::pair<int, int>>> fixed_pos =
+            {{1, {}}, {2, {}}};
 
-    std::map<std::string, std::vector<std::string>> netlist;
-    netlist["1"] = vector<string>{"p1", "p2"};
-    netlist["2"] = vector<string>{"p3", "p4"};
+    map<std::string, std::vector<std::string>> netlist1;
+    netlist1["1"] = vector<string>{"p1", "p2"};
+    netlist1["2"] = vector<string>{"p3", "p4"};
 
-    DetailedPlacer placer(blks, netlist, available_pos, fixed_pos, 'p', false);
+    std::map<std::string, std::vector<std::string>> netlist2;
+    netlist2["1"] = vector<string>{"p5", "p6"};
+    netlist2["2"] = vector<string>{"p7", "p8"};
 
-    placer.anneal();
-    auto result = placer.realize();
-    for (const auto &ins : result)
-        cerr << ins.first << " " << ins.second << endl;
+    map<int, set<string>> blks = {{1, blks1}, {2, blks2}};
+    map<int, map<std::string, std::vector<std::string>>> netlists =
+            {{1, netlist1}, {2, netlist2}};
+    map<int, map<char, set<pair<int, int>>>> available_pos =
+            {{1, available_pos1}, {2, available_pos2}};
+
+    auto result = multi_place(blks, available_pos, netlists, fixed_pos, 'p', false);
+
+    for (const auto &iter : result) {
+        cerr << iter.first << " " << Point(iter.second) << endl;
+    }
 }

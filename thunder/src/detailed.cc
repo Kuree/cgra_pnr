@@ -34,7 +34,9 @@ DetailedPlacer::DetailedPlacer(std::vector<std::string> cluster_blocks,
     for (const auto & iter : fixed_pos) {
         Instance ins(iter.first, Point(iter.second), id_count);
         this->fixed_pos.emplace_back(ins);
+        this->instances.emplace_back(ins);
         blk_id_dict.insert({ins.name, id_count++});
+        assert (blk_id_dict[ins.name] == ins.id);
     }
 
     // check if we have enough instances
@@ -66,6 +68,7 @@ DetailedPlacer::DetailedPlacer(std::vector<std::string> cluster_blocks,
         Instance instance(blk_name, pos, id_count);
         instances.emplace_back(instance);
         blk_id_dict.insert({blk_name, id_count++});
+        assert (blk_id_dict[instance.name] == instance.id);
     }
 
     // TODO:
@@ -118,8 +121,14 @@ DetailedPlacer::DetailedPlacer(std::vector<std::string> cluster_blocks,
     for (auto const &iter : netlist) {
         Net net {.net_id = iter.first, .instances = ::vector<int>()};
         for (auto const &blk : iter.second) {
+            assert (blk_id_dict.find(blk) != blk_id_dict.end());
             int blk_id = blk_id_dict[blk];
             net.instances.emplace_back(blk_id);
+            if (blk_id >= (int)this->instances.size()) {
+                std::cerr << blk_id << " blk name: " << blk << std::endl;
+                std::cerr << this->instances.size() << " " << blk_id_dict.size() << std::endl;
+                assert (false);
+            }
             this->instances[blk_id].nets.emplace_back(net_id_count);
         }
         this->netlist.emplace_back(net);
@@ -144,9 +153,11 @@ void DetailedPlacer::move() {
     }
 #endif
     this->moves.clear();
-    auto curr_ins = instances[detail_rand_.uniform<uint64_t>(0, instances.size() - 1)];
+    auto curr_ins = instances[detail_rand_.uniform<uint64_t>(this->fixed_pos.size(),
+                                                             instances.size() - 1)];
     if (curr_ins.name[0] != 'r') {
-        auto next_ins = instances[detail_rand_.uniform<uint64_t>(0, instances.size() - 1)];
+        auto next_ins = instances[detail_rand_.uniform<uint64_t>(this->fixed_pos.size(),
+                                                                 instances.size() - 1)];
         // if it's legal then swap
         // TODO: add legal check for registers
         if (curr_ins.name[0] != next_ins.name[0])

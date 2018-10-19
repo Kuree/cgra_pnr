@@ -99,8 +99,8 @@ class tqdm {
 
         void finish() {
             progress(total_,total_);
-            printf("\n");
-            fflush(stderr);
+            printf("\r");
+            fflush(stdout);
         }
         void progress( int curr, int tot) {
             if(is_tty && (curr%period == 0)) {
@@ -130,7 +130,7 @@ class tqdm {
                     avgrate = dnsum/dtsum;
                 }
 
-                // learn an appropriate period length to avoid spamming stderr
+                // learn an appropriate period length to avoid spamming stdout
                 // and slowing down the loop, shoot for ~25Hz and smooth over 3 seconds
                 if (nupdates > 10) {
                     period = (int)( std::min(std::max((1.0/25)*curr/dt_tot,1.0), 5e5));
@@ -178,7 +178,7 @@ class tqdm {
                 printf("%s ", label.c_str());
                 if (use_colors) printf("\033[0m\033[32m\033[0m\015 ");
 
-                if( ( tot - curr ) > period ) fflush(stderr);
+                if( ( tot - curr ) > period ) fflush(stdout);
 
             }
         }

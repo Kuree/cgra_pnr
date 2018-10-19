@@ -8,13 +8,17 @@ python:
 
 addons:
   apt:
+    sources:
+      - ubuntu-toolchain-r-test
     packages:
       - make
-      - gcc
+      - gcc-7
+      - g++-7
       - realpath
 
 install:
   - pip install -r requirements.txt
+  - pip install thunder/
 
 script:
   - make
