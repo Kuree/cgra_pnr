@@ -4,7 +4,7 @@
 using namespace std;
 
 int main() {
-    auto blks1 = set<string>{"p1", "p2", "p3", "p4"};
+    auto blks1 = set<string>{"p1", "p2", "p3", "p4", "r1", "r2"};
     auto blks2 = set<string>{"p5", "p6", "p7", "p8"};
     auto available_pos1 = map<char, set<pair<int, int>>>();
     available_pos1['p'] = set<pair<int, int>>{make_pair(1, 1),
@@ -20,8 +20,9 @@ int main() {
             {{1, {}}, {2, {}}};
 
     map<std::string, std::vector<std::string>> netlist1;
-    netlist1["1"] = vector<string>{"p1", "p2"};
+    netlist1["1"] = vector<string>{"p1", "p2", "r1"};
     netlist1["2"] = vector<string>{"p3", "p4"};
+    netlist1["3"] = vector<string>{"r1", "p4"};
 
     std::map<std::string, std::vector<std::string>> netlist2;
     netlist2["1"] = vector<string>{"p5", "p6"};
@@ -33,7 +34,7 @@ int main() {
     map<int, map<char, set<pair<int, int>>>> available_pos =
             {{1, available_pos1}, {2, available_pos2}};
 
-    auto result = multi_place(blks, available_pos, netlists, fixed_pos, 'p', false);
+    auto result = multi_place(blks, available_pos, netlists, fixed_pos, 'p', true);
 
     for (const auto &iter : result) {
         cerr << iter.first << " " << Point(iter.second) << endl;

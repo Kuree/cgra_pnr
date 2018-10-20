@@ -293,7 +293,7 @@ def generate_is_cell_legal(board_meta, fold_reg=True):
             blk_type = id_remap[blk_type]
         if x < 0 or y < 0 or x >= width or y >= height:
             return False
-        if layout_board[y][x] != blk_type:
+        if layout_board[y][x] != blk_type and blk[0] != 'r':
             return False
         if board is not None:
             if type(board[y][x]) == list:

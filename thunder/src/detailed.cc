@@ -3,7 +3,7 @@
 #include <cassert>
 #include "detailed.hh"
 
-#define DEBUG 0
+#define DEBUG 1
 
 using namespace std;
 
@@ -20,101 +20,34 @@ DetailedPlacer::DetailedPlacer(std::vector<std::string> cluster_blocks,
                                SimAnneal(),
                                instances(),
                                netlist(),
-                               available_pos(),
                                fixed_pos(),
-                               board(),
-                               moves(),
+                               moves_(),
                                clb_type(clb_type),
-                               fold_reg(fold_reg)
+                               fold_reg_(fold_reg),
+                               reg_no_pos_()
 {
+    // intelligently set the fold reg option
+    set_fold_reg(cluster_blocks, fold_reg);
+
     map<::string, int> blk_id_dict;
-    int id_count = 0;
     // copy fixed pos over
     this->fixed_pos.reserve(fixed_pos.size());
     for (const auto & iter : fixed_pos) {
-        Instance ins(iter.first, Point(iter.second), id_count);
+        Instance ins(iter.first, Point(iter.second), (int)this->instances.size());
+        blk_id_dict.insert({ins.name, ins.id});
         this->fixed_pos.emplace_back(ins);
         this->instances.emplace_back(ins);
-        blk_id_dict.insert({ins.name, id_count++});
         assert (blk_id_dict[ins.name] == ins.id);
     }
 
-    // check if we have enough instances
-    // if so, create dummy instances to fill out the board
-    map<char, int> blk_counts;
-    for (const auto &blk_name: cluster_blocks) {
-        char blk_type = blk_name[0];
-        if (blk_counts.find(blk_type) == blk_counts.end())
-            blk_counts.insert({blk_type, 0});
-        blk_counts[blk_type] += 1;
-    }
-
-    // compute empty spaces
-    map<char, int64_t> empty_spaces;
-    for (const auto &iter : blk_counts) {
-        char blk_type = iter.first;
-        if (fold_reg && blk_type == 'r')
-            continue;
-        int64_t empty_space = available_pos[blk_type].size() - iter.second;
-        if (empty_space < 0)
-            throw ::runtime_error("Not enough block pos for " + ::string(1, blk_type));
-        empty_spaces.insert({blk_type, empty_space});
-    }
     // initial placement
-    for (const auto &blk_name : cluster_blocks) {
-        char blk_type = blk_name[0];
-        auto pos = available_pos[blk_type].back();
-        available_pos[blk_type].pop_back();
-        Instance instance(blk_name, pos, id_count);
-        instances.emplace_back(instance);
-        blk_id_dict.insert({blk_name, id_count++});
-        assert (blk_id_dict[instance.name] == instance.id);
-    }
+    this->init_place_regular(cluster_blocks, blk_id_dict, available_pos);
 
-    // TODO:
-    // add register net stuff
-    // and place register
-    if (fold_reg)
-        throw ::runtime_error("Not implemented");
+    // compute reg no pos
+    this->compute_reg_no_pos(cluster_blocks, netlist, blk_id_dict);
 
-    // fill in dummies
-    for (auto const &iter : empty_spaces) {
-        char blk_type = iter.first;
-        if (iter.second <= 0) {
-            continue;
-        } else{
-            assert (iter.second == (int64_t)available_pos[blk_type].size());
-        }
-        auto pos = available_pos[blk_type].back();
-        available_pos[blk_type].pop_back();
-        Instance ins(blk_type, pos, (int)instances.size());
-        instances.emplace_back(ins);
-    }
-
-    // create 2D grid
-    // the board is essentially the reverse of placement
-    // we need to do that because of the floating registers
-    // init it first
-    for (const auto &ins : instances) {
-        board.insert({ins.pos, make_pair(-1, -1)});
-    }
-
-    // initial placement
-    for (const auto &ins : instances) {
-        if (ins.id >= 0) {
-            assert (board.find(ins.pos) != board.end());
-            if (board[ins.pos].first == -1) {
-                board[ins.pos] = make_pair(ins.id, -1);
-            } else if (board[ins.pos].second == -1) {
-                board[ins.pos] = make_pair(board[ins.pos].first, ins.id);
-            } else {
-                cerr << "pos_0: " << board[ins.pos].first
-                     << " pos_1: " << board[ins.pos].second
-                     << " new: " << ins.id << endl;
-                throw ::runtime_error("More than two instances on the same tile!");
-            }
-        }
-    }
+    // place registers
+    this->init_place_reg(cluster_blocks, blk_id_dict);
 
     // set up the net
     uint32_t net_id_count = 0;
@@ -137,10 +70,195 @@ DetailedPlacer::DetailedPlacer(std::vector<std::string> cluster_blocks,
     }
 
     // random setup
-    randutils::random_generator<std::mt19937> detail_rand_;
     detail_rand_.seed(0);
 
     this->curr_energy = this->init_energy();
+}
+
+void DetailedPlacer::set_fold_reg(const std::vector<std::string> &cluster_blocks,
+                                  bool fold_reg) {
+    if (fold_reg) {
+        bool found_reg = false;
+        for (auto const & blk_id : cluster_blocks) {
+            if (blk_id[0] == 'r') {
+                found_reg = true;
+                break;
+            }
+        }
+        this->fold_reg_ = found_reg;
+    } else {
+        this->fold_reg_ = fold_reg;
+    }
+}
+
+void DetailedPlacer::init_place_regular(const std::vector<std::string> &cluster_blocks,
+                                        std::map<std::string, int> &blk_id_dict,
+                                        std::map<char, std::vector<std::pair<int, int>>> &available_pos) {
+    // check if we have enough instances
+    // if so, create dummy instances to fill out the board
+    map<char, int> blk_counts;
+    for (const auto &blk_name: cluster_blocks) {
+        char blk_type = blk_name[0];
+        if (blk_counts.find(blk_type) == blk_counts.end())
+            blk_counts.insert({blk_type, 0});
+        blk_counts[blk_type] += 1;
+    }
+
+    // compute empty spaces
+    map<char, int64_t> empty_spaces;
+    for (const auto &iter : blk_counts) {
+        char blk_type = iter.first;
+        if (fold_reg_ && blk_type == 'r')
+            continue;
+        int64_t empty_space = available_pos[blk_type].size() - iter.second;
+        if (empty_space < 0)
+            throw ::runtime_error("Not enough block pos for " + ::string(1, blk_type));
+        empty_spaces.insert({blk_type, empty_space});
+    }
+
+    for (const auto &blk_name : cluster_blocks) {
+        char blk_type = blk_name[0];
+        // register has to be done differently
+        if (fold_reg_ && blk_type == 'r')
+            continue;
+        auto pos = available_pos[blk_type].back();
+        available_pos[blk_type].pop_back();
+        Instance instance(blk_name, pos, (int)instances.size());
+        instances.emplace_back(instance);
+        blk_id_dict.insert({blk_name, instance.id});
+        assert (blk_id_dict[instance.name] == instance.id);
+    }
+
+    // fill in dummies
+    for (auto const &iter : empty_spaces) {
+        char blk_type = iter.first;
+        if (iter.second <= 0) {
+            continue;
+        } else {
+            assert (iter.second == (int64_t)available_pos[blk_type].size());
+        }
+        auto pos = available_pos[blk_type].back();
+        available_pos[blk_type].pop_back();
+        Instance ins(blk_type, pos, (int)instances.size());
+        instances.emplace_back(ins);
+    }
+
+    for (const auto &ins : instances) {
+        board_.insert({ins.pos, make_pair(ins.id, -1)});
+    }
+}
+
+void DetailedPlacer::init_place_reg(const std::vector<std::string> &cluster_blocks,
+                                    std::map<std::string, int> &blk_id_dict) {
+    // create 2D grid
+    // for reg fold
+    // init it first
+    if (fold_reg_) {
+        ::vector<Point> positions;
+        for (const auto &ins : instances) {
+                positions.emplace_back(ins.pos);
+        }
+
+        // initial placement for reg fold
+        for (const auto &instance_name : cluster_blocks) {
+            if (instance_name[0] != 'r')
+                continue;
+            for (auto const &pos : positions) {
+                auto assignment = board_[pos];
+                if (assignment.second != -1)
+                    continue;
+                assert (assignment.first != -1);
+                if (reg_no_pos_.find(instance_name) != reg_no_pos_.end()) {
+                    auto blks = reg_no_pos_[instance_name];
+                    if (std::find(blks.begin(), blks.end(), assignment.second) != blks.end())
+                        continue;
+                }
+                Instance ins(instance_name, pos, (int) instances.size());
+                board_[pos] = make_pair(board_[pos].first, ins.id);
+                instances.emplace_back(ins);
+
+                blk_id_dict.insert({ins.name, ins.id});
+                break;
+            }
+        }
+        // next pass to create dummy registers
+        for (const auto &iter : board_) {
+            Point pos = iter.first;
+            assert (board_[pos].first != -1);
+            if (board_[pos].second == -1) {
+                Instance ins(::string(1, 'r'), pos, (int) instances.size());
+                instances.emplace_back(ins);
+                board_[pos] = {board_[pos].first, ins.id};
+            }
+        }
+    }
+}
+
+void DetailedPlacer::compute_reg_no_pos(
+        const std::vector<std::string> &cluster_blocks,
+        std::map<std::string, std::vector<std::string>> &nets,
+        std::map<std::string, int> &blk_id_dict) {
+    // direct translate from Python implementation
+    if (this->fold_reg_) {
+        auto linked_net = group_reg_nets(nets);
+        for (auto const &iter : linked_net) {
+            auto net_id = iter.first;
+            auto net = ::vector<::string>();
+            net.insert(net.end(), nets[net_id].begin(), nets[net_id].end());
+            if (linked_net.find(net_id) != linked_net.end()) {
+                for (auto const  &reg_net_id : linked_net[net_id]) {
+                    if (nets.find(reg_net_id) != nets.end()) {
+                        auto temp_net = nets[reg_net_id];
+                        net.insert(net.end(), temp_net.begin(), temp_net.end());
+                    }
+                }
+            }
+
+            for (auto const &blk : net) {
+                // we only care about the wire it's driving
+                if (blk[0] == 'r' and std::find(cluster_blocks.begin(),
+                                                cluster_blocks.end(),
+                                                blk) != cluster_blocks.end()) {
+                    if (reg_no_pos_.find(blk) == reg_no_pos_.end()) {
+                        reg_no_pos_.insert({blk, {}});
+                    }
+                    for (auto const & bb : net) {
+                        if (bb[0] != 'r')
+                            reg_no_pos_[blk].insert(blk_id_dict[bb]);
+                    }
+                }
+            }
+        }
+    }
+}
+
+bool DetailedPlacer::is_reg_net(const Instance &ins, const Point &next_pos) {
+    if (ins.name[0] == clb_type) {
+        auto assigned = board_[next_pos];
+        int reg_id = -1;
+        if (instances[assigned.first].name[0] == 'r')
+            reg_id = assigned.first;
+        else if (instances[assigned.second].name[0] == 'r')
+            reg_id = assigned.second;
+        if (reg_id != -1) {
+            const auto &reg_name = instances[reg_id].name;
+            if (reg_no_pos_.find(reg_name) != reg_no_pos_.end()) {
+                auto ins_list = reg_no_pos_[reg_name];
+                if (::find(ins_list.begin(), ins_list.end(), ins.id) != ins_list.end())
+                    return false;
+            }
+        }
+    } else if (ins.name[0] == 'r') {
+        if (reg_no_pos_.find(ins.name) != reg_no_pos_.end()) {
+            auto ins_list = reg_no_pos_[ins.name];
+            auto assigned = board_[next_pos];
+            if (::find(ins_list.begin(), ins_list.end(), assigned.first) != ins_list.end())
+                return false;
+            if (::find(ins_list.begin(), ins_list.end(), assigned.second) != ins_list.end())
+                return false;
+        }
+    }
+    return true;
 }
 
 void DetailedPlacer::move() {
@@ -149,30 +267,45 @@ void DetailedPlacer::move() {
     if (real_hpwl != this->curr_energy) {
         cerr << current_step << " "
              << "real: " << real_hpwl << " current: " << this->curr_energy << endl;
-        throw ::runtime_error(" checking failed at step " + ::to_string(this->current_step));
+        throw ::runtime_error("checking failed at step " + ::to_string(this->current_step));
+    }
+    if (fold_reg_) {
+        // check board placement is correct
+        for (auto const &ins : instances) {
+            auto pos = ins.pos;
+            assert (board_.find(pos) != board_.end());
+            auto assigned = board_[pos];
+            if (assigned.first != ins.id && assigned.second != ins.id)
+                throw ::runtime_error("checking failed at ins " + ::to_string(ins.id));
+        }
     }
 #endif
-    this->moves.clear();
+    this->moves_.clear();
     auto curr_ins = instances[detail_rand_.uniform<uint64_t>(this->fixed_pos.size(),
                                                              instances.size() - 1)];
-    if (curr_ins.name[0] != 'r') {
-        auto next_ins = instances[detail_rand_.uniform<uint64_t>(this->fixed_pos.size(),
-                                                                 instances.size() - 1)];
-        // if it's legal then swap
-        // TODO: add legal check for registers
-        if (curr_ins.name[0] != next_ins.name[0])
+    auto next_ins = instances[detail_rand_.uniform<uint64_t>(this->fixed_pos.size(),
+                                                             instances.size() - 1)];
+    // if it's legal then swap
+    if (curr_ins.name[0] != next_ins.name[0])
+        return;
+
+    // check if it's legal in reg net
+    if (fold_reg_) {
+        if ((!is_reg_net(curr_ins, next_ins.pos))
+        || (!is_reg_net(next_ins, curr_ins.pos)))
             return;
-        // swap
-        this->moves.insert(DetailedMove{.blk_id = curr_ins.id, .new_pos = next_ins.pos});
-        this->moves.insert(DetailedMove{.blk_id = next_ins.id, .new_pos = curr_ins.pos});
     }
+
+    // swap
+    this->moves_.insert(DetailedMove{.blk_id = curr_ins.id, .new_pos = next_ins.pos});
+    this->moves_.insert(DetailedMove{.blk_id = next_ins.id, .new_pos = curr_ins.pos});
 }
 
 double DetailedPlacer::energy() {
-    if (!this->moves.empty()) {
+    if (!this->moves_.empty()) {
         map<int, Point> original;
         set<int> changed_net;
-        for (auto const &move : this->moves) {
+        for (auto const &move : this->moves_) {
             original[move.blk_id] = Point(instances[move.blk_id].pos);
             for (const int net: instances[move.blk_id].nets) {
                 changed_net.insert(net);
@@ -187,7 +320,10 @@ double DetailedPlacer::energy() {
         double old_hpwl = get_hpwl(nets, this->instances);
 
         // change the locations
-        this->commit_changes();
+        for (const auto &move : moves_) {
+            int blk_id = move.blk_id;
+            instances[blk_id].pos = move.new_pos;
+        }
 
         // compute the new hpwl
         double new_hpwl = get_hpwl(nets, this->instances);
@@ -204,9 +340,22 @@ double DetailedPlacer::energy() {
 }
 
 void DetailedPlacer::commit_changes() {
-    for (const auto &move : this->moves) {
+    for (const auto &move : this->moves_) {
         int blk_id = move.blk_id;
         instances[blk_id].pos = Point(move.new_pos);
+
+        if (fold_reg_) {
+            assert (board_.find(move.new_pos) != board_.end());
+            auto assigned = board_[move.new_pos];
+            if (instances[assigned.first].name[0] == instances[blk_id].name[0]) {
+                board_[move.new_pos] = {blk_id, assigned.second};
+            } else if (instances[assigned.second].name[0] == instances[blk_id].name[0]) {
+                board_[move.new_pos] = {assigned.first, blk_id};
+            } else {
+                throw ::runtime_error("block state not found for instance " +
+                                      instances[blk_id].name);
+            }
+        }
     }
 }
 

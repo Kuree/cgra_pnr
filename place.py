@@ -341,6 +341,7 @@ def detailed_placement_thunder_wrapper(args):
     netlists = {}
     fixed_blocks = {}
     clb_type = args[0]["clb_type"]
+    fold_reg = args[0]["fold_reg"]
     for i in range(len(args)):
         arg = args[i]
         clusters[i] = arg["clusters"]
@@ -349,7 +350,7 @@ def detailed_placement_thunder_wrapper(args):
         fixed_blocks[i] = arg["blk_pos"]
     return pythunder.detailed_placement(clusters, cells, netlists, fixed_blocks,
                                         clb_type,
-                                        False)
+                                        fold_reg)
 
 
 def perform_detailed_placement(board, centroids, cluster_cells, clusters,
@@ -388,7 +389,7 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
                 "disallowed_pos": disallowed_pos}
 
         map_args.append(args)
-    if not fold_reg and not lambda_url:
+    if not lambda_url:
         return detailed_placement_thunder_wrapper(map_args)
     if lambda_url:
         from requests_futures.sessions import FuturesSession

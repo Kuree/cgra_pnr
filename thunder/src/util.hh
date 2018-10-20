@@ -1,11 +1,8 @@
-//
-// Created by keyi on 10/17/18.
-//
-
 #ifndef THUNDER_UTIL_HH
 #define THUNDER_UTIL_HH
 #include <string>
 #include <vector>
+#include <map>
 #include <climits>
 #include <iterator>
 
@@ -46,5 +43,8 @@ struct Net {
 };
 
 double get_hpwl(const std::vector<Net> &netlist, const std::vector<Instance> &instances);
+
+std::map<std::string, std::vector<std::string>> group_reg_nets(
+        std::map<std::string, std::vector<std::string>> &netlist);
 
 #endif //THUNDER_UTIL_HH
