@@ -3,11 +3,16 @@ CGRA PnR [![Build Status](https://travis-ci.org/Kuree/cgra_pnr.svg?branch=master
 Generic place and route tool for CGRA.
 ## Getting started
 ### Prerequisites
-+ GCC 4.0.x and above
-+ Python 2.7+/Python 3.6+
+Because the C++ implementation, exposed to Python via `pybind11`, uses lots
+of C++14/17 features, a modern C++ compiler is required.
++ `g++` 7.0 and above
++ `gcc` 7.0 and above.
++ `cmake` 3.5 and above.
++ `Python` 2.7+/3.6+
 ### Install
 ```
 $ make
+$ pip install thunder/
 $ pip install -r requirements.txt
 ```
 ### Usage
@@ -60,11 +65,11 @@ TRACK 4                                                                  0.00%
 ```
 
 ### FPGA
-~~It currently can place FPGA based on a custom format designed for VPR. I will release the modified VPR soon. It uses a different format than the packed CGRA file.~~
-
-Due to the recent changes to the initial placement as well as annealing movement change, I've decided to drop suuport of FPGA in the `master` branch. FPGA code is still accessible in older branches.
-
+It supports both `VPR` and `bookshelf` format. As a result, it can place any
+packed version of VPR benchmark or ISPD FPGA benchmark. However, because it's
+not designed to place generic netlists, it may not obtain an optimal solution,
+or may be very slow to converge.
 ### Work in progress
 1. ~~Integrate DAG kernel based partition.~~
 2. ~~Use register folding instead of wasting PE tiles for registers that drives more than one net.~~ Done
-3. (Maybe) reimplement in C++ for efficiency.
+3. ~~reimplement in C++ for efficiency.~~
