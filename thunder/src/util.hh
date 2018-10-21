@@ -20,6 +20,7 @@ struct Point {
 
 std::ostream& operator<<(std::ostream& os, const Point &p);
 bool operator< (const Point &p1, const Point &p2);
+bool operator== (const Point &p1, const Point &p2);
 
 struct Instance {
     std::string name;

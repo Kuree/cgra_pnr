@@ -91,7 +91,7 @@ using std::set;
         auto task_result = task.get();
         for (const auto &iter :task_result) {
             // remove fixed cluster center and dummy blocks
-            if (iter.first[0] != 'x' && iter.first.length() > 1)
+            if (iter.first[0] != 'x')
                 result[iter.first] = iter.second;
         }
     }

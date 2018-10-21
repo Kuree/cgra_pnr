@@ -20,9 +20,9 @@ int main() {
             {{1, {}}, {2, {}}};
 
     map<std::string, std::vector<std::string>> netlist1;
-    netlist1["1"] = vector<string>{"p1", "p2", "r1"};
+    netlist1["1"] = vector<string>{"p1", "r1"};
     netlist1["2"] = vector<string>{"p3", "p4"};
-    netlist1["3"] = vector<string>{"r1", "p4"};
+    netlist1["2"] = vector<string>{"r1", "p2"};
 
     std::map<std::string, std::vector<std::string>> netlist2;
     netlist2["1"] = vector<string>{"p5", "p6"};

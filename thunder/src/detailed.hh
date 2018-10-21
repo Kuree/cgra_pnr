@@ -30,13 +30,12 @@ private:
     std::set<DetailedMove> moves_;
     char clb_type;
     bool fold_reg_;
-    std::map<Point, std::pair<int, int>> board_;
 
     randutils::random_generator<std::mt19937> detail_rand_;
 
     double init_energy() override;
 
-    std::map<std::string, std::set<int>> reg_no_pos_;
+    std::map<int, std::set<int>> reg_no_pos_;
 
     void init_place_regular(const std::vector<std::string> &cluster_blocks,
                             std::map<std::string, int> &blk_id_dict,
@@ -53,6 +52,8 @@ private:
                             std::map<std::string, int> &blk_id_dict);
 
     bool is_reg_net(const Instance &ins, const Point &next_pos);
+
+    void legalize_reg();
 };
 
 

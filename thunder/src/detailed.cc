@@ -43,11 +43,15 @@ DetailedPlacer::DetailedPlacer(std::vector<std::string> cluster_blocks,
     // initial placement
     this->init_place_regular(cluster_blocks, blk_id_dict, available_pos);
 
+    // place registers
+    this->init_place_reg(cluster_blocks, blk_id_dict);
+
     // compute reg no pos
     this->compute_reg_no_pos(cluster_blocks, netlist, blk_id_dict);
 
-    // place registers
-    this->init_place_reg(cluster_blocks, blk_id_dict);
+    // legalize the regs
+    this->legalize_reg();
+
 
     // set up the net
     uint32_t net_id_count = 0;
@@ -142,56 +146,87 @@ void DetailedPlacer::init_place_regular(const std::vector<std::string> &cluster_
         Instance ins(blk_type, pos, (int)instances.size());
         instances.emplace_back(ins);
     }
-
-    for (const auto &ins : instances) {
-        board_.insert({ins.pos, make_pair(ins.id, -1)});
-    }
 }
 
 void DetailedPlacer::init_place_reg(const std::vector<std::string> &cluster_blocks,
                                     std::map<std::string, int> &blk_id_dict) {
-    // create 2D grid
-    // for reg fold
-    // init it first
     if (fold_reg_) {
         ::vector<Point> positions;
         for (const auto &ins : instances) {
+            if (ins.name[0] == clb_type)
                 positions.emplace_back(ins.pos);
         }
 
         // initial placement for reg fold
+        uint32_t reg_count = 0;
         for (const auto &instance_name : cluster_blocks) {
             if (instance_name[0] != 'r')
                 continue;
-            for (auto const &pos : positions) {
-                auto assignment = board_[pos];
-                if (assignment.second != -1)
-                    continue;
-                assert (assignment.first != -1);
-                if (reg_no_pos_.find(instance_name) != reg_no_pos_.end()) {
-                    auto blks = reg_no_pos_[instance_name];
-                    if (std::find(blks.begin(), blks.end(), assignment.second) != blks.end())
-                        continue;
-                }
-                Instance ins(instance_name, pos, (int) instances.size());
-                board_[pos] = make_pair(board_[pos].first, ins.id);
-                instances.emplace_back(ins);
+            const auto &pos = positions[reg_count++];
+            Instance ins(instance_name, pos, (int) instances.size());
+            instances.emplace_back(ins);
 
-                blk_id_dict.insert({ins.name, ins.id});
+            blk_id_dict.insert({ins.name, ins.id});
+
+        }
+        // next pass to create dummy registers
+        for (uint32_t i = reg_count; i < positions.size(); i++) {
+            const auto & pos = positions[i];
+            Instance ins(::string(1, 'r'), pos, (int) instances.size());
+            instances.emplace_back(ins);
+        }
+    }
+}
+
+void DetailedPlacer::legalize_reg() {
+    ::set<Point> available_pos;
+    ::set<int> finished_set;
+    ::set<int> working_set;
+
+    // get all the available positions
+    for (auto const &ins : instances) {
+        if (ins.name[0] != 'r')
+            continue;
+        available_pos.insert(ins.pos);
+        working_set.insert(ins.id);
+    }
+
+    // focus on the regs that drives nets
+    for (auto const id : working_set) {
+        if (reg_no_pos_.find(id) == reg_no_pos_.end())
+            continue;
+        // find a suitable position
+        bool found = false;
+        for (auto const &pos : available_pos) {
+            bool use = true;
+            for (auto const blk_id : reg_no_pos_[id]) {
+                if (instances[blk_id].pos == pos) {
+                    use = false;
+                    break;
+                }
+            }
+            if (use) {
+                instances[id].pos = pos;
+                found = true;
+                finished_set.insert(id);
+                available_pos.erase(pos);
                 break;
             }
         }
-        // next pass to create dummy registers
-        for (const auto &iter : board_) {
-            Point pos = iter.first;
-            assert (board_[pos].first != -1);
-            if (board_[pos].second == -1) {
-                Instance ins(::string(1, 'r'), pos, (int) instances.size());
-                instances.emplace_back(ins);
-                board_[pos] = {board_[pos].first, ins.id};
-            }
+        if (!found) {
+            throw ::runtime_error("cannot find pos for " + instances[id].name);
         }
     }
+
+    // randomly assign the rest of them
+    for (auto const id : working_set) {
+        if (finished_set.find(id) != finished_set.end())
+            continue;
+        Point pos = *available_pos.begin();
+        instances[id].pos = pos;
+        available_pos.erase(pos);
+    }
+
 }
 
 void DetailedPlacer::compute_reg_no_pos(
@@ -216,15 +251,24 @@ void DetailedPlacer::compute_reg_no_pos(
 
             for (auto const &blk : net) {
                 // we only care about the wire it's driving
-                if (blk[0] == 'r' and std::find(cluster_blocks.begin(),
-                                                cluster_blocks.end(),
-                                                blk) != cluster_blocks.end()) {
-                    if (reg_no_pos_.find(blk) == reg_no_pos_.end()) {
-                        reg_no_pos_.insert({blk, {}});
+                if (std::find(cluster_blocks.begin(),
+                              cluster_blocks.end(),
+                              blk) != cluster_blocks.end()) {
+                    int blk_id = blk_id_dict[blk];
+                    if (reg_no_pos_.find(blk_id) == reg_no_pos_.end()) {
+                        reg_no_pos_.insert({blk_id, {}});
                     }
-                    for (auto const & bb : net) {
-                        if (bb[0] != 'r')
-                            reg_no_pos_[blk].insert(blk_id_dict[bb]);
+                    if (blk[0] == 'r') {
+                        for (auto const &bb : net) {
+                            if (bb[0] != 'r')
+                                reg_no_pos_[blk_id].insert(blk_id_dict[bb]);
+                        }
+                    } else {
+                        // only put registers there
+                        for (auto const &bb : net) {
+                            if (bb[0] == 'r')
+                                reg_no_pos_[blk_id].insert(blk_id_dict[bb]);
+                        }
                     }
                 }
             }
@@ -233,28 +277,10 @@ void DetailedPlacer::compute_reg_no_pos(
 }
 
 bool DetailedPlacer::is_reg_net(const Instance &ins, const Point &next_pos) {
-    if (ins.name[0] == clb_type) {
-        auto assigned = board_[next_pos];
-        int reg_id = -1;
-        if (instances[assigned.first].name[0] == 'r')
-            reg_id = assigned.first;
-        else if (instances[assigned.second].name[0] == 'r')
-            reg_id = assigned.second;
-        if (reg_id != -1) {
-            const auto &reg_name = instances[reg_id].name;
-            if (reg_no_pos_.find(reg_name) != reg_no_pos_.end()) {
-                auto ins_list = reg_no_pos_[reg_name];
-                if (::find(ins_list.begin(), ins_list.end(), ins.id) != ins_list.end())
-                    return false;
-            }
-        }
-    } else if (ins.name[0] == 'r') {
-        if (reg_no_pos_.find(ins.name) != reg_no_pos_.end()) {
-            auto ins_list = reg_no_pos_[ins.name];
-            auto assigned = board_[next_pos];
-            if (::find(ins_list.begin(), ins_list.end(), assigned.first) != ins_list.end())
-                return false;
-            if (::find(ins_list.begin(), ins_list.end(), assigned.second) != ins_list.end())
+    int blk_id = ins.id;
+    if (reg_no_pos_.find(blk_id) != reg_no_pos_.end()) {
+        for (auto const &id : reg_no_pos_[blk_id]) {
+            if (next_pos == instances[id].pos)
                 return false;
         }
     }
@@ -269,16 +295,11 @@ void DetailedPlacer::move() {
              << "real: " << real_hpwl << " current: " << this->curr_energy << endl;
         throw ::runtime_error("checking failed at step " + ::to_string(this->current_step));
     }
+
     if (fold_reg_) {
-        // check board placement is correct
-        for (auto const &ins : instances) {
-            auto pos = ins.pos;
-            assert (board_.find(pos) != board_.end());
-            auto assigned = board_[pos];
-            if (assigned.first != ins.id && assigned.second != ins.id)
-                throw ::runtime_error("checking failed at ins " + ::to_string(ins.id));
-        }
+
     }
+
 #endif
     this->moves_.clear();
     auto curr_ins = instances[detail_rand_.uniform<uint64_t>(this->fixed_pos.size(),
@@ -286,7 +307,11 @@ void DetailedPlacer::move() {
     auto next_ins = instances[detail_rand_.uniform<uint64_t>(this->fixed_pos.size(),
                                                              instances.size() - 1)];
     // if it's legal then swap
+    // TODO: change the selection
     if (curr_ins.name[0] != next_ins.name[0])
+        return;
+
+    if (curr_ins.name == next_ins.name)
         return;
 
     // check if it's legal in reg net
@@ -322,7 +347,7 @@ double DetailedPlacer::energy() {
         // change the locations
         for (const auto &move : moves_) {
             int blk_id = move.blk_id;
-            instances[blk_id].pos = move.new_pos;
+            instances[blk_id].pos = Point(move.new_pos);
         }
 
         // compute the new hpwl
@@ -343,19 +368,6 @@ void DetailedPlacer::commit_changes() {
     for (const auto &move : this->moves_) {
         int blk_id = move.blk_id;
         instances[blk_id].pos = Point(move.new_pos);
-
-        if (fold_reg_) {
-            assert (board_.find(move.new_pos) != board_.end());
-            auto assigned = board_[move.new_pos];
-            if (instances[assigned.first].name[0] == instances[blk_id].name[0]) {
-                board_[move.new_pos] = {blk_id, assigned.second};
-            } else if (instances[assigned.second].name[0] == instances[blk_id].name[0]) {
-                board_[move.new_pos] = {assigned.first, blk_id};
-            } else {
-                throw ::runtime_error("block state not found for instance " +
-                                      instances[blk_id].name);
-            }
-        }
     }
 }
 
@@ -366,7 +378,8 @@ double DetailedPlacer::init_energy() {
 ::map<std::string, std::pair<int, int>> DetailedPlacer::realize() {
     map<::string, ::pair<int, int>> result;
     for (auto const &ins : instances) {
-        result[ins.name] = ::make_pair(ins.pos.x, ins.pos.y);
+        if (ins.name.length() > 1)
+            result[ins.name] = ::make_pair(ins.pos.x, ins.pos.y);
     }
     return result;
 }

@@ -12,6 +12,10 @@ bool operator< (const Point &p1, const Point &p2) {
     return ::pair<int, int>({p1.x, p1.y}) < ::pair<int, int>({p2.x, p2.y});
 }
 
+bool operator== (const Point &p1, const Point &p2) {
+    return p1.x == p2.x && p1.y == p2.y;
+}
+
 std::ostream& operator<<(std::ostream& os, const Point &p) {
     os << "x: " << p.x << " y: " << p.y;
     return os;
@@ -79,7 +83,7 @@ std::map<::string, ::vector<::string>> group_reg_nets(
 
     for (auto const &iter : reg_srcs) {
         auto reg_id = iter.first;
-        auto r_net_id = reg_srcs[reg_id];
+        auto r_net_id = iter.second;
         if (resolved_net.find(r_net_id) != resolved_net.end())
             continue;
         // search for the ultimate src
@@ -111,7 +115,11 @@ std::map<::string, ::vector<::string>> group_reg_nets(
     }
 
     // make sure we've merged every nets
-    assert(resolved_net.size() == net_id_to_remove);
+    if (resolved_net.size() != net_id_to_remove) {
+        throw std::runtime_error("unexpected resolve size: " +
+                std::to_string(resolved_net.size()) + " "
+                + std::to_string(net_id_to_remove));
+    }
 
     return linked_nets;
 }

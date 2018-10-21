@@ -13,8 +13,12 @@ def reduce_cluster_graph(netlists, clusters, fixed_blocks,
     current_cluster = clusters[cluster_id]
     new_netlist = {}
     for net_id in netlists:
-        netlist = set(netlists[net_id])
-        if len(netlist.intersection(current_cluster)) > 0:
+        netlist = []
+        for blk_id in netlists[net_id]:
+            if blk_id not in netlist:
+                netlist.append(blk_id)
+        netlist_set = set(netlist)
+        if len(netlist_set.intersection(current_cluster)) > 0:
             # we need to reduce the net
             new_net = []
             for blk_id in netlist:
