@@ -18,17 +18,23 @@ public:
                    std::map<std::string, std::pair<int, int>> fixed_pos,
                    char clb_type,
                    bool fold_reg);
+    DetailedPlacer(std::map<std::string, Point> init_placement,
+                   std::map<std::string, std::vector<std::string>> netlist,
+                   std::map<char, std::vector<std::pair<int, int>>> available_pos,
+                   char clb_type,
+                   bool fold_reg);
     void move() override;
     double energy() override;
     void commit_changes() override;
     std::map<std::string, std::pair<int, int>> realize();
 
 private:
-    std::vector<Instance> instances;
-    std::vector<Net> netlist;
-    std::vector<Instance> fixed_pos;
+    std::vector<Instance> instances_;
+    std::vector<Net> netlist_;
+    std::pair<uint64_t, uint64_t> fixed_pos_index_;
     std::set<DetailedMove> moves_;
-    char clb_type;
+    std::map<char, std::pair<uint64_t, uint64_t>> instance_type_index_;
+    char clb_type_;
     bool fold_reg_;
 
     randutils::random_generator<std::mt19937> detail_rand_;
@@ -54,6 +60,12 @@ private:
     bool is_reg_net(const Instance &ins, const Point &next_pos);
 
     void legalize_reg();
+
+    void process_netlist(const std::map<std::string, std::vector<std::string>> &netlist,
+                         std::map<std::string, int> &blk_id_dict);
+
+    void create_fixed_pos(const std::map<std::string, std::pair<int, int>> &fixed_pos,
+                          std::map<std::string, int> &blk_id_dict);
 };
 
 

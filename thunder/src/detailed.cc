@@ -18,11 +18,12 @@ DetailedPlacer::DetailedPlacer(std::vector<std::string> cluster_blocks,
                                char clb_type,
                                bool fold_reg) :
                                SimAnneal(),
-                               instances(),
-                               netlist(),
-                               fixed_pos(),
+                               instances_(),
+                               netlist_(),
+                               fixed_pos_index_({0, 0}),
                                moves_(),
-                               clb_type(clb_type),
+                               instance_type_index_(),
+                               clb_type_(clb_type),
                                fold_reg_(fold_reg),
                                reg_no_pos_()
 {
@@ -30,15 +31,7 @@ DetailedPlacer::DetailedPlacer(std::vector<std::string> cluster_blocks,
     set_fold_reg(cluster_blocks, fold_reg);
 
     map<::string, int> blk_id_dict;
-    // copy fixed pos over
-    this->fixed_pos.reserve(fixed_pos.size());
-    for (const auto & iter : fixed_pos) {
-        Instance ins(iter.first, Point(iter.second), (int)this->instances.size());
-        blk_id_dict.insert({ins.name, ins.id});
-        this->fixed_pos.emplace_back(ins);
-        this->instances.emplace_back(ins);
-        assert (blk_id_dict[ins.name] == ins.id);
-    }
+    create_fixed_pos(fixed_pos, blk_id_dict);
 
     // initial placement
     this->init_place_regular(cluster_blocks, blk_id_dict, available_pos);
@@ -52,31 +45,52 @@ DetailedPlacer::DetailedPlacer(std::vector<std::string> cluster_blocks,
     // legalize the regs
     this->legalize_reg();
 
-
     // set up the net
-    uint32_t net_id_count = 0;
-    for (auto const &iter : netlist) {
-        Net net {.net_id = iter.first, .instances = ::vector<int>()};
-        for (auto const &blk : iter.second) {
-            assert (blk_id_dict.find(blk) != blk_id_dict.end());
-            int blk_id = blk_id_dict[blk];
-            net.instances.emplace_back(blk_id);
-            if (blk_id >= (int)this->instances.size()) {
-                std::cerr << blk_id << " blk name: " << blk << std::endl;
-                std::cerr << this->instances.size() << " " << blk_id_dict.size() << std::endl;
-                assert (false);
-            }
-            this->instances[blk_id].nets.emplace_back(net_id_count);
-        }
-        this->netlist.emplace_back(net);
-        net_id_count++;
-        assert(net_id_count == this->netlist.size());
-    }
+    process_netlist(netlist, blk_id_dict);
 
     // random setup
     detail_rand_.seed(0);
 
     this->curr_energy = this->init_energy();
+}
+
+void DetailedPlacer::create_fixed_pos(const map<string, pair<int, int>> &fixed_pos,
+        map<string, int> &blk_id_dict) {// copy fixed pos over
+    uint64_t start_index = instances_.size();
+    for (const auto & iter : fixed_pos) {
+        Instance ins(iter.first, Point(iter.second), (int) instances_.size());
+        blk_id_dict.insert({ins.name, ins.id});
+        instances_.emplace_back(ins);
+        //assert (blk_id_dict[ins.name] == ins.id);
+    }
+    uint64_t end_index = instances_.size();
+    fixed_pos_index_ = {start_index, end_index};
+}
+
+void DetailedPlacer::process_netlist(const map<string, vector<string>> &netlist,
+                                     map<string, int> &blk_id_dict) {
+    uint32_t net_id_count = 0;
+    for (auto const &iter : netlist) {
+        Net net {.net_id = iter.first, .instances = vector<int>()};
+        for (auto const &blk : iter.second) {
+            if (blk_id_dict.find(blk) == blk_id_dict.end()) {
+                throw ::runtime_error("unknown block " + blk);
+            }
+            int blk_id = blk_id_dict[blk];
+            net.instances.emplace_back(blk_id);
+            if (blk_id >= (int) instances_.size()) {
+                cerr << blk_id << " blk name: " << blk << endl;
+                cerr << instances_.size() << " " << blk_id_dict.size() << endl;
+                throw ::runtime_error("no enough space left.");
+            }
+            instances_[blk_id].nets.emplace_back(net_id_count);
+        }
+        netlist_.emplace_back(net);
+        net_id_count++;
+        if (net_id_count != netlist_.size()) {
+            throw ::runtime_error("error in creating netlist");
+        }
+    }
 }
 
 void DetailedPlacer::set_fold_reg(const std::vector<std::string> &cluster_blocks,
@@ -100,60 +114,67 @@ void DetailedPlacer::init_place_regular(const std::vector<std::string> &cluster_
                                         std::map<char, std::vector<std::pair<int, int>>> &available_pos) {
     // check if we have enough instances
     // if so, create dummy instances to fill out the board
-    map<char, int> blk_counts;
+    ::map<char, ::vector<::string>> blk_counts;
     for (const auto &blk_name: cluster_blocks) {
         char blk_type = blk_name[0];
         if (blk_counts.find(blk_type) == blk_counts.end())
-            blk_counts.insert({blk_type, 0});
-        blk_counts[blk_type] += 1;
+            blk_counts.insert({blk_type, {}});
+        blk_counts[blk_type].emplace_back(blk_name);
     }
 
     // compute empty spaces
-    map<char, int64_t> empty_spaces;
+    ::map<char, int64_t> empty_spaces;
     for (const auto &iter : blk_counts) {
         char blk_type = iter.first;
         if (fold_reg_ && blk_type == 'r')
             continue;
-        int64_t empty_space = available_pos[blk_type].size() - iter.second;
+        int64_t empty_space = available_pos[blk_type].size() - iter.second.size();
         if (empty_space < 0)
             throw ::runtime_error("Not enough block pos for " + ::string(1, blk_type));
         empty_spaces.insert({blk_type, empty_space});
     }
 
-    for (const auto &blk_name : cluster_blocks) {
-        char blk_type = blk_name[0];
+    // create instances for each block (except registers) as well as dummies
+    for (const auto &iter : blk_counts) {
+        uint64_t start_index = instances_.size();
+
+        char blk_type = iter.first;
         // register has to be done differently
         if (fold_reg_ && blk_type == 'r')
             continue;
-        auto pos = available_pos[blk_type].back();
-        available_pos[blk_type].pop_back();
-        Instance instance(blk_name, pos, (int)instances.size());
-        instances.emplace_back(instance);
-        blk_id_dict.insert({blk_name, instance.id});
-        assert (blk_id_dict[instance.name] == instance.id);
-    }
-
-    // fill in dummies
-    for (auto const &iter : empty_spaces) {
-        char blk_type = iter.first;
-        if (iter.second <= 0) {
-            continue;
-        } else {
-            assert (iter.second == (int64_t)available_pos[blk_type].size());
+        // regular blocks
+        for (const auto &blk_name : iter.second) {
+            auto pos = available_pos[blk_type].back();
+            available_pos[blk_type].pop_back();
+            Instance instance(blk_name, pos, (int) instances_.size());
+            instances_.emplace_back(instance);
+            blk_id_dict.insert({blk_name, instance.id});
+            assert (blk_id_dict[instance.name] == instance.id);
         }
-        auto pos = available_pos[blk_type].back();
-        available_pos[blk_type].pop_back();
-        Instance ins(blk_type, pos, (int)instances.size());
-        instances.emplace_back(ins);
+
+        // empty dummies
+        int64_t available_space = empty_spaces[blk_type];
+        if (available_space > 0) {
+            assert (available_space == (int64_t)available_pos[blk_type].size());
+            for (int i = 0; i < available_space; i++) {
+                auto pos = available_pos[blk_type].back();
+                available_pos[blk_type].pop_back();
+                Instance ins(blk_type, pos, (int) instances_.size());
+                instances_.emplace_back(ins);
+            }
+        }
+        uint64_t end_index = instances_.size() - 1;
+        instance_type_index_.insert({blk_type, {start_index, end_index}});
     }
 }
 
 void DetailedPlacer::init_place_reg(const std::vector<std::string> &cluster_blocks,
                                     std::map<std::string, int> &blk_id_dict) {
     if (fold_reg_) {
+        uint64_t start_index = instances_.size();
         ::vector<Point> positions;
-        for (const auto &ins : instances) {
-            if (ins.name[0] == clb_type)
+        for (const auto &ins : instances_) {
+            if (ins.name[0] == clb_type_)
                 positions.emplace_back(ins.pos);
         }
 
@@ -163,8 +184,8 @@ void DetailedPlacer::init_place_reg(const std::vector<std::string> &cluster_bloc
             if (instance_name[0] != 'r')
                 continue;
             const auto &pos = positions[reg_count++];
-            Instance ins(instance_name, pos, (int) instances.size());
-            instances.emplace_back(ins);
+            Instance ins(instance_name, pos, (int) instances_.size());
+            instances_.emplace_back(ins);
 
             blk_id_dict.insert({ins.name, ins.id});
 
@@ -172,9 +193,11 @@ void DetailedPlacer::init_place_reg(const std::vector<std::string> &cluster_bloc
         // next pass to create dummy registers
         for (uint32_t i = reg_count; i < positions.size(); i++) {
             const auto & pos = positions[i];
-            Instance ins(::string(1, 'r'), pos, (int) instances.size());
-            instances.emplace_back(ins);
+            Instance ins(::string(1, 'r'), pos, (int) instances_.size());
+            instances_.emplace_back(ins);
         }
+        uint64_t end_index = instances_.size() - 1;
+        instance_type_index_.insert({'r', {start_index, end_index}});
     }
 }
 
@@ -184,7 +207,7 @@ void DetailedPlacer::legalize_reg() {
     ::set<int> working_set;
 
     // get all the available positions
-    for (auto const &ins : instances) {
+    for (auto const &ins : instances_) {
         if (ins.name[0] != 'r')
             continue;
         available_pos.insert(ins.pos);
@@ -200,13 +223,13 @@ void DetailedPlacer::legalize_reg() {
         for (auto const &pos : available_pos) {
             bool use = true;
             for (auto const blk_id : reg_no_pos_[id]) {
-                if (instances[blk_id].pos == pos) {
+                if (instances_[blk_id].pos == pos) {
                     use = false;
                     break;
                 }
             }
             if (use) {
-                instances[id].pos = pos;
+                instances_[id].pos = pos;
                 found = true;
                 finished_set.insert(id);
                 available_pos.erase(pos);
@@ -214,7 +237,7 @@ void DetailedPlacer::legalize_reg() {
             }
         }
         if (!found) {
-            throw ::runtime_error("cannot find pos for " + instances[id].name);
+            throw ::runtime_error("cannot find pos for " + instances_[id].name);
         }
     }
 
@@ -223,7 +246,7 @@ void DetailedPlacer::legalize_reg() {
         if (finished_set.find(id) != finished_set.end())
             continue;
         Point pos = *available_pos.begin();
-        instances[id].pos = pos;
+        instances_[id].pos = pos;
         available_pos.erase(pos);
     }
 
@@ -280,7 +303,7 @@ bool DetailedPlacer::is_reg_net(const Instance &ins, const Point &next_pos) {
     int blk_id = ins.id;
     if (reg_no_pos_.find(blk_id) != reg_no_pos_.end()) {
         for (auto const &id : reg_no_pos_[blk_id]) {
-            if (next_pos == instances[id].pos)
+            if (next_pos == instances_[id].pos)
                 return false;
         }
     }
@@ -289,11 +312,13 @@ bool DetailedPlacer::is_reg_net(const Instance &ins, const Point &next_pos) {
 
 void DetailedPlacer::move() {
 #if DEBUG
-    double real_hpwl = get_hpwl(this->netlist, this->instances);
+    double real_hpwl = get_hpwl(this->netlist_, this->instances_);
     if (real_hpwl != this->curr_energy) {
         cerr << current_step << " "
-             << "real: " << real_hpwl << " current: " << this->curr_energy << endl;
-        throw ::runtime_error("checking failed at step " + ::to_string(this->current_step));
+             << "real: " << real_hpwl << " current: "
+             << this->curr_energy << endl;
+        throw ::runtime_error("checking failed at step " +
+                              ::to_string(this->current_step));
     }
 
     if (fold_reg_) {
@@ -302,14 +327,16 @@ void DetailedPlacer::move() {
 
 #endif
     this->moves_.clear();
-    auto curr_ins = instances[detail_rand_.uniform<uint64_t>(this->fixed_pos.size(),
-                                                             instances.size() - 1)];
-    auto next_ins = instances[detail_rand_.uniform<uint64_t>(this->fixed_pos.size(),
-                                                             instances.size() - 1)];
-    // if it's legal then swap
-    // TODO: change the selection
+    auto curr_ins = instances_[detail_rand_.uniform<uint64_t>(fixed_pos_index_.second,
+                                                              instances_.size() - 1)];
+    // only swap with the same type
+    char blk_type = curr_ins.name[0];
+    auto [start_index, end_index] = instance_type_index_[blk_type];
+    auto next_ins = instances_[detail_rand_.uniform<uint64_t>(start_index,
+                                                              end_index)];
+
     if (curr_ins.name[0] != next_ins.name[0])
-        return;
+        throw ::runtime_error("unexpected move selection error");
 
     if (curr_ins.name == next_ins.name)
         return;
@@ -331,8 +358,8 @@ double DetailedPlacer::energy() {
         map<int, Point> original;
         set<int> changed_net;
         for (auto const &move : this->moves_) {
-            original[move.blk_id] = Point(instances[move.blk_id].pos);
-            for (const int net: instances[move.blk_id].nets) {
+            original[move.blk_id] = Point(instances_[move.blk_id].pos);
+            for (const int net: instances_[move.blk_id].nets) {
                 changed_net.insert(net);
             }
         }
@@ -340,22 +367,22 @@ double DetailedPlacer::energy() {
         vector<Net> nets(changed_net.size());
         int count = 0;
         for (auto const net_id : changed_net) {
-            nets[count++] = netlist[net_id];
+            nets[count++] = netlist_[net_id];
         }
-        double old_hpwl = get_hpwl(nets, this->instances);
+        double old_hpwl = get_hpwl(nets, this->instances_);
 
         // change the locations
         for (const auto &move : moves_) {
             int blk_id = move.blk_id;
-            instances[blk_id].pos = Point(move.new_pos);
+            instances_[blk_id].pos = Point(move.new_pos);
         }
 
         // compute the new hpwl
-        double new_hpwl = get_hpwl(nets, this->instances);
+        double new_hpwl = get_hpwl(nets, this->instances_);
 
         // revert
         for (const auto &iter : original)
-            instances[iter.first].pos = iter.second;
+            instances_[iter.first].pos = iter.second;
 
         return this->curr_energy + (new_hpwl - old_hpwl);
 
@@ -367,17 +394,17 @@ double DetailedPlacer::energy() {
 void DetailedPlacer::commit_changes() {
     for (const auto &move : this->moves_) {
         int blk_id = move.blk_id;
-        instances[blk_id].pos = Point(move.new_pos);
+        instances_[blk_id].pos = Point(move.new_pos);
     }
 }
 
 double DetailedPlacer::init_energy() {
-    return get_hpwl(this->netlist, this->instances);
+    return get_hpwl(this->netlist_, this->instances_);
 }
 
 ::map<std::string, std::pair<int, int>> DetailedPlacer::realize() {
     map<::string, ::pair<int, int>> result;
-    for (auto const &ins : instances) {
+    for (auto const &ins : instances_) {
         if (ins.name.length() > 1)
             result[ins.name] = ::make_pair(ins.pos.x, ins.pos.y);
     }

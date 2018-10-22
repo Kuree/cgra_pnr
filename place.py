@@ -2,7 +2,7 @@ from __future__ import print_function
 from util import reduce_cluster_graph
 from argparse import ArgumentParser
 from arch.parser import parse_emb
-from placer import SAClusterPlacer, ClusterException,  SADetailedPlacer
+from placer import SAClusterPlacer, ClusterException
 from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
 import numpy as np
 import os
@@ -10,8 +10,6 @@ import pickle
 from visualize import visualize_placement_cgra, visualize_clustering_cgra
 from sklearn.cluster import KMeans
 import random
-from multiprocessing import Pool
-import multiprocessing
 from arch.cgra import place_special_blocks, save_placement, prune_netlist
 from arch.cgra_packer import load_packed_file
 from arch.fpga import load_packed_fpga_netlist
@@ -19,43 +17,17 @@ from arch import mock_board_meta
 import pythunder
 
 
-def detailed_placement(args, context=None):
+def detailed_placement_thunder(args, context=None):
     if context is not None:
         args = pickle.loads(args["body"])
-    clusters = args["clusters"]
+    blks = list(args["clusters"])
     cells = args["cells"]
     netlist = args["new_netlist"]
-    raw_netlist = args["raw_netlist"]
-    board = args["board"]
     blk_pos = args["blk_pos"]
     fold_reg = args["fold_reg"]
     seed = args["seed"]
-    fallback = args["fallback"]
-    disallowed_pos = args["disallowed_pos"]
+    # disallowed_pos = args["disallowed_pos"]
     clb_type = args["clb_type"]
-    if fold_reg:
-        detailed = SADetailedPlacer(clusters, cells, netlist, raw_netlist,
-                                    board, blk_pos, disallowed_pos,
-                                    fold_reg=fold_reg, seed=seed,
-                                    clb_type=clb_type)
-        if fallback:
-            detailed.steps *= 5
-        # detailed.steps = 10
-        detailed.anneal()
-        placement = detailed.realize()
-    else:
-        placement = detailed_placement_thunder(clusters, cells, netlist,
-                                               blk_pos, clb_type)
-    if context is None:
-        return placement
-    else:
-        return {'statusCode': 200,
-                'headers': {'Content-Type': 'application/json'},
-                'body': placement
-                }
-
-
-def detailed_placement_thunder(blks, cells, netlist, blk_pos, clb_type):
     fixed_pos = {}
     for blk_id in blk_pos:
         fixed_pos[blk_id] = list(blk_pos[blk_id])
@@ -64,8 +36,7 @@ def detailed_placement_thunder(blks, cells, netlist, blk_pos, clb_type):
         available_cells[blk_type] = list(cells[blk_type])
     placer = pythunder.DetailedPlacer(list(blks), netlist, available_cells,
                                       fixed_pos, clb_type,
-                                      False)
-    placer.steps = 100
+                                      fold_reg)
     placer.anneal()
     placer.refine(1000, 0.01)
     placement = placer.realize()
@@ -75,7 +46,13 @@ def detailed_placement_thunder(blks, cells, netlist, blk_pos, clb_type):
             keys_to_remove.add(blk_id)
     for blk_id in keys_to_remove:
         placement.remove(blk_id)
-    return placement
+    if context is None:
+        return placement
+    else:
+        return {'statusCode': 200,
+                'headers': {'Content-Type': 'application/json'},
+                'body': placement
+                }
 
 
 def main():
@@ -176,9 +153,6 @@ def main():
             pos = fixed_blk_pos[blk_id]
             place_on_board(board, blk_id, pos)
 
-        # set them to empty
-        raw_netlist = {}
-
         folded_blocks = {}
         changed_pe = {}
 
@@ -207,16 +181,15 @@ def main():
         data_x[i] = emb[blks[i]]
 
     centroids, cluster_cells, clusters, fallback = perform_global_placement(
-        blks, data_x, emb, fixed_blk_pos, netlists, board,
+        blks, data_x, emb, fixed_blk_pos, netlists,
         board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
         seed=seed, fpga_place=fpga_place, vis=vis_opt)
 
     # placer with each cluster
-    board_pos = perform_detailed_placement(board, centroids,
+    board_pos = perform_detailed_placement(centroids,
                                            cluster_cells, clusters,
                                            fixed_blk_pos, netlists,
-                                           raw_netlist,
-                                           fold_reg, seed, fallback,
+                                           fold_reg, seed,
                                            board_info,
                                            lambda_url)
 
@@ -245,7 +218,7 @@ def get_num_clusters(id_to_name):
     return sum(count)
 
 
-def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists, board,
+def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
                              board_meta, fold_reg, seed,
                              num_clusters=None, fpga_place=False, vis=True):
     # simple heuristics to calculate the clusters
@@ -353,9 +326,9 @@ def detailed_placement_thunder_wrapper(args):
                                         fold_reg)
 
 
-def perform_detailed_placement(board, centroids, cluster_cells, clusters,
-                               fixed_blk_pos, netlists, raw_netlist,
-                               fold_reg, seed, fallback, board_info,
+def perform_detailed_placement(centroids, cluster_cells, clusters,
+                               fixed_blk_pos, netlists,
+                               fold_reg, seed, board_info,
                                lambda_url=""):
     board_pos = fixed_blk_pos.copy()
     map_args = []
@@ -383,15 +356,15 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
             pos = centroids[i]
             blk_pos[node_id] = pos
         args = {"clusters": clusters[c_id], "cells": cells,
-                "new_netlist": new_netlist, "raw_netlist": raw_netlist,
-                "board": board, "blk_pos": blk_pos, "fold_reg": fold_reg,
-                "seed": seed, "fallback": fallback, "clb_type": clb_type,
+                "new_netlist": new_netlist,
+                "blk_pos": blk_pos, "fold_reg": fold_reg,
+                "seed": seed, "clb_type": clb_type,
                 "disallowed_pos": disallowed_pos}
 
         map_args.append(args)
     if not lambda_url:
         return detailed_placement_thunder_wrapper(map_args)
-    if lambda_url:
+    else:
         from requests_futures.sessions import FuturesSession
         session = FuturesSession()
         res_list = []
@@ -404,18 +377,7 @@ def perform_detailed_placement(board, centroids, cluster_cells, clusters,
         for res in res_list:
             r = res.json()
             board_pos.update(r)
-    else:
-        num_of_cpus = min(multiprocessing.cpu_count(), len(clusters))
-        pool = Pool(num_of_cpus)
-        # use the following code to debug
-        # detailed_placement(map_args[0])
-        results = pool.map(detailed_placement, map_args)
-        pool.close()
-        pool.join()
-        for r in results:
-            board_pos.update(r)
-
-    return board_pos
+        return board_pos
 
 
 if __name__ == "__main__":
