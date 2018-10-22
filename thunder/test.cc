@@ -57,9 +57,13 @@ int main() {
 #endif
 
 #if SINGLE_THREAD
-    auto dp = DetailedPlacer(blks1, netlist1, available_pos1, fixed_pos, 'p', true);
+    auto dp = DetailedPlacer(blks1, netlist1, available_pos1, fixed_pos, 'p',
+                             true);
     dp.anneal();
     auto result = dp.realize();
+    dp = DetailedPlacer(result, netlist1, available_pos1, fixed_pos, 'p', true);
+    dp.anneal();
+    result = dp.realize();
 #else
     auto result = multi_place(blks, available_pos, netlists, fixed_pos, 'p', true);
 #endif

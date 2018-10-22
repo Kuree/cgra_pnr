@@ -15,7 +15,9 @@ struct Point {
     Point() = default;
     Point(const int x, const int y) : x(x), y(y) {}
     Point(const Point &p) { x = p.x; y = p.y; }
-    Point(const std::pair<int, int> &p) { x = p.first; y = p.second; }
+    explicit Point(const std::pair<int, int> &p) { x = p.first; y = p.second; }
+    explicit operator std::string() const { return "x: " + std::to_string(x) +
+                                            " y: " + std::to_string(y); }
 };
 
 std::ostream& operator<<(std::ostream& os, const Point &p);
@@ -32,9 +34,15 @@ struct Instance {
     Instance(const std::string &name, const struct Point &pos,
             const int id) :
             name(name), pos(pos), id(id) {}
+    Instance(const std::string &name, const std::pair<int, int> &pos,
+             const int id) :
+            name(name), pos(pos), id(id) {}
     Instance(const char name, const struct Point &pos,
              const int id):
              name(std::string(1, name)), pos(pos), id(id) {}
+    Instance(const char name, const std::pair<int, int> &pos,
+             const int id):
+            name(std::string(1, name)), pos(pos), id(id) {}
 
 };
 
@@ -43,7 +51,8 @@ struct Net {
     std::vector<int> instances;
 };
 
-double get_hpwl(const std::vector<Net> &netlist, const std::vector<Instance> &instances);
+double get_hpwl(const std::vector<Net> &netlist,
+                const std::vector<Instance> &instances);
 
 std::map<std::string, std::vector<std::string>> group_reg_nets(
         std::map<std::string, std::vector<std::string>> &netlist);

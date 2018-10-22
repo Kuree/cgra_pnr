@@ -18,16 +18,39 @@ void init_pythunder(py::module &m) {
     py::class_<DetailedMove>(m, "DetailedMove")
             .def(py::init<>());
 
-    py::class_<DetailedPlacer>(m, "DetailedPlacer").def(py::init<::vector<::string>,
-            ::map<::string, ::vector<std::string>>,
-            ::map<char, ::vector<::pair<int, int>>>,
-            ::map<::string, ::pair<int, int>>,
-            char,
-            bool>())
+    py::class_<DetailedPlacer>(m, "DetailedPlacer")
+            .def(py::init<::vector<::string>,
+                 ::map<::string, ::vector<std::string>>,
+                 ::map<char, ::vector<::pair<int, int>>>,
+                 ::map<::string, ::pair<int, int>>,
+                 char,
+                 bool>())
+            .def(py::init<::vector<::string>,
+                    ::map<::string, ::vector<std::string>>,
+                    ::map<char, ::vector<::pair<int, int>>>,
+                    ::map<::string, ::pair<int, int>>,
+                    char,
+                    bool,
+                    double>())
+            .def(py::init<::map<::string, ::pair<int, int>>,
+                    ::map<::string, ::vector<std::string>>,
+                    ::map<char, ::vector<::pair<int, int>>>,
+                    ::map<::string, ::pair<int, int>>,
+                    char,
+                    bool>())
+            .def(py::init<::map<::string, ::pair<int, int>>,
+                    ::map<::string, ::vector<std::string>>,
+                    ::map<char, ::vector<::pair<int, int>>>,
+                    ::map<::string, ::pair<int, int>>,
+                    char,
+                    bool,
+                    double>())
             .def("anneal", &SimAnneal::anneal)
             .def("realize", &DetailedPlacer::realize)
             .def("refine", &SimAnneal::refine)
-            .def_readwrite("steps", &DetailedPlacer::steps);
+            .def_readwrite("steps", &DetailedPlacer::steps)
+            .def_readwrite("tmax", &DetailedPlacer::tmax)
+            .def_readwrite("tmin", &DetailedPlacer::tmin);
 }
 
 void init_detailed_placement(py::module &m) {

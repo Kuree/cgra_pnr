@@ -55,6 +55,30 @@ def detailed_placement_thunder(args, context=None):
                 }
 
 
+def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
+                          fold_reg):
+    board_layout = board_meta[0]
+    board_info = board_meta[-1]
+    clb_type = board_info["clb_type"]
+    available_pos = {}
+    for y in range(len(board_layout)):
+        for x in range(len(board_layout[y])):
+            blk_type = board_layout[y][x]
+            if blk_type is not None:
+                if blk_type not in available_pos:
+                    available_pos[blk_type] = []
+                available_pos[blk_type].append((x, y))
+    global_refine = pythunder.DetailedPlacer(pre_placement,
+                                             netlists,
+                                             available_pos,
+                                             fixed_pos,
+                                             clb_type,
+                                             fold_reg)
+
+    global_refine.anneal()
+    return global_refine.realize()
+
+
 def main():
     parser = ArgumentParser("CGRA Placer")
     parser.add_argument("-i", "--input", help="Packed netlist file, " +
@@ -192,6 +216,9 @@ def main():
                                            fold_reg, seed,
                                            board_info,
                                            lambda_url)
+    # refinement
+    board_pos = refine_global_thunder(board_meta, board_pos, netlists,
+                                      fixed_blk_pos, fold_reg)
 
     for blk_id in board_pos:
         pos = board_pos[blk_id]

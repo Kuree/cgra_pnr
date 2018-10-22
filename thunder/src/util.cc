@@ -21,7 +21,8 @@ std::ostream& operator<<(std::ostream& os, const Point &p) {
     return os;
 }
 
-double get_hpwl(const std::vector<Net> &netlist, const std::vector<Instance> &instances) {
+double get_hpwl(const ::vector<Net> &netlist,
+                const ::vector<Instance> &instances) {
     double hpwl = 0;
     for (auto const &net : netlist) {
         int xmin = INT_MAX;

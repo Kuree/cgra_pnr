@@ -32,7 +32,6 @@ protected:
     double curr_energy = 0;
     int current_step = 0;
 private:
-    std::random_device rd_;
     randutils::random_generator<std::mt19937> rand_;
 };
 
