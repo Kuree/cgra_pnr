@@ -275,6 +275,28 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
         cluster_sizes = [len(clusters[s]) for s in clusters]
         print("cluster average:", np.average(cluster_sizes), "std:",
               np.std(cluster_sizes), "total:", np.sum(cluster_sizes))
+        new_clusters = {}
+        for c_id in clusters:
+            new_id = "x" + str(c_id)
+            new_clusters[new_id] = set()
+            for blk in clusters[c_id]:
+                # make sure that fixed blocks are not in the clusters
+                if blk not in fixed_blk_pos:
+                    new_clusters[new_id].add(blk)
+        new_layout = []
+        board_layout = board_meta[0]
+        for y in range(len(board_layout)):
+            row = []
+            for x in range(len(board_layout[y])):
+                if board_layout[y][x] is None:
+                    row.append(' ')
+                else:
+                    row.append(board_layout[y][x])
+            new_layout.append(row)
+
+        pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
+                               new_layout, 'p', fold_reg)
+        exit(0)
         try:
             cluster_placer = SAClusterPlacer(clusters, netlists,
                                              fixed_blk_pos,

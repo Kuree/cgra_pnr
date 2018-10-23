@@ -5,7 +5,7 @@
 #include <cmath>
 #include "detailed.hh"
 
-#define DEBUG 1
+#define DEBUG 0
 
 using std::string;
 using std::pair;
@@ -119,7 +119,7 @@ DetailedPlacer
     // annealing setup. low temperature global refinement
     steps = (int)(cluster_blocks.size() * cluster_blocks.size() * step_ratio);
     tmin = 1;
-    tmax = std::max(tmin + 0.1, 0.001 * netlist.size());
+    tmax = (float)std::max(tmin + 0.1, 0.001 * netlist.size());
 }
 
 void DetailedPlacer
