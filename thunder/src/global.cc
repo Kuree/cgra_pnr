@@ -1,5 +1,6 @@
 #include <string>
 #include <cmath>
+#include <limits>
 #include "global.hh"
 
 using std::map;
@@ -40,6 +41,11 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
     for (auto const &iter : intra_count)
         printf("%s %d\n", iter.first.c_str(), iter.second);
 
+    // random setup
+    global_rand_.seed(0);
+
+    // init placement
+    init_place();
 }
 
 void GlobalPlacer::setup_reduced_layout() {
@@ -99,15 +105,17 @@ void GlobalPlacer::setup_reduced_layout() {
 void GlobalPlacer::create_fixed_boxes() {
     for (const auto &iter : fixed_pos_) {
         ClusterBox box {
-            .xmin = iter.second.first,
-            .xmax = iter.second.first,
-            .ymin = iter.second.second,
-            .ymax = iter.second.second,
-            .cx = (double)iter.second.first,
-            .cy = (double)iter.second.second,
-            .id = iter.first,
-            .index = (int)boxes_.size(),
-            .fixed = true
+            (double)iter.second.first, // xmin
+            (double)iter.second.first, // xmax
+            (double)iter.second.second, // ymin
+            (double)iter.second.second, // ymax
+            (double)iter.second.first,  // cx
+            (double)iter.second.second, // cy
+            iter.first,                 // id
+            0,                          // clb_size
+            1,                          // width
+            (int)boxes_.size(),      // index
+            true                     //fixed
         };
         boxes_.emplace_back(box);
     }
@@ -120,10 +128,10 @@ void GlobalPlacer::create_boxes() {
         auto const &cluster_id = iter.first;
         int box_index = (int)boxes_.size();
         ::map<char, int> dsp_blocks;
-        ClusterBox box {
-            .id = cluster_id,
-            .index = box_index,
-            .clb_size = 0};
+        ClusterBox box;
+        box.id = cluster_id;
+        box.index = box_index;
+        box.clb_size = 0;
         for (auto const &blk_name : iter.second) {
             char blk_type = blk_name[0];
             if (blk_type == clb_type_) {
@@ -137,11 +145,13 @@ void GlobalPlacer::create_boxes() {
             }
         }
         boxes_.emplace_back(box);
+        // calculate the width
+        box.width = (uint32_t)std::ceil(std::sqrt(box.clb_size));
 
         // calculate the legal cost function
         ::map<char, tk::spline> splines;
         for (auto const &iter_dsp : dsp_blocks) {
-            auto height = (uint32_t)std::ceil(std::sqrt(box.clb_size));
+            auto height = box.width;
             const char blk_type = iter_dsp.first;
 
             ::vector<double> cost;
@@ -304,7 +314,81 @@ void GlobalPlacer::compute_gaussian_grad() {
 }
 
 void GlobalPlacer::solve() {
+    uint32_t max_iter = 50;
+    const double precision = 0.99999;
+    double obj_value = eval_f();
+    double old_obj_value = 0;
 
+    for (uint32_t iter = 0; iter < max_iter; iter++) {
+        uint32_t inner_iter = 0;
+        ::vector<::pair<double, double>> last_grad_f;
+        double best_hpwl = INT_MAX;
+        while (true) {
+            if (inner_iter == 0) {
+                old_obj_value = obj_value;
+            }
+            obj_value = eval_f();
+            if (obj_value >= precision * old_obj_value)
+                break;
+
+            // compute the gradient
+            ::vector<::pair<double, double>> grad_f;
+            eval_grad_f(grad_f);
+            // adjust force??
+
+            if (inner_iter == 0) {
+                for(auto &grad : grad_f) {
+                    grad.first = -grad.first;
+                    grad.second = -grad.second;
+                }
+            } else {
+                double beta = find_beta(grad_f, last_grad_f);
+                for (uint32_t i = 0; i < grad_f.size(); i++) {
+                    grad_f[i].first = - grad_f[i].first +
+                                      beta * last_grad_f[i].first;
+                    grad_f[i].second = - grad_f[i].second +
+                                       beta * last_grad_f[i].second;
+                }
+            }
+
+            // calculate a_k (step size)
+            double step_size = line_search(grad_f);
+
+            // compute move for every box
+            for (uint32_t i = 0; i < boxes_.size(); i++) {
+                auto &box = boxes_[i];
+                if (box.fixed)
+                    continue;
+                box.cx += grad_f[i].first * step_size;
+                box.cy += grad_f[i].second * step_size;
+
+                // set bound
+                // and a look-ahead legalization
+                int xmin = (int)(box.cx - box.width / 2.0);
+                int ymin = (int)(box.cy - box.width / 2.0);
+                // bound them up
+                xmin = std::max<int>(xmin, 0);
+                xmin = std::min<int>(xmin, reduced_width_ - box.width);
+                ymin = std::max<int>(ymin, 0);
+                ymin = std::min<int>(ymin, reduced_height_ - box.width);
+                box.cx = xmin + box.width / 2.0;
+                box.cy = ymin + box.width / 2.0;
+            }
+
+            // compute the hpwl only once a while
+            if (inner_iter % 4 == 0) {
+                double hpwl = compute_hpwl();
+                if (hpwl > best_hpwl)
+                    break;
+                best_hpwl = hpwl;
+            }
+
+            // copy over the grad_f
+            last_grad_f.assign(grad_f.begin(), grad_f.end());
+            old_obj_value = obj_value;
+            inner_iter++;
+        }
+    }
 }
 
 double GlobalPlacer::eval_f() {
@@ -346,7 +430,7 @@ double GlobalPlacer::eval_f() {
         if (box.fixed)
             continue;
         // spline is calculated based on the xmin
-        int x = box.xmin;
+        double x = box.xmin;
         for (const auto &iter : legal_spline_[box.index]) {
             // TODO: add different legal energy here
             legal += iter.second(x);
@@ -417,10 +501,10 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f) {
         if (box.fixed)
             continue;
         // spline is calculated based on the xmin
-        int x = box.xmin;
+        double x = box.xmin;
         for (const auto &iter : legal_spline_[box.index]) {
             // TODO: add different legal energy here
-            legal[box.index].first += iter.second.deriv(x, 1);
+            legal[box.index].first += iter.second.deriv(1, x);
         }
     }
 
@@ -460,8 +544,8 @@ GlobalPlacer::find_beta(const ::vector<::pair<double, double>> &grad_f,
 }
 
 double
-GlobalPlacer::line_search(const ::vector<::pair<double, double>> &grad_f,
-                          const uint32_t &current_step) {
+GlobalPlacer::line_search(const ::vector<::pair<double, double>> &grad_f) {
+    const double step = 0.3;
     // Keyi:
     // adapted from ntuplace
     uint64_t size = grad_f.size();
@@ -471,5 +555,47 @@ GlobalPlacer::line_search(const ::vector<::pair<double, double>> &grad_f,
         total_grad += grad_f[i].second * grad_f[i].second;
     }
     double avg_grad = std::sqrt(total_grad / size);
-    return  1.0 / avg_grad * current_step;
+    return  1.0 / avg_grad * step;
+}
+
+void GlobalPlacer::init_place() {
+    double center_x = (reduced_width_ - 1) / 2.0;
+    double center_y = (reduced_height_ - 1) / 2.0;
+    for (auto &box : boxes_) {
+        if (box.fixed)
+            continue;
+        box.cx = center_x + global_rand_.uniform<double>(-1, 1);
+        box.cy = center_y + global_rand_.uniform<double>(-1, 1);
+        box.xmin = box.cx - (box.width) / 2.0;
+        box.xmax = box.cx + (box.width) / 2.0;
+        box.ymin = box.cy - (box.width) / 2.0;
+        box.ymax = box.cy + (box.width) / 2.0;
+    }
+}
+
+double GlobalPlacer::compute_hpwl() {
+    double hpwl = 0;
+    for (const auto &net : netlists_) {
+        double xmin = INT_MAX;
+        double xmax = 0;
+        double ymin = INT_MAX;
+        double ymax = 0;
+        for (const auto &box_index : net) {
+            auto const &box = boxes_[box_index];
+            if (box.cx > xmax)
+                xmax = box.cx;
+            if (box.cx < xmin)
+                xmin = box.cx;
+            if (box.cy > ymax)
+                ymax = box.cy;
+            if (box.cy < ymin)
+                ymin = box.cy;
+        }
+        if (xmin >= xmax)
+            throw std::runtime_error("error in xmin/xmax");
+        if (ymin >= ymax)
+            throw std::runtime_error("error in ymin/ymax");
+        hpwl += xmax - xmin + ymax - ymin;
+    }
+    return hpwl;
 }

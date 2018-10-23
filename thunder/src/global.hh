@@ -6,16 +6,17 @@
 
 
 struct ClusterBox {
-    int xmin = 0;
-    int xmax = 0;
-    int ymin = 0;
-    int ymax = 0;
+    double xmin = 0;
+    double xmax = 0;
+    double ymin = 0;
+    double ymax = 0;
     double cx = 0;
     double cy = 0;
 
     std::string id;
     int index = 0;
     int clb_size = 0;
+    int width = 0;
     bool fixed = false;
     std::set<int> nets = {};
 };
@@ -34,8 +35,7 @@ public:
     std::map<int, std::map<std::string, std::pair<int, int>>> realize();
 private:
 
-    double line_search(const std::vector<std::pair<double, double>> &grad_f,
-                       const uint32_t &current_step);
+    double line_search(const std::vector<std::pair<double, double>> &grad_f);
     double eval_f();
     void eval_grad_f(std::vector<std::pair<double, double>> &);
     double find_beta(const std::vector<std::pair<double, double>> &grad_f,
@@ -46,6 +46,7 @@ private:
     void create_fixed_boxes();
     void create_boxes();
     void compute_gaussian_grad();
+    double compute_hpwl();
 
     std::pair<std::vector<std::vector<int>>, std::map<std::string, uint32_t>>
     collapse_netlist(std::map<std::string, std::vector<std::string>>);
@@ -60,6 +61,7 @@ private:
     std::vector<ClusterBox> boxes_;
     std::vector<std::map<char, tk::spline>> legal_spline_;
     std::map<uint32_t, uint32_t> column_mapping_;
+    randutils::random_generator<std::mt19937> global_rand_;
 
     // helper values
     uint32_t reduced_width_ = 0;
