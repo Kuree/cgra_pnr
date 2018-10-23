@@ -26,8 +26,7 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
                            boxes_(),
                            legal_spline_(),
                            column_mapping_(),
-                           hidden_columns(),
-                           gaussian_gradient_(){
+                           hidden_columns() {
     // first compute the reduced board_layout
     setup_reduced_layout();
     create_fixed_boxes();
@@ -38,14 +37,20 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
     auto [nets, intra_count] = this->collapse_netlist(::move(netlists));
     netlists_ = nets;
 
+    /*
     for (auto const &iter : intra_count)
         printf("%s %d\n", iter.first.c_str(), iter.second);
+    */
 
     // random setup
     global_rand_.seed(0);
 
     // init placement
     init_place();
+
+    // set annealing parameters
+    this->tmax = tmin * 2;
+    this->steps = (int)(clusters_.size() * clusters_.size() * 100);
 }
 
 void GlobalPlacer::setup_reduced_layout() {
@@ -84,6 +89,7 @@ void GlobalPlacer::setup_reduced_layout() {
         }
     }
     // sanity check
+    /*
     for (auto const &y : reduced_board_layout_) {
         if (y.size() != reduced_board_layout_[margin].size())
             throw std::runtime_error("failed layout check at " +
@@ -93,13 +99,11 @@ void GlobalPlacer::setup_reduced_layout() {
                 printf("%c", t);
         printf("\n");
     }
+    */
 
     // set helper values
     reduced_height_ = (uint32_t)reduced_board_layout_.size();
     reduced_width_ = (uint32_t)reduced_board_layout_[0].size();
-
-    // compute gradient
-    compute_gaussian_grad();
 }
 
 void GlobalPlacer::create_fixed_boxes() {
@@ -144,9 +148,9 @@ void GlobalPlacer::create_boxes() {
                 dsp_blocks[blk_type]++;
             }
         }
-        boxes_.emplace_back(box);
         // calculate the width
         box.width = (uint32_t)std::ceil(std::sqrt(box.clb_size));
+        boxes_.emplace_back(box);
 
         // calculate the legal cost function
         ::map<char, tk::spline> splines;
@@ -273,80 +277,52 @@ GlobalPlacer::collapse_netlist(::map<::string,
     return {result, intra_cluster_count};
 }
 
-void GlobalPlacer::compute_gaussian_grad() {
-    ::vector<double> grad_x;
-    ::vector<double> grad_y;
-
-    const auto x_mid = (reduced_width_ - 1) / 2.0;
-    const auto y_mid = (reduced_height_ - 1) / 2.0;
-
-    const auto x_spread = 1. / (sigma_x * sigma_x * 2);
-    const auto y_spread = 1. / (sigma_y * sigma_y * 2);
-
-    grad_x.resize(reduced_width_);
-    for (uint32_t i = 0;  i < reduced_width_;  i++) {
-        auto const x = i - x_mid;
-        grad_x[i] = std::exp(-x * x * x_spread);
-    }
-
-    grad_y.resize(reduced_height_);
-    for (uint32_t i = 0;  i < reduced_height_;  i++) {
-        auto y = i - y_mid;
-        grad_y[i] = std::exp(-y * y * y_spread);
-    }
-
-    double denominator = 0;
-    gaussian_gradient_.resize(reduced_height_);
-    for (uint32_t y = 0; y < reduced_height_; y++) {
-        gaussian_gradient_[y].resize(reduced_width_);
-        for (uint32_t x = 0; x < reduced_width_; x++) {
-            double value = grad_x[x] * grad_y[y];
-            denominator += value;
-            gaussian_gradient_[y][x] = value;
-        }
-    }
-
-    for (uint32_t y = 0; y < reduced_height_; y++) {
-        for (uint32_t x = 0; x < reduced_width_; x++) {
-            gaussian_gradient_[y][x] /= denominator;
-        }
-    }
-}
-
 void GlobalPlacer::solve() {
     uint32_t max_iter = 50;
-    const double precision = 0.99999;
-    double obj_value = eval_f();
+    const double precision = 0.99;
+    double obj_value = 0;
     double old_obj_value = 0;
 
     for (uint32_t iter = 0; iter < max_iter; iter++) {
+        obj_value = eval_f();
+        printf("HPWL: %f\n", obj_value);
+        if (iter > 0 && obj_value >= precision * old_obj_value)
+            break;
         uint32_t inner_iter = 0;
         ::vector<::pair<double, double>> last_grad_f;
         double best_hpwl = INT_MAX;
         while (true) {
             if (inner_iter == 0) {
-                old_obj_value = obj_value;
+                old_obj_value = std::numeric_limits<double>::max();
             }
             obj_value = eval_f();
-            if (obj_value >= precision * old_obj_value)
+            if (obj_value >= precision * old_obj_value) {
                 break;
+            }
 
             // compute the gradient
             ::vector<::pair<double, double>> grad_f;
-            eval_grad_f(grad_f);
-            // adjust force??
+            eval_grad_f(grad_f, iter);
+            // adjust force
+            adjust_force(grad_f);
+
+            ::vector<::pair<double, double>> direction;
+            direction.resize(grad_f.size());
+            const ::pair<double, double> zero = {0, 0};
+            std::fill(direction.begin(), direction.end(), zero);
+
 
             if (inner_iter == 0) {
-                for(auto &grad : grad_f) {
-                    grad.first = -grad.first;
-                    grad.second = -grad.second;
+                for(uint32_t i = 0; i < grad_f.size(); i++) {
+                    direction[i].first = -grad_f[i].first;
+                    direction[i].second = -grad_f[i].second;
                 }
             } else {
                 double beta = find_beta(grad_f, last_grad_f);
                 for (uint32_t i = 0; i < grad_f.size(); i++) {
-                    grad_f[i].first = - grad_f[i].first +
+                    direction[i].first = - grad_f[i].first +
                                       beta * last_grad_f[i].first;
-                    grad_f[i].second = - grad_f[i].second +
+                    direction[i].second = - grad_f[i].second +
                                        beta * last_grad_f[i].second;
                 }
             }
@@ -359,20 +335,22 @@ void GlobalPlacer::solve() {
                 auto &box = boxes_[i];
                 if (box.fixed)
                     continue;
-                box.cx += grad_f[i].first * step_size;
-                box.cy += grad_f[i].second * step_size;
+                box.cx += direction[i].first * step_size;
+                box.cy += direction[i].second * step_size;
 
                 // set bound
                 // and a look-ahead legalization
-                int xmin = (int)(box.cx - box.width / 2.0);
-                int ymin = (int)(box.cy - box.width / 2.0);
+                double xmin = box.cx - box.width / 2.0;
+                double ymin = box.cy - box.width / 2.0;
                 // bound them up
-                xmin = std::max<int>(xmin, 0);
-                xmin = std::min<int>(xmin, reduced_width_ - box.width);
-                ymin = std::max<int>(ymin, 0);
-                ymin = std::min<int>(ymin, reduced_height_ - box.width);
+                xmin = std::max<double>(xmin, 0);
+                xmin = std::min<double>(xmin, reduced_width_ - box.width);
+                ymin = std::max<double>(ymin, 0);
+                ymin = std::min<double>(ymin, reduced_height_ - box.width);
                 box.cx = xmin + box.width / 2.0;
                 box.cy = ymin + box.width / 2.0;
+                box.xmin = xmin;
+                box.ymin = ymin;
             }
 
             // compute the hpwl only once a while
@@ -389,9 +367,27 @@ void GlobalPlacer::solve() {
             inner_iter++;
         }
     }
+
+    // legalize them into integers
+    for (auto &box : boxes_) {
+        if (box.fixed)
+            continue;
+        box.xmin = std::min<double>(std::round(box.xmin),
+                                    reduced_width_ - box.width);
+        box.xmin = std::max<double>(0, box.xmin);
+        box.ymin = std::min<double>(std::round(box.ymin),
+                                    reduced_height_ - box.width);
+        box.ymin = std::max<double>(0, box.ymin);
+        box.xmax = box.xmin + box.width;
+        box.ymax = box.ymin + box.width;
+        box.cx = box.xmin + box.width / 2.0;
+        box.cy = box.ymax + box.width / 2.0;
+    }
+
+    this->curr_energy = eval_f(anneal_param_);
 }
 
-double GlobalPlacer::eval_f() {
+double GlobalPlacer::eval_f(double overlap_param) {
     // first part is HPWL.
     double hpwl = 0;
     for (const auto & net : netlists_) {
@@ -415,13 +411,27 @@ double GlobalPlacer::eval_f() {
 
     // second part is the spreading potential
     double overlap = 0;
-    for (const auto &box : boxes_) {
-        if (box.fixed)
+    for (const auto &box1 : boxes_) {
+        if (box1.fixed)
             continue;
-        int x = (int)box.cx;
-        int y = (int)box.cy;
+        double x1 = box1.cx;
+        double y1 = box1.cy;
 
-        overlap += gaussian_gradient_[y][x];
+        for (const auto &box2 : boxes_) {
+            if (box2.fixed || box1.index == box2.index)
+                continue;
+            // compute the distance
+            double x2 = box2.cx;
+            double y2 = box2.cy;
+            double d_2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+            double width_2 = (box1.width + box2.width)
+                             * (box1.width + box2.width);
+            if (d_2 >= width_2) {
+                continue;
+            } else {
+                overlap += (d_2 - width_2) * (d_2 - width_2);
+            }
+        }
     }
 
     // third part is the legalization
@@ -437,17 +447,17 @@ double GlobalPlacer::eval_f() {
         }
     }
 
-    return hpwl * hpwl_param_ + overlap * potential_param_ +
+    return hpwl * hpwl_param_ + overlap * potential_param_ * overlap_param +
            legal * legal_param_;
 }
 
-void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f) {
+void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f,
+                                const uint32_t current_step) {
     // first part is HWPL
     ::vector<::pair<double, double>> hpwl;
     ::vector<::pair<double, double>> overlap;
     ::vector<::pair<double, double>> legal;
 
-    // resize
     grad_f.resize(boxes_.size());
     hpwl.resize(boxes_.size());
     overlap.resize(boxes_.size());
@@ -457,8 +467,8 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f) {
     const auto zero = std::make_pair(0, 0);
     std::fill(grad_f.begin(), grad_f.end(), zero);
     std::fill(hpwl.begin(), hpwl.end(), zero);
-    std::fill(overlap.begin(), hpwl.end(), zero);
-    std::fill(legal.begin(), hpwl.end(), zero);
+    std::fill(overlap.begin(), overlap.end(), zero);
+    std::fill(legal.begin(), legal.end(), zero);
 
     for (const auto & net : netlists_) {
         int N = (int)net.size();
@@ -474,26 +484,40 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f) {
         for (const auto &index : net) {
             auto x = boxes_[index].cx;
             auto y = boxes_[index].cy;
-            hpwl[index].first += 2.0 / (N * N) * ((N * N - 2 * N + 2) * x -
+            hpwl[index].first -= 2.0 / (N * N) * ((N * N - 2 * N + 2) * x -
                                  2 * (N - 1) * (x_sum - x));
-            hpwl[index].second += 2.0 / (N * N) * ((N * N - 2 * N + 2) * y -
+            hpwl[index].second -= 2.0 / (N * N) * ((N * N - 2 * N + 2) * y -
                                   2 * (N - 1) * (y_sum - y));
         }
     }
     // second part is the spreading potential
-
-    const auto x_spread_2 = 1. / (sigma_x * sigma_x);
-    const auto y_spread_2 = 1. / (sigma_y * sigma_y);
-    for (const auto &box : boxes_) {
-        if (box.fixed)
+    for (const auto &box1 : boxes_) {
+        if (box1.fixed)
             continue;
-        int x = (int)box.cx;
-        int y = (int)box.cy;
+        double x1 = box1.cx;
+        double y1 = box1.cy;
 
-        overlap[box.index].first += gaussian_gradient_[y][x] *
-                                    (-x / x_spread_2);
-        overlap[box.index].second += gaussian_gradient_[y][x] *
-                                     (-y / y_spread_2);
+        for (const auto &box2 : boxes_) {
+            if (box2.fixed || box1.index == box2.index)
+                continue;
+            // compute the distance
+            double x2 = box2.cx;
+            double y2 = box2.cy;
+            double d_2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+            double width_2 = (box1.width + box2.width)
+                             * (box1.width + box2.width);
+            if (d_2 >= width_2) {
+                continue;
+            } else if (d_2 == 0) {
+                throw std::runtime_error("not implemented");
+            } else {
+                // compute the gradient
+                double value = std::abs(2 * (d_2 - width_2));
+                double norm = std::sqrt(d_2);
+                overlap[box1.index].first -= (x1 - x2) / norm * value;
+                overlap[box1.index].second -= (y1 - y2) / norm * value;
+            }
+        }
     }
 
     // third part is the legalization
@@ -504,7 +528,7 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f) {
         double x = box.xmin;
         for (const auto &iter : legal_spline_[box.index]) {
             // TODO: add different legal energy here
-            legal[box.index].first += iter.second.deriv(1, x);
+            legal[box.index].first -= iter.second.deriv(1, x);
         }
     }
 
@@ -512,9 +536,11 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f) {
         auto index = box.index;
         grad_f[index].first = hpwl[index].first * hpwl_param_
                               + overlap[index].first * potential_param_
+                                * (current_step)
                               + legal[index].first * legal_param_;
         grad_f[index].second = hpwl[index].second * hpwl_param_
                                + overlap[index].second * potential_param_
+                                * (current_step)
                                + legal[index].second * legal_param_;
     }
 }
@@ -536,16 +562,16 @@ GlobalPlacer::find_beta(const ::vector<::pair<double, double>> &grad_f,
     for (uint32_t i = 0; i < grad_f.size(); i++ ) {
         // g_k^T ( g_k - g_{k-1}
         product += grad_f[i].first *
-                   (grad_f[i].first + last_grad_f[i].first);
+                   (grad_f[i].first - last_grad_f[i].first);
         product += grad_f[i].second *
-                   (grad_f[i].second + last_grad_f[i].second);
+                   (grad_f[i].second - last_grad_f[i].second);
     }
     return product / l2norm;
 }
 
 double
 GlobalPlacer::line_search(const ::vector<::pair<double, double>> &grad_f) {
-    const double step = 0.3;
+    const double step = 1;
     // Keyi:
     // adapted from ntuplace
     uint64_t size = grad_f.size();
@@ -556,6 +582,24 @@ GlobalPlacer::line_search(const ::vector<::pair<double, double>> &grad_f) {
     }
     double avg_grad = std::sqrt(total_grad / size);
     return  1.0 / avg_grad * step;
+}
+
+void
+GlobalPlacer::adjust_force(::vector<::pair<double, double>> &grad_f) {
+    double norm_2 = 0;
+    for (auto const &vec : grad_f) {
+        norm_2 += vec.first * vec.first;
+        norm_2 += vec.second * vec.second;
+    }
+    double average = norm_2 / grad_f.size();
+    // truncate to the average
+    for (auto &vec : grad_f) {
+        double norm = vec.first * vec.first + vec.second * vec.second;
+        if (norm > average) {
+            vec.first = vec.first * average / norm;
+            vec.second = vec.second * average / norm;
+        }
+    }
 }
 
 void GlobalPlacer::init_place() {
@@ -573,7 +617,7 @@ void GlobalPlacer::init_place() {
     }
 }
 
-double GlobalPlacer::compute_hpwl() {
+double GlobalPlacer::compute_hpwl() const {
     double hpwl = 0;
     for (const auto &net : netlists_) {
         double xmin = INT_MAX;
@@ -591,11 +635,103 @@ double GlobalPlacer::compute_hpwl() {
             if (box.cy < ymin)
                 ymin = box.cy;
         }
-        if (xmin >= xmax)
-            throw std::runtime_error("error in xmin/xmax");
-        if (ymin >= ymax)
-            throw std::runtime_error("error in ymin/ymax");
         hpwl += xmax - xmin + ymax - ymin;
     }
     return hpwl;
+}
+
+::map<int, ::map<char, ::vector<::pair<int, int>>>>
+GlobalPlacer::realize() {
+    // several problem to solve
+    // 1. reverse the mapping
+    // 2. assign cells
+
+    ::map<int, ::map<char, ::vector<::pair<int, int>>>> result;
+
+    return result;
+}
+
+void GlobalPlacer::move() {
+    auto box_index = global_rand_.uniform<uint64_t>(fixed_pos_.size(),
+                                                        boxes_.size() - 1);
+
+    int dx = global_rand_.uniform<int>(-2, 2);
+    int dy = global_rand_.uniform<int>(-2, 2);
+
+    double xmin = boxes_[box_index].xmin + dx;
+    double ymin = boxes_[box_index].ymin + dy;
+    xmin = std::min<double>(xmin,
+                            reduced_width_ - boxes_[box_index].width);
+    xmin = std::max<double>(0, xmin);
+    ymin = std::min<double>(ymin,
+                            reduced_height_ - boxes_[box_index].width);
+    ymin = std::max<double>(0, ymin);
+
+    dx = (int)(xmin - boxes_[box_index].xmin);
+    dy = (int)(ymin - boxes_[box_index].ymin);
+
+    if (dx == 0 and dy == 0) {
+        // assume we always have at least a fixed box
+        current_move_.box_index = 0;
+    } else {
+        current_move_.box_index = box_index;
+        current_move_.dx = dx;
+        current_move_.dy = dy;
+    }
+}
+
+double GlobalPlacer::energy() {
+    if (current_move_.box_index == 0)
+        return curr_energy;
+    auto &box = boxes_[current_move_.box_index];
+    int dx = current_move_.dx;
+    int dy = current_move_.dy;
+
+    // make the change
+    box.xmin += dx;
+    box.ymax += dx;
+    box.cx += dx;
+    box.ymin += dy;
+    box.ymax += dy;
+    box.cy += dy;
+
+    double new_energy = eval_f(anneal_param_);
+
+    // revert back
+    box.xmin -= dx;
+    box.ymax -= dx;
+    box.cx -= dx;
+    box.ymin -= dy;
+    box.ymax -= dy;
+    box.cy -= dy;
+
+
+    return new_energy;
+}
+
+void GlobalPlacer::commit_changes() {
+    if (current_move_.box_index == 0)
+        return;
+
+    auto &box = boxes_[current_move_.box_index];
+    int dx = current_move_.dx;
+    int dy = current_move_.dy;
+
+    // make the change
+    box.xmin += dx;
+    box.ymax += dx;
+    box.cx += dx;
+    box.ymin += dy;
+    box.ymax += dy;
+    box.cy += dy;
+
+    current_move_.box_index = 0;
+}
+
+void GlobalPlacer::anneal() {
+    double old_energy = curr_energy;
+    printf("Before annealing energy: %f\n", old_energy);
+    SimAnneal::anneal();
+    printf("After annealing energy: %f improvement: %f\n",
+            curr_energy, (old_energy - curr_energy) / old_energy);
 }

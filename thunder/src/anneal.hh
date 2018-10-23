@@ -15,11 +15,9 @@ class SimAnneal {
 public:
     SimAnneal();
 
-    virtual void move() {}
     virtual double init_energy() { return 0; }
     virtual double energy() { return 0; }
-    virtual void commit_changes() {}
-    void anneal();
+    virtual void anneal();
     void refine(int num_iter, double threshold);
 
     // attributes
@@ -29,6 +27,8 @@ public:
     float tmin = 3;
 
 protected:
+    virtual void move() {}
+    virtual void commit_changes() {}
     double curr_energy = 0;
     int current_step = 0;
 private:

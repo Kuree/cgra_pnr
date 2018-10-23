@@ -59,7 +59,10 @@ void init_pythunder(py::module &m) {
                     std::map<std::string, std::pair<int, int>>,
                     std::vector<std::vector<char>>,
                     char,
-                    bool>());
+                    bool>())
+            .def("solve", &GlobalPlacer::solve)
+            .def("realize", &GlobalPlacer::realize)
+            .def("anneal", &SimAnneal::anneal);
 }
 
 void init_detailed_placement(py::module &m) {

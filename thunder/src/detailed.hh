@@ -28,10 +28,12 @@ public:
                    char clb_type,
                    bool fold_reg,
                    double step_ratio = 1);
-    void move() override;
     double energy() override;
-    void commit_changes() override;
     std::map<std::string, std::pair<int, int>> realize();
+
+protected:
+    void move() override;
+    void commit_changes() override;
 
 private:
     std::vector<Instance> instances_;

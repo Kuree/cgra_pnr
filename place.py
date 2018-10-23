@@ -204,7 +204,7 @@ def main():
     for i in range(len(blks)):
         data_x[i] = emb[blks[i]]
 
-    centroids, cluster_cells, clusters, fallback = perform_global_placement(
+    centroids, cluster_cells, clusters = perform_global_placement(
         blks, data_x, emb, fixed_blk_pos, netlists,
         board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
         seed=seed, fpga_place=fpga_place, vis=vis_opt)
@@ -257,104 +257,56 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
     num_clusters = min(num_clusters, len(blks))
     clusters = {}
     cluster_cells, centroids = None, None
-    while True:     # this just enforce we can actually place it
-        if num_clusters == 0:
-            cluster_placer = None
-            break
-        # num_clusters = 7
-        print("Trying: num of clusters", num_clusters)
-        kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(data_x)
-        cluster_ids = kmeans.labels_
-        clusters = {}
-        for i in range(len(blks)):
-            cid = cluster_ids[i]
-            if cid not in clusters:
-                clusters[cid] = {blks[i]}
-            else:
-                clusters[cid].add(blks[i])
-        cluster_sizes = [len(clusters[s]) for s in clusters]
-        print("cluster average:", np.average(cluster_sizes), "std:",
-              np.std(cluster_sizes), "total:", np.sum(cluster_sizes))
-        new_clusters = {}
-        for c_id in clusters:
-            new_id = "x" + str(c_id)
-            new_clusters[new_id] = set()
-            for blk in clusters[c_id]:
-                # make sure that fixed blocks are not in the clusters
-                if blk not in fixed_blk_pos:
-                    new_clusters[new_id].add(blk)
-        new_layout = []
-        board_layout = board_meta[0]
-        for y in range(len(board_layout)):
-            row = []
-            for x in range(len(board_layout[y])):
-                if board_layout[y][x] is None:
-                    row.append(' ')
-                else:
-                    row.append(board_layout[y][x])
-            new_layout.append(row)
 
-        pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
-                               new_layout, 'p', fold_reg)
-        exit(0)
-        try:
-            cluster_placer = SAClusterPlacer(clusters, netlists,
-                                             fixed_blk_pos,
-                                             board_meta=board_meta,
-                                             fold_reg=fold_reg,
-                                             seed=seed)  # num_mb=num_mb)
-            # use the following code to debug
-            # cluster_placer.steps = 0
-            cluster_placer.anneal()
-            cluster_cells, centroids = cluster_placer.realize()
-            break
-        except ClusterException as _:
-            num_clusters -= 1
-    if num_clusters > 0:
-        fallback = False
-    else:
-        if fpga_place:
-            raise Exception("Full board placement not supported in FPGA")
-        # it exceeds the algorithm's limit
-        # fall back to full-size annealing
-        print("Netlist too big. Fall back to full-board annealing")
-        clusters = {0: blks}
-        # put there one by one
-        cluster_cells = {0: {}}
-        available_cells = []
-        board_layout = board_meta[0]
-        mem_cells = set()
-        for y in range(len(board_layout)):
-            for x in range(len(board_layout[y])):
-                if board_layout[y][x] == "p":
-                    available_cells.append((x, y))
-                elif board_layout[y][x] == "m":
-                    mem_cells.add((x, y))
-        p_blks = [b for b in blks if b[0] == "p"]
-        m_blks = [b for b in blks if b[0] == "m"]
-        if len(available_cells) < len(p_blks):
-            raise Exception("We have " + str(len(available_cells)) +
-                            " PE tiles, but the netlist needs " +
-                            str(len(p_blks)))
+    print("Trying: num of clusters", num_clusters)
+    kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(data_x)
+    cluster_ids = kmeans.labels_
+    clusters = {}
+    for i in range(len(blks)):
+        cid = cluster_ids[i]
+        if cid not in clusters:
+            clusters[cid] = {blks[i]}
         else:
-            print("Using", len(p_blks), "out of", len(available_cells),
-                  "available PE tiles")
-        cluster_cells[0]["p"] = set(available_cells[:len(p_blks)])
-        # handle memory
-        if len(mem_cells) < len(m_blks):
-            raise Exception("We have " + str(len(mem_cells)) +
-                            " MEM tiles, but the netlist needs " +
-                            str(len(m_blks)))
-        else:
-            print("Using", len(m_blks), "out of", len(mem_cells),
-                  "available MEM tiles")
-        cluster_cells[0]["m"] = mem_cells
-        centroids = {0: (len(board_layout[0]) // 2, len(board_layout) // 2)}
-        fallback = True
+            clusters[cid].add(blks[i])
+    cluster_sizes = [len(clusters[s]) for s in clusters]
+    print("cluster average:", np.average(cluster_sizes), "std:",
+          np.std(cluster_sizes), "total:", np.sum(cluster_sizes))
+    new_clusters = {}
+    for c_id in clusters:
+        new_id = "x" + str(c_id)
+        new_clusters[new_id] = set()
+        for blk in clusters[c_id]:
+            # make sure that fixed blocks are not in the clusters
+            if blk not in fixed_blk_pos:
+                new_clusters[new_id].add(blk)
+    new_layout = []
+    board_layout = board_meta[0]
+    for y in range(len(board_layout)):
+        row = []
+        for x in range(len(board_layout[y])):
+            if board_layout[y][x] is None:
+                row.append(' ')
+            else:
+                row.append(board_layout[y][x])
+        new_layout.append(row)
+    print("new_clusters")
+    print(new_clusters)
+    print(netlists)
+    print(fixed_blk_pos)
+    print(new_layout)
+
+    gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
+                                new_layout, 'p', fold_reg)
+
+    gp.solve()
+    gp.anneal()
+    cluster_cells = gp.realize()
+
     if vis:
         visualize_clustering_cgra(board_meta, cluster_cells)
+    exit(0)
     assert(cluster_cells is not None and centroids is not None)
-    return centroids, cluster_cells, clusters, fallback
+    return centroids, cluster_cells, clusters
 
 
 def detailed_placement_thunder_wrapper(args):

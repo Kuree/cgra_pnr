@@ -21,7 +21,13 @@ struct ClusterBox {
     std::set<int> nets = {};
 };
 
-class GlobalPlacer : SimAnneal {
+struct ClusterMove {
+    uint64_t box_index = 0;
+    int dx;
+    int dy;
+};
+
+class GlobalPlacer : public SimAnneal {
 public:
     GlobalPlacer(std::map<std::string, std::set<std::string>> clusters,
                  std::map<std::string, std::vector<std::string>> netlists,
@@ -31,22 +37,28 @@ public:
                  bool reg_fold);
 
     void solve();
-    void anneal();
-    std::map<int, std::map<std::string, std::pair<int, int>>> realize();
+    void anneal() override;
+    std::map<int, std::map<char, std::vector<std::pair<int, int>>>> realize();
+
+protected:
+    void move() override;
+    void commit_changes() override;
+    double energy() override;
+
 private:
 
     double line_search(const std::vector<std::pair<double, double>> &grad_f);
-    double eval_f();
-    void eval_grad_f(std::vector<std::pair<double, double>> &);
+    double eval_f(double overlap_param=1);
+    void eval_grad_f(std::vector<std::pair<double, double>> &, const uint32_t);
     double find_beta(const std::vector<std::pair<double, double>> &grad_f,
                      const std::vector<std::pair<double, double>> &last_grad_f);
+    void adjust_force(std::vector<std::pair<double, double>> &grad_f);
     void init_place();
 
     void setup_reduced_layout();
     void create_fixed_boxes();
     void create_boxes();
-    void compute_gaussian_grad();
-    double compute_hpwl();
+    double compute_hpwl() const;
 
     std::pair<std::vector<std::vector<int>>, std::map<std::string, uint32_t>>
     collapse_netlist(std::map<std::string, std::vector<std::string>>);
@@ -68,15 +80,14 @@ private:
     uint32_t reduced_height_ = 0;
     std::map<char, std::vector<double>> hidden_columns;
 
-    // gradient
-    double sigma_x = 5;
-    double sigma_y = 5;
-    std::vector<std::vector<double>> gaussian_gradient_;
-
     // CG parameters
-    double hpwl_param_ = 100;
-    double potential_param_ = 30;
-    double legal_param_ = 20;
+    double hpwl_param_ = .05;
+    double potential_param_ = 0.07;
+    double legal_param_ = .02;
+
+    // Anneal parameters
+    double anneal_param_ = 1.5;
+    ClusterMove current_move_ = {};
 };
 
 
