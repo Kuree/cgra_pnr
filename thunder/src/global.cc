@@ -357,9 +357,25 @@ double GlobalPlacer::eval_f() {
            legal * legal_param_;
 }
 
-double GlobalPlacer::eval_grad_f() {
+void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f) {
     // first part is HWPL
-    double hpwl = 0;
+    ::vector<::pair<double, double>> hpwl;
+    ::vector<::pair<double, double>> overlap;
+    ::vector<::pair<double, double>> legal;
+
+    // resize
+    grad_f.resize(boxes_.size());
+    hpwl.resize(boxes_.size());
+    overlap.resize(boxes_.size());
+    legal.resize(boxes_.size());
+
+    // set to zero
+    const auto zero = std::make_pair(0, 0);
+    std::fill(grad_f.begin(), grad_f.end(), zero);
+    std::fill(hpwl.begin(), hpwl.end(), zero);
+    std::fill(overlap.begin(), hpwl.end(), zero);
+    std::fill(legal.begin(), hpwl.end(), zero);
+
     for (const auto & net : netlists_) {
         int N = (int)net.size();
         // star model
@@ -374,14 +390,14 @@ double GlobalPlacer::eval_grad_f() {
         for (const auto &index : net) {
             auto x = boxes_[index].cx;
             auto y = boxes_[index].cy;
-            hpwl += 2.0 / (N * N) * ((N * N - 2 * N + 2) * x -
-                                     2 * (N - 1) * (x_sum - x));
-            hpwl += 2.0 / (N * N) * ((N * N - 2 * N + 2) * y -
-                                     2 * (N - 1) * (y_sum - y));
+            hpwl[index].first += 2.0 / (N * N) * ((N * N - 2 * N + 2) * x -
+                                 2 * (N - 1) * (x_sum - x));
+            hpwl[index].second += 2.0 / (N * N) * ((N * N - 2 * N + 2) * y -
+                                  2 * (N - 1) * (y_sum - y));
         }
     }
     // second part is the spreading potential
-    double overlap = 0;
+
     const auto x_spread_2 = 1. / (sigma_x * sigma_x);
     const auto y_spread_2 = 1. / (sigma_y * sigma_y);
     for (const auto &box : boxes_) {
@@ -390,12 +406,13 @@ double GlobalPlacer::eval_grad_f() {
         int x = (int)box.cx;
         int y = (int)box.cy;
 
-        overlap += gaussian_gradient_[y][x] * (-x / x_spread_2);
-        overlap += gaussian_gradient_[y][x] * (-y / y_spread_2);
+        overlap[box.index].first += gaussian_gradient_[y][x] *
+                                    (-x / x_spread_2);
+        overlap[box.index].second += gaussian_gradient_[y][x] *
+                                     (-y / y_spread_2);
     }
 
     // third part is the legalization
-    double legal = 0;
     for (const auto &box : boxes_) {
         if (box.fixed)
             continue;
@@ -403,10 +420,56 @@ double GlobalPlacer::eval_grad_f() {
         int x = box.xmin;
         for (const auto &iter : legal_spline_[box.index]) {
             // TODO: add different legal energy here
-            legal += iter.second.deriv(x, 1);
+            legal[box.index].first += iter.second.deriv(x, 1);
         }
     }
 
-    return hpwl * hpwl_param_ + overlap * potential_param_ +
-           legal * legal_param_;
+    for (const auto &box : boxes_) {
+        auto index = box.index;
+        grad_f[index].first = hpwl[index].first * hpwl_param_
+                              + overlap[index].first * potential_param_
+                              + legal[index].first * legal_param_;
+        grad_f[index].second = hpwl[index].second * hpwl_param_
+                               + overlap[index].second * potential_param_
+                               + legal[index].second * legal_param_;
+    }
+}
+
+double
+GlobalPlacer::find_beta(const ::vector<::pair<double, double>> &grad_f,
+                        const ::vector<::pair<double, double>> &last_grad_f) {
+    // Polak-Ribiere formula from APlace journal paper
+    // NOTE:
+    //   g_{k-1} = -last_grad_f
+    //   g_k     = grad_f
+    // Keyi: adapted from NTU place
+    double l2norm = 0;
+    for (auto &i : last_grad_f) {
+        l2norm += i.first * i.first;
+        l2norm += i.second * i.second;
+    }
+    double product = 0;
+    for (uint32_t i = 0; i < grad_f.size(); i++ ) {
+        // g_k^T ( g_k - g_{k-1}
+        product += grad_f[i].first *
+                   (grad_f[i].first + last_grad_f[i].first);
+        product += grad_f[i].second *
+                   (grad_f[i].second + last_grad_f[i].second);
+    }
+    return product / l2norm;
+}
+
+double
+GlobalPlacer::line_search(const ::vector<::pair<double, double>> &grad_f,
+                          const uint32_t &current_step) {
+    // Keyi:
+    // adapted from ntuplace
+    uint64_t size = grad_f.size();
+    double total_grad = 0;
+    for (uint32_t i=0; i < size; i++) {
+        total_grad += grad_f[i].first * grad_f[i].first;
+        total_grad += grad_f[i].second * grad_f[i].second;
+    }
+    double avg_grad = std::sqrt(total_grad / size);
+    return  1.0 / avg_grad * current_step;
 }

@@ -34,9 +34,13 @@ public:
     std::map<int, std::map<std::string, std::pair<int, int>>> realize();
 private:
 
-    double line_search(const std::vector<ClusterBox> &clusters);
+    double line_search(const std::vector<std::pair<double, double>> &grad_f,
+                       const uint32_t &current_step);
     double eval_f();
-    double eval_grad_f();
+    void eval_grad_f(std::vector<std::pair<double, double>> &);
+    double find_beta(const std::vector<std::pair<double, double>> &grad_f,
+                     const std::vector<std::pair<double, double>> &last_grad_f);
+    void init_place();
 
     void setup_reduced_layout();
     void create_fixed_boxes();
