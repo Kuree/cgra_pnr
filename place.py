@@ -236,16 +236,6 @@ def main():
             perform_global_placement_cluster(cluster_file, fixed_blk_pos,
                                              netlists, id_to_name, board_meta,
                                              fold_reg, seed, vis=vis_opt)
-    # common routine
-    data_x = np.zeros((len(emb), num_dim))
-    blks = list(emb.keys())
-    for i in range(len(blks)):
-        data_x[i] = emb[blks[i]]
-
-    centroids, cluster_cells, clusters = perform_global_placement(
-        blks, data_x, emb, fixed_blk_pos, netlists,
-        board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
-        seed=seed, fpga_place=fpga_place, vis=vis_opt)
 
     # placer with each cluster
     board_pos = perform_detailed_placement(centroids,
@@ -253,10 +243,7 @@ def main():
                                            fixed_blk_pos, netlists,
                                            fold_reg, seed,
                                            board_info,
-                                           lambda_url,
-    # refinement
-    board_pos = refine_global_thunder(board_meta, board_pos, netlists,
-                                      fixed_blk_pos, fold_reg)
+                                           lambda_url)
 
     for blk_id in board_pos:
         pos = board_pos[blk_id]
@@ -302,6 +289,14 @@ def perform_global_placement_cluster(cluster_file, fixed_blk_pos, netlists,
             clusters[c_id].add(name_to_id[blk_name])
 
     # prepare for the input
+    new_clusters = {}
+    for c_id in clusters:
+        new_id = "x" + str(c_id)
+        new_clusters[new_id] = set()
+        for blk in clusters[c_id]:
+            # make sure that fixed blocks are not in the clusters
+            if blk not in fixed_blk_pos:
+                new_clusters[new_id].add(blk)
     new_layout = []
     board_layout = board_meta[0]
     for y in range(len(board_layout)):
