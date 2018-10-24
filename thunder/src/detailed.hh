@@ -14,21 +14,34 @@ class DetailedPlacer: public SimAnneal {
 public:
     DetailedPlacer(std::vector<std::string> cluster_blocks,
                    std::map<std::string, std::vector<std::string>> netlist,
-                   std::map<char, std::vector<std::pair<int, int>>> available_pos,
+                   std::map<char,
+                            std::vector<std::pair<int, int>>> available_pos,
                    std::map<std::string, std::pair<int, int>> fixed_pos,
                    char clb_type,
-                   bool fold_reg);
-    void move() override;
+                   bool fold_reg,
+                   double step_ratio = 30);
+    DetailedPlacer(std::map<std::string, std::pair<int, int>> init_placement,
+                   std::map<std::string, std::vector<std::string>> netlist,
+                   std::map<char,
+                            std::vector<std::pair<int, int>>> available_pos,
+                   std::map<std::string, std::pair<int, int>> fixed_pos,
+                   char clb_type,
+                   bool fold_reg,
+                   double step_ratio = 1);
     double energy() override;
-    void commit_changes() override;
     std::map<std::string, std::pair<int, int>> realize();
 
+protected:
+    void move() override;
+    void commit_changes() override;
+
 private:
-    std::vector<Instance> instances;
-    std::vector<Net> netlist;
-    std::vector<Instance> fixed_pos;
+    std::vector<Instance> instances_;
+    std::vector<Net> netlist_;
+    std::vector<int> instance_ids_;
     std::set<DetailedMove> moves_;
-    char clb_type;
+    std::map<char, std::pair<uint64_t, uint64_t>> instance_type_index_;
+    char clb_type_;
     bool fold_reg_;
 
     randutils::random_generator<std::mt19937> detail_rand_;
@@ -39,7 +52,9 @@ private:
 
     void init_place_regular(const std::vector<std::string> &cluster_blocks,
                             std::map<std::string, int> &blk_id_dict,
-                            std::map<char, std::vector<std::pair<int, int>>> &available_pos);
+                            std::map<char,
+                                     std::vector<std::pair<int, int>>>
+                                     &available_pos);
     void init_place_reg(const std::vector<std::string> &cluster_blocks,
                         std::map<std::string, int> &blk_id_dict);
     // automatically set the fold reg
@@ -48,12 +63,34 @@ private:
                       bool fold_reg);
 
     void compute_reg_no_pos(const std::vector<std::string> &cluster_blocks,
-                            std::map<std::string, std::vector<std::string>> &nets,
+                            std::map<std::string,
+                                     std::vector<std::string>> &nets,
                             std::map<std::string, int> &blk_id_dict);
 
     bool is_reg_net(const Instance &ins, const Point &next_pos);
 
     void legalize_reg();
+
+    void process_netlist(const std::map<std::string,
+                                        std::vector<std::string>> &netlist,
+                         std::map<std::string, int> &blk_id_dict);
+
+    void create_fixed_pos(const std::map<std::string,
+                                         std::pair<int, int>> &fixed_pos,
+                          std::map<std::string, int> &blk_id_dict);
+
+    void compute_blk_pos(const std::vector<std::string> &cluster_blocks,
+                         std::map<char,
+                                  std::vector<std::pair<int,
+                                                        int>>> &available_pos,
+                         std::map<char, std::vector<std::string>> &blk_counts,
+                         std::map<char, int64_t> &empty_spaces) const;
+
+    void copy_init_placement(
+            std::map<std::string, std::pair<int, int>> &init_placement,
+            std::map<char, std::vector<std::pair<int, int>>> &available_pos,
+            const std::vector<std::string> &cluster_blocks,
+            std::map<std::string, int> &blk_id_dict);
 };
 
 

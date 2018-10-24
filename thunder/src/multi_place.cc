@@ -42,7 +42,8 @@ using std::set;
     for (auto const &iter : clusters) {
         int cluster_id = iter.first;
         auto cluster_set = clusters[cluster_id];
-        auto cluster = ::vector<::string>(cluster_set.begin(), cluster_set.end());
+        auto cluster = ::vector<::string>(cluster_set.begin(),
+                                          cluster_set.end());
 
         // check to make sure that we have everything
         assert (cells.find(cluster_id) != cells.end());

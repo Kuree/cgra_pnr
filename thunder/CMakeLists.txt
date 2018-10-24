@@ -2,13 +2,19 @@ cmake_minimum_required(VERSION 3.0)
 project(thunder)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread -g -O0")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread -g\
+    -funroll-all-loops -march=native")
+
+set(HEADER_LIBRARY src/include/randutils.hpp
+                   src/include/tqdm.h
+                   src/include/cxxpool.h
+                   src/include/spline.h)
 
 add_library(thunder src/anneal.cc src/anneal.hh src/util.cc
             src/util.hh src/detailed.cc src/detailed.hh
             src/multi_place.cc src/multi_place.hh
-            src/include/randutils.hpp src/include/tqdm.h
-            src/include/cxxpool.h)
+            src/global.cc src/global.hh
+            ${HEADER_LIBRARY})
 
 add_subdirectory(python/pybind11)
 add_subdirectory(python)
