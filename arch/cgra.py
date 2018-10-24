@@ -68,7 +68,7 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
     # input_io_locations = [(1, 2), (2, 1)]
     # output_io_locations = [(18, 2), (2, 18)]
     input_io_locations = io_locations[:len(io_locations) // 2]
-    output_io_locations = io_locations[len(io_locations) // 2:]
+    output_io_locations = io_locations[len(input_io_locations):]
 
     # Keyi:
     # sort the io location lists so that it will produce result consistent

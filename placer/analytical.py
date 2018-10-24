@@ -50,11 +50,10 @@ class GlobalPlacer:
         self.cluster_connection, self.block_index =\
             compute_connections(self.blocks, self.netlists)
 
-        self.connection_spring = 1.0 / len(self.netlists)
+        self.connection_spring = 1.0 / (len(self.netlists) ** 2)
         # overlapping spring need to counteract the netlist force
         total_c_size = sum([len(clusters[c]) for c in clusters])
-        self.overlap_spring = self.connection_spring * \
-            len(self.netlists) / total_c_size * 5
+        self.overlap_spring = self.connection_spring / len(self.netlists) * 5
         self.fixed_spring = self.connection_spring * 5
         # percentage of nets that have DSP connections
         self.dsp_ratio = 0.01
@@ -220,7 +219,7 @@ class GlobalPlacer:
 
             # net and overlap have different schedule
             total_force = net_force / ((it + 1) ** 0.8) + \
-                overlap_force / ((it + 0.5) ** 0.4)
+                overlap_force / ((it + 0.5) ** 0.3)
             total_force = total_force.sum(axis=1)
             # DSP have different schedule
             total_force += dsp_force / ((it + 1) ** 0.5)

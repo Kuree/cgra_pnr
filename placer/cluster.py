@@ -539,7 +539,7 @@ class SAClusterPlacer(Annealer):
                 cells_have += 1
         search_radius = 1
         old_have = cells_have
-        while cells_have < needed and effort_count < 20:
+        while cells_have < needed and effort_count < 40:
             # boolean board
             ext = self.__get_exterior_set(cluster_id, current_cell, bboard,
                                           max_dist=search_radius)

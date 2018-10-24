@@ -269,7 +269,7 @@ def write_detailed_placement(cluster_cells, netlists, init_placement, fixed_pos,
     write_aux(aux_filename, design_name)
 
 
-def mock_board_meta(size, memory_repeat=5):
+def mock_board_meta(size, memory_repeat=8):
     height = size
     width = size
 
@@ -279,9 +279,12 @@ def mock_board_meta(size, memory_repeat=5):
     io_tiles = []
     for y in range(height):
         row = []
-        for x in range(width):
+        for x in range(0, width):
             row.append(None)
-        for x in range(width):
+        if y < margin or y >= width - margin:
+            board_layout.append(row)
+            continue
+        for x in range(margin, width - margin):
             if x % memory_repeat == margin and x != margin:
                 row[x] = "m"
             else:
@@ -291,8 +294,8 @@ def mock_board_meta(size, memory_repeat=5):
     # second pass to insert io tiles
     # random IO tiles
     random.seed(0)
-    y_range = [random.randrange(margin - 1, width - margin + 1) for _
-               in range(4)]
+    y_range = list(set([random.randrange(margin - 1, width - margin + 1) for _
+                        in range(20)]))
     for y in y_range:
         x = margin - 1
         board_layout[y][x] = "i"

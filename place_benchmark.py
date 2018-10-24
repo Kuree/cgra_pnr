@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+from placer import SAClusterPlacer
 from placer.util import compute_centroids
 from util import reduce_cluster_graph
 from argparse import ArgumentParser
@@ -245,6 +246,9 @@ def main():
                                            board_info,
                                            lambda_url)
 
+    board_pos = refine_global_thunder(board_meta, board_pos, netlists,
+                                      fixed_blk_pos, fold_reg)
+
     for blk_id in board_pos:
         pos = board_pos[blk_id]
         place_on_board(board, blk_id, pos)
@@ -286,43 +290,19 @@ def perform_global_placement_cluster(cluster_file, fixed_blk_pos, netlists,
             if blk_name not in name_to_id:
                 print(blk_name, "not found", file=sys.stderr)
                 continue
-            clusters[c_id].add(name_to_id[blk_name])
+            blk_id = name_to_id[blk_name]
+            if blk_id not in fixed_blk_pos:
+                clusters[c_id].add(blk_id)
 
-    # prepare for the input
-    new_clusters = {}
-    for c_id in clusters:
-        new_id = "x" + str(c_id)
-        new_clusters[new_id] = set()
-        for blk in clusters[c_id]:
-            # make sure that fixed blocks are not in the clusters
-            if blk not in fixed_blk_pos:
-                new_clusters[new_id].add(blk)
-    new_layout = []
-    board_layout = board_meta[0]
-    for y in range(len(board_layout)):
-        row = []
-        for x in range(len(board_layout[y])):
-            if board_layout[y][x] is None:
-                row.append(' ')
-            else:
-                row.append(board_layout[y][x])
-        new_layout.append(row)
-
-    board_info = board_meta[-1]
-    clb_type = board_info["clb_type"]
-    gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
-                                new_layout, clb_type, fold_reg)
-
-    gp.solve()
-    #gp.anneal()
-    cluster_cells_ = gp.realize()
-
-    cluster_cells = {}
-    for c_id in cluster_cells_:
-        cells = cluster_cells_[c_id]
-        c_id = int(c_id[1:])
-        cluster_cells[c_id] = cells
-    centroids = compute_centroids(cluster_cells, b_type=clb_type)
+    cluster_placer = SAClusterPlacer(clusters, netlists,
+                                     fixed_blk_pos,
+                                     board_meta=board_meta,
+                                     fold_reg=fold_reg,
+                                     seed=seed)  # num_mb=num_mb)
+    # use the following code to debug
+    # cluster_placer.steps = 0
+    cluster_placer.anneal()
+    cluster_cells, centroids = cluster_placer.realize()
 
     # if vis:
     #    visualize_clustering_cgra(board_meta, cluster_cells)

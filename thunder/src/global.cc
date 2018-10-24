@@ -278,7 +278,7 @@ GlobalPlacer::collapse_netlist(::map<::string,
 
 void GlobalPlacer::solve() {
     uint32_t max_iter = 50;
-    const double precision = 0.99;
+    const double precision = 1.01;
     double obj_value = 0;
     double old_obj_value = 0;
 
