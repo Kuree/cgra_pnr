@@ -35,6 +35,7 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
 
     // setup reduced netlist
     auto [nets, intra_count] = this->collapse_netlist(::move(netlists));
+    (void)intra_count;
     netlists_ = nets;
 
     /*
