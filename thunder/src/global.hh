@@ -38,7 +38,8 @@ public:
 
     void solve();
     void anneal() override;
-    std::map<int, std::map<char, std::vector<std::pair<int, int>>>> realize();
+    std::map<std::string, std::map<char, std::set<std::pair<int, int>>>>
+    realize();
 
 protected:
     void move() override;
@@ -48,17 +49,23 @@ protected:
 private:
 
     double line_search(const std::vector<std::pair<double, double>> &grad_f);
-    double eval_f(double overlap_param=1);
+    double eval_f(double overlap_param=1) const;
     void eval_grad_f(std::vector<std::pair<double, double>> &, const uint32_t);
     double find_beta(const std::vector<std::pair<double, double>> &grad_f,
                      const std::vector<std::pair<double, double>> &last_grad_f);
     void adjust_force(std::vector<std::pair<double, double>> &grad_f);
     void init_place();
+    void legalize_box();
 
     void setup_reduced_layout();
     void create_fixed_boxes();
     void create_boxes();
     double compute_hpwl() const;
+    void
+    find_exterior_set(const std::vector<std::vector<bool>> &bboard,
+                      const std::set<std::pair<int, int>> &assigned,
+                      std::vector<std::pair<int, int>> &empty_cells,
+                      const int &max_dist) const;
 
     std::pair<std::vector<std::vector<int>>, std::map<std::string, uint32_t>>
     collapse_netlist(std::map<std::string, std::vector<std::string>>);
@@ -82,12 +89,15 @@ private:
 
     // CG parameters
     double hpwl_param_ = .05;
-    double potential_param_ = 0.07;
-    double legal_param_ = .02;
+    double potential_param_ = 0.1;
+    double legal_param_ = .05;
 
     // Anneal parameters
-    double anneal_param_ = 1.5;
+    double anneal_param_ = 10;
     ClusterMove current_move_ = {};
+
+    // TODO: add it abck to board info
+    uint32_t clb_margin_ = 1;
 };
 
 

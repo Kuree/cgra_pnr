@@ -1,8 +1,9 @@
 from __future__ import print_function
+
+from placer.util import compute_centroids
 from util import reduce_cluster_graph
 from argparse import ArgumentParser
 from arch.parser import parse_emb
-from placer import SAClusterPlacer, ClusterException
 from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
 import numpy as np
 import os
@@ -255,9 +256,6 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
         num_clusters = int(np.ceil(len(emb) / 40)) + 1
     # extra careful
     num_clusters = min(num_clusters, len(blks))
-    clusters = {}
-    cluster_cells, centroids = None, None
-
     print("Trying: num of clusters", num_clusters)
     kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(data_x)
     cluster_ids = kmeans.labels_
@@ -279,6 +277,8 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
             # make sure that fixed blocks are not in the clusters
             if blk not in fixed_blk_pos:
                 new_clusters[new_id].add(blk)
+
+    # prepare for the input
     new_layout = []
     board_layout = board_meta[0]
     for y in range(len(board_layout)):
@@ -289,22 +289,25 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
             else:
                 row.append(board_layout[y][x])
         new_layout.append(row)
-    print("new_clusters")
-    print(new_clusters)
-    print(netlists)
-    print(fixed_blk_pos)
-    print(new_layout)
 
+    board_info = board_meta[-1]
+    clb_type = board_info["clb_type"]
     gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
-                                new_layout, 'p', fold_reg)
+                                new_layout, clb_type, fold_reg)
 
     gp.solve()
-    gp.anneal()
-    cluster_cells = gp.realize()
+    #gp.anneal()
+    cluster_cells_ = gp.realize()
+
+    cluster_cells = {}
+    for c_id in cluster_cells_:
+        cells = cluster_cells_[c_id]
+        c_id = int(c_id[1:])
+        cluster_cells[c_id] = cells
+    centroids = compute_centroids(cluster_cells, b_type=clb_type)
 
     if vis:
         visualize_clustering_cgra(board_meta, cluster_cells)
-    exit(0)
     assert(cluster_cells is not None and centroids is not None)
     return centroids, cluster_cells, clusters
 
