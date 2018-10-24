@@ -16,11 +16,6 @@ from arch.cgra_packer import load_packed_file
 from arch.fpga import load_packed_fpga_netlist
 from arch import mock_board_meta
 import pythunder
-import json
-import sys
-from arch.bookshelf import write_detailed_placement, parse_pl
-import tempfile
-import subprocess
 
 
 def detailed_placement_thunder(args, context=None):
@@ -85,31 +80,14 @@ def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
     return global_refine.realize()
 
 
-def setup_embeddings(netlist_embedding):
-    num_dim, raw_emb = parse_emb(netlist_embedding)
-    emb = {}
-    for blk_id in raw_emb:
-        if blk_id[0] == "i":
-            continue
-        else:
-            emb[blk_id] = raw_emb[blk_id]
-    # common routine
-    data_x = np.zeros((len(emb), num_dim))
-    blks = list(emb.keys())
-    for i in range(len(blks)):
-        data_x[i] = emb[blks[i]]
-    return blks, data_x, emb
-
-
 def main():
     parser = ArgumentParser("CGRA Placer")
     parser.add_argument("-i", "--input", help="Packed netlist file, " +
                                               "e.g. harris.packed",
                         required=True, action="store", dest="packed_filename")
     parser.add_argument("-e", "--embedding", help="Netlist embedding file, " +
-                        "e.g. harris.emb", default="",
-                        required=False, action="store",
-                        dest="netlist_embedding")
+                        "e.g. harris.emb",
+                        required=True, action="store", dest="netlist_embedding")
     parser.add_argument("-o", "--output", help="Placement result, " +
                                                "e.g. harris.place",
                         required=True, action="store",
@@ -138,24 +116,17 @@ def main():
     parser.add_argument("--mock", action="store", dest="mock_size",
                         default=0, type=int, help="Mock CGRA board with "
                         "provided size")
-    parser.add_argument("--cluster", help="Provide cluster file instead of "
-                                          "embeddings", type=str,
-                        action="store", dest="cluster_file", default="")
     args = parser.parse_args()
 
     cgra_arch = args.cgra_arch
     fpga_arch = args.fpga_arch
     mock_size = args.mock_size
-    netlist_embedding = args.netlist_embedding
-    cluster_file = args.cluster_file
 
     if len(cgra_arch) == 0 ^ len(fpga_arch) == 0 and mock_size == 0:
-        parser.error("Must provide either --fpga or --cgra")
-
-    if len(cluster_file) == 0 ^ len(netlist_embedding) == 0:
-        parser.error("Must provide either --embedding or --cluster")
+        parser.error("Must provide wither --fpga or --cgra")
 
     packed_filename = args.packed_filename
+    netlist_embedding = args.netlist_embedding
     placement_filename = args.placement_filename
     lambda_url = args.lambda_url
     fpga_place = len(fpga_arch) > 0
@@ -182,23 +153,26 @@ def main():
     # Common routine
     board_name, board_meta = board_meta.popitem()
     print("INFO: Placing for", board_name)
+    num_dim, raw_emb = parse_emb(netlist_embedding)
     board = make_board(board_meta)
     board_info = board_meta[-1]
     place_on_board = generate_place_on_board(board_meta, fold_reg=fold_reg)
 
     fixed_blk_pos = {}
     special_blocks = set()
+    emb = {}
 
     # FPGA
     if fpga_place:
-        netlists, fixed_blk_pos, blk_to_site = \
-            load_packed_fpga_netlist(packed_filename)
+        netlists, fixed_blk_pos, _ = load_packed_fpga_netlist(packed_filename)
         num_of_kernels = None
         id_to_name = {}
-        for blk_id in blk_to_site:
+        for blk_id in raw_emb:
             id_to_name[blk_id] = blk_id
             if blk_id[0] == "i":
                 special_blocks.add(blk_id)
+            else:
+                emb[blk_id] = raw_emb[blk_id]
         # place fixed IO locations
         for blk_id in fixed_blk_pos:
             pos = fixed_blk_pos[blk_id]
@@ -214,28 +188,27 @@ def main():
         num_of_kernels = get_num_clusters(id_to_name)
         netlists = prune_netlist(raw_netlist)
 
-        for blk_id in id_to_name:
+        for blk_id in raw_emb:
             if blk_id[0] == "i":
                 special_blocks.add(blk_id)
+            else:
+                emb[blk_id] = raw_emb[blk_id]
         # place the spacial blocks first
         place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
                              id_to_name,
                              place_on_board,
                              board_meta)
 
-    if len(netlist_embedding) > 0:
-        centroids, cluster_cells, clusters = \
-            perform_global_placement_emb(netlist_embedding, fixed_blk_pos,
-                                         netlists, board_meta,
-                                         fold_reg=fold_reg,
-                                         num_clusters=num_of_kernels,
-                                         seed=seed, fpga_place=fpga_place,
-                                         vis=vis_opt)
-    else:
-        centroids, cluster_cells, clusters = \
-            perform_global_placement_cluster(cluster_file, fixed_blk_pos,
-                                             netlists, id_to_name, board_meta,
-                                             fold_reg, seed, vis=vis_opt)
+    # common routine
+    data_x = np.zeros((len(emb), num_dim))
+    blks = list(emb.keys())
+    for i in range(len(blks)):
+        data_x[i] = emb[blks[i]]
+
+    centroids, cluster_cells, clusters = perform_global_placement(
+        blks, data_x, emb, fixed_blk_pos, netlists,
+        board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
+        seed=seed, fpga_place=fpga_place, vis=vis_opt)
 
     # placer with each cluster
     board_pos = perform_detailed_placement(centroids,
@@ -244,6 +217,9 @@ def main():
                                            fold_reg, seed,
                                            board_info,
                                            lambda_url)
+    # refinement
+    board_pos = refine_global_thunder(board_meta, board_pos, netlists,
+                                      fixed_blk_pos, fold_reg)
 
     for blk_id in board_pos:
         pos = board_pos[blk_id]
@@ -270,70 +246,9 @@ def get_num_clusters(id_to_name):
     return sum(count)
 
 
-def perform_global_placement_cluster(cluster_file, fixed_blk_pos, netlists,
-                                     id_to_name, board_meta, fold_reg, seed,
-                                     vis=True):
-    with open(cluster_file) as f:
-        cluster_names = json.load(f)
-    name_to_id = {}
-    for blk_id in id_to_name:
-        name_to_id[id_to_name[blk_id]] = blk_id
-    clusters = {}
-    for c_id in cluster_names:
-        c_id = int(c_id)
-        clusters[c_id] = set()
-        for blk_name in cluster_names[str(c_id)]:
-            if blk_name not in name_to_id:
-                print(blk_name, "not found", file=sys.stderr)
-                continue
-            clusters[c_id].add(name_to_id[blk_name])
-
-    # prepare for the input
-    new_clusters = {}
-    for c_id in clusters:
-        new_id = "x" + str(c_id)
-        new_clusters[new_id] = set()
-        for blk in clusters[c_id]:
-            # make sure that fixed blocks are not in the clusters
-            if blk not in fixed_blk_pos:
-                new_clusters[new_id].add(blk)
-    new_layout = []
-    board_layout = board_meta[0]
-    for y in range(len(board_layout)):
-        row = []
-        for x in range(len(board_layout[y])):
-            if board_layout[y][x] is None:
-                row.append(' ')
-            else:
-                row.append(board_layout[y][x])
-        new_layout.append(row)
-
-    board_info = board_meta[-1]
-    clb_type = board_info["clb_type"]
-    gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
-                                new_layout, clb_type, fold_reg)
-
-    gp.solve()
-    #gp.anneal()
-    cluster_cells_ = gp.realize()
-
-    cluster_cells = {}
-    for c_id in cluster_cells_:
-        cells = cluster_cells_[c_id]
-        c_id = int(c_id[1:])
-        cluster_cells[c_id] = cells
-    centroids = compute_centroids(cluster_cells, b_type=clb_type)
-
-    # if vis:
-    #    visualize_clustering_cgra(board_meta, cluster_cells)
-
-    return centroids, cluster_cells, clusters
-
-
-def perform_global_placement_emb(emb_filename, fixed_blk_pos, netlists,
-                                 board_meta, fold_reg, seed,
-                                 num_clusters=None, fpga_place=False, vis=True):
-    blks, data_x, emb = setup_embeddings(emb_filename)
+def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
+                             board_meta, fold_reg, seed,
+                             num_clusters=None, fpga_place=False, vis=True):
     # simple heuristics to calculate the clusters
     if fpga_place:
         num_clusters = int(np.ceil(len(emb) / 300)) + 1
