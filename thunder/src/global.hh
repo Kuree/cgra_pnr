@@ -17,6 +17,7 @@ struct ClusterBox {
     int index = 0;
     int clb_size = 0;
     int width = 0;
+    int height = 0;
     bool fixed = false;
     std::set<int> nets = {};
 };
@@ -85,12 +86,17 @@ private:
     // helper values
     uint32_t reduced_width_ = 0;
     uint32_t reduced_height_ = 0;
+    double aspect_ratio_ = 0;
     std::map<char, std::vector<double>> hidden_columns;
+    std::vector<double> gaussian_table_;
+    double gaussian_sigma_2_ = 1;
+    void compute_gaussian_table();
 
     // CG parameters
     double hpwl_param_ = .05;
     double potential_param_ = 0.1;
     double legal_param_ = .05;
+    double aspect_param_ = 1;
 
     // Anneal parameters
     double anneal_param_ = 10;

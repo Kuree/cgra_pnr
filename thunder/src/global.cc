@@ -104,6 +104,11 @@ void GlobalPlacer::setup_reduced_layout() {
     // set helper values
     reduced_height_ = (uint32_t)reduced_board_layout_.size();
     reduced_width_ = (uint32_t)reduced_board_layout_[0].size();
+    aspect_ratio_ = (double)reduced_height_ / reduced_width_;
+    aspect_param_ = std::max(reduced_width_, reduced_height_);
+
+    // compute the gaussian table for the global placement
+    compute_gaussian_table();
 }
 
 void GlobalPlacer::create_fixed_boxes() {
@@ -118,6 +123,7 @@ void GlobalPlacer::create_fixed_boxes() {
             iter.first,                 // id
             0,                          // clb_size
             1,                          // width
+            1,                          // height
             (int)boxes_.size(),      // index
             true                     //fixed
         };
@@ -149,23 +155,26 @@ void GlobalPlacer::create_boxes() {
             }
         }
         // calculate the width
-        box.width = (uint32_t)std::ceil(std::sqrt(box.clb_size));
+        box.width = (uint32_t)std::ceil(std::sqrt(box.clb_size /
+                                                  aspect_ratio_));
+        box.height = (uint32_t)std::ceil(box.clb_size / box.width);
         boxes_.emplace_back(box);
 
         // calculate the legal cost function
         ::map<char, tk::spline> splines;
         for (auto const &iter_dsp : dsp_blocks) {
-            auto height = box.width;
+            auto height = box.height;
+            auto width = box.width;
             const char blk_type = iter_dsp.first;
 
             ::vector<double> cost;
             ::vector<double> x_data;
             auto dsp_columns = hidden_columns[blk_type];
-            for (uint32_t x = 0; x < reduced_width_ - height; x++) {
+            for (uint32_t x = 0; x < reduced_width_ - width; x++) {
                 // try to place it on every x and then see how many blocks left
                 // TODO: fix DSP block height
                 int blk_need = iter_dsp.second;
-                for (uint32_t xx = x; xx < x + height; xx++) {
+                for (uint32_t xx = x; xx < x + width; xx++) {
                     for (const auto &xxx : dsp_columns) {
                         if (xxx - 1 < xx && xxx + 1 > xx) {
                             // found some
@@ -341,15 +350,15 @@ void GlobalPlacer::solve() {
                 // set bound
                 // and a look-ahead legalization
                 double xmin = box.cx - box.width / 2.0;
-                double ymin = box.cy - box.width / 2.0;
+                double ymin = box.cy - box.height / 2.0;
                 // bound them up
                 xmin = std::max<double>(xmin, 0);
                 xmin = std::min<double>(xmin, reduced_width_ - box.width);
                 ymin = std::max<double>(ymin, clb_margin_);
-                ymin = std::min<double>(ymin, reduced_height_ - box.width
+                ymin = std::min<double>(ymin, reduced_height_ - box.height
                                               - clb_margin_);
                 box.cx = xmin + box.width / 2.0;
-                box.cy = ymin + box.width / 2.0;
+                box.cy = ymin + box.height / 2.0;
                 box.xmin = xmin;
                 box.ymin = ymin;
             }
@@ -415,12 +424,14 @@ double GlobalPlacer::eval_f(double overlap_param) const {
             double x2 = box2.cx;
             double y2 = box2.cy;
             double d_2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
-            double width_2 = (box1.width + box2.width)
-                             * (box1.width + box2.width);
-            if (d_2 >= width_2) {
+            double ref_d_2 = (box1.width + box2.width + box1.height +
+                              box2.height)
+                             * (box1.width + box2.width + box1.height +
+                                box2.height) / 4.0;
+            if (d_2 >= ref_d_2) {
                 continue;
             } else {
-                overlap += (d_2 - width_2) * (d_2 - width_2);
+                overlap += (d_2 - ref_d_2) * (d_2 - ref_d_2);
             }
         }
     }
@@ -438,8 +449,17 @@ double GlobalPlacer::eval_f(double overlap_param) const {
         }
     }
 
+    // last part is the aspect ratio spreading force
+    double aspect = 0;
+    for (const auto & box : boxes_) {
+        if (box.fixed)
+            continue;
+        int x = (int)(reduced_height_ > reduced_width_? box.cy : box.cx);
+        aspect += gaussian_table_[x];
+    }
+
     return hpwl * hpwl_param_ + overlap * potential_param_ * overlap_param +
-           legal * legal_param_;
+           legal * legal_param_ + aspect * aspect_param_;
 }
 
 void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f,
@@ -448,11 +468,13 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f,
     ::vector<::pair<double, double>> hpwl;
     ::vector<::pair<double, double>> overlap;
     ::vector<::pair<double, double>> legal;
+    ::vector<::pair<double, double>> aspect;
 
     grad_f.resize(boxes_.size());
     hpwl.resize(boxes_.size());
     overlap.resize(boxes_.size());
     legal.resize(boxes_.size());
+    aspect.resize(boxes_.size());
 
     // set to zero
     const auto zero = std::make_pair(0, 0);
@@ -460,6 +482,7 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f,
     std::fill(hpwl.begin(), hpwl.end(), zero);
     std::fill(overlap.begin(), overlap.end(), zero);
     std::fill(legal.begin(), legal.end(), zero);
+    std::fill(aspect.begin(), aspect.end(), zero);
 
     for (const auto & net : netlists_) {
         int N = (int)net.size();
@@ -495,15 +518,17 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f,
             double x2 = box2.cx;
             double y2 = box2.cy;
             double d_2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
-            double width_2 = (box1.width + box2.width)
-                             * (box1.width + box2.width);
-            if (d_2 >= width_2) {
+            double ref_d_2 = (box1.width + box2.width + box1.height +
+                              box2.height)
+                             * (box1.width + box2.width + box1.height +
+                                box2.height) / 4.0;
+            if (d_2 >= ref_d_2) {
                 continue;
             } else if (d_2 == 0) {
                 throw std::runtime_error("not implemented");
             } else {
                 // compute the gradient
-                double value = std::abs(2 * (d_2 - width_2));
+                double value = std::abs(2 * (d_2 - ref_d_2));
                 double norm = std::sqrt(d_2);
                 overlap[box1.index].first -= (x1 - x2) / norm * value;
                 overlap[box1.index].second -= (y1 - y2) / norm * value;
@@ -523,16 +548,38 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f,
         }
     }
 
+    for (const auto & box : boxes_) {
+        if (box.fixed)
+            continue;
+        int x;
+        double mid;
+        if (reduced_height_ > reduced_width_) {
+            x = (int)box.cy;
+            mid = reduced_height_ / 2.0;
+        } else {
+            x = (int)box.cx;
+            mid = reduced_width_ / 2.0;
+        }
+        double xx = x - mid;
+        double value = gaussian_table_[x] * (- 2 * xx / gaussian_sigma_2_);
+        if (reduced_height_ > reduced_width_)
+            aspect[box.index].second -= value;
+        else
+            aspect[box.index].first -= value;
+    }
+
     for (const auto &box : boxes_) {
         auto index = box.index;
         grad_f[index].first = hpwl[index].first * hpwl_param_
                               + overlap[index].first * potential_param_
                                 * (current_step + 0.5)
-                              + legal[index].first * legal_param_;
+                              + legal[index].first * legal_param_
+                              + aspect[index].first * aspect_param_;
         grad_f[index].second = hpwl[index].second * hpwl_param_
                                + overlap[index].second * potential_param_
                                 * (current_step + 0.5)
-                               + legal[index].second * legal_param_;
+                               + legal[index].second * legal_param_
+                               + aspect[index].second * aspect_param_;
     }
 }
 
@@ -603,8 +650,8 @@ void GlobalPlacer::init_place() {
         box.cy = center_y + global_rand_.uniform<double>(-1, 1);
         box.xmin = box.cx - (box.width) / 2.0;
         box.xmax = box.cx + (box.width) / 2.0;
-        box.ymin = box.cy - (box.width) / 2.0;
-        box.ymax = box.cy + (box.width) / 2.0;
+        box.ymin = box.cy - (box.height) / 2.0;
+        box.ymax = box.cy + (box.height) / 2.0;
     }
 }
 
@@ -638,7 +685,6 @@ GlobalPlacer::realize() {
     // 1. assign clb cells
     // 2. coordinates remapping
     // 3. assign complex cells
-
     ::map<int, std::pair<Point, Point>> boxes;
     for (const auto &box : boxes_) {
         if (box.fixed)
@@ -842,7 +888,7 @@ void GlobalPlacer::move() {
                             reduced_width_ - boxes_[box_index].width);
     xmin = std::max<double>(0, xmin);
     ymin = std::min<double>(ymin,
-                            reduced_height_ - boxes_[box_index].width
+                            reduced_height_ - boxes_[box_index].height
                             - clb_margin_);
     ymin = std::max<double>(clb_margin_, ymin);
 
@@ -917,6 +963,10 @@ void GlobalPlacer
         xs.emplace_back(iter.first);
         ys.emplace_back(iter.first);
     }
+
+    if (assigned.empty()) {
+        throw std::runtime_error("box completely empty during de-overlapping");
+    }
     std::sort(xs.begin(), xs.end());
     std::sort(ys.begin(), ys.end());
     int xmin = xs[0];
@@ -954,11 +1004,29 @@ void GlobalPlacer::legalize_box() {
                                     reduced_width_ - box.width);
         box.xmin = std::max<double>(0, box.xmin);
         box.ymin = std::min<double>(std::round(box.ymin),
-                                    reduced_height_ - box.width - clb_margin_);
+                                    reduced_height_ - box.height - clb_margin_);
         box.ymin = std::max<double>(clb_margin_, box.ymin);
         box.xmax = box.xmin + box.width;
-        box.ymax = box.ymin + box.width;
+        box.ymax = box.ymin + box.height;
         box.cx = box.xmin + box.width / 2.0;
-        box.cy = box.ymax + box.width / 2.0;
+        box.cy = box.ymax + box.height / 2.0;
     }
+}
+
+void GlobalPlacer::compute_gaussian_table() {
+    uint32_t axis = std::max<uint32_t>(reduced_width_, reduced_height_);
+
+    double mid = axis / 2.0;
+    gaussian_sigma_2_ = std::pow(aspect_ratio_ * 2, 4);
+
+    for (uint32_t i = 0; i < axis; i++) {
+        double const x = i - mid;
+        double value = std::exp(-x * x / gaussian_sigma_2_);
+        gaussian_table_.emplace_back(value);
+    }
+
+    const auto denominator = std::accumulate(gaussian_table_.begin(),
+                                             gaussian_table_.end(), 0);
+    for (auto &v : gaussian_table_)
+        v /= denominator;
 }
