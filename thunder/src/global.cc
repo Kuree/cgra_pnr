@@ -69,7 +69,10 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
 
     // set annealing parameters
     this->tmax = tmin * 2;
-    this->steps = (int)(clusters_.size() * nets.size());
+    this->steps = (int)(std::pow(clusters_.size(), 2) * nets.size());
+    this->anneal_param_ = std::pow((nets.size() / (double)clusters_.size()), 2)
+                          * hpwl_param_;
+    printf("Use anneal param: %f\n", anneal_param_);
 }
 
 void GlobalPlacer::setup_reduced_layout() {
@@ -172,10 +175,12 @@ void GlobalPlacer::create_boxes() {
                 dsp_blocks[blk_type]++;
             }
         }
+        // store it so that we can use it in the annealing phase
+        box_dsp_blocks_[cluster_id] = dsp_blocks;
         // calculate the width
         box.width = (uint32_t)std::ceil(std::sqrt(box.clb_size /
                                                   aspect_ratio_));
-        box.height = (uint32_t)std::ceil(box.clb_size / box.width);
+        box.height = (uint32_t)std::ceil(box.clb_size / (double)box.width);
         boxes_.emplace_back(box);
 
         // calculate the legal cost function
@@ -967,11 +972,18 @@ void GlobalPlacer::move() {
         current_move_.box1.assign(boxes_[box_index]);
         ClusterBox &box = current_move_.box1;
         int dx = global_rand_.uniform<int>(-2, 2);
-        int new_width = std::max(box.width + dx, 1);
+        int new_width = std::min<int>(std::max(box.width + dx, 1),
+                                      reduced_width_ - 1);
         box.xmin = (int)(box.cx - new_width / 2.0);
-        box.xmax = (int)(box.cx + new_width / 2.0);
-        box.width = (int)(box.xmax - box.xmin);
-        box.height = (int)(std::ceil(box.clb_size / box.width));
+        box.xmax = (int)(box.xmin + new_width);
+        box.width = new_width;
+        box.height = (int)(std::ceil(box.clb_size / (double)box.width));
+        // because it might be rotated in the future, if the height is more than
+        // the board width, we dis-alllow it
+        if (box.height >= (int)(reduced_width_ - 1)) {
+            current_move_.box1.index = -1;
+            return;
+        }
         box.ymax = box.ymin + box.height;
         // recompute the centroid
         box.cx = (box.xmin + box.xmax) / 2.0;
@@ -981,6 +993,11 @@ void GlobalPlacer::move() {
         // swap
         auto box_index2 = global_rand_.uniform<uint64_t>(fixed_pos_.size(),
                                                          boxes_.size() - 1);
+        if (box_index2 == box_index) {
+            current_move_.box1.index = -1;
+            current_move_.box2.index = -1;
+            return;
+        }
         current_move_.box1.assign(boxes_[box_index]);
         current_move_.box2.assign(boxes_[box_index2]);
 
@@ -1083,8 +1100,28 @@ double GlobalPlacer::init_energy() {
             overlap += dx * dy;
         }
     }
+
+    double special = 0;
+    for (const auto &box : boxes_) {
+        // compute the dsps
+        auto dsp_blocks = box_dsp_blocks_[box.id];
+        auto xmin = box.xmin;
+        auto xmax = box.xmax;
+        for (const auto &iter : dsp_blocks) {
+            int needed = iter.second;
+            const char blk_type = iter.first;
+            auto columns = hidden_columns[blk_type];
+            for (const auto &xx : columns) {
+                if (xx < xmax && xx >=xmin)
+                    needed -= box.height;
+            }
+            if (needed > 0)
+                special += needed;
+        }
+    }
     // the main job is to reduce overlap
-    return hpwl * hpwl_param_ + overlap * anneal_param_;
+    return hpwl * hpwl_param_ + overlap * anneal_param_ +
+                  special * 10;
 }
 
 void GlobalPlacer::commit_changes() {
@@ -1137,7 +1174,7 @@ void GlobalPlacer::anneal() {
     double old_energy = curr_energy;
     printf("Before annealing energy: %f\n", old_energy);
     SimAnneal::anneal();
-    printf("After annealing energy: %f improvement: %f ",
+    printf("After annealing energy: %f improvement: %f\n",
             curr_energy, (old_energy - curr_energy) / old_energy);
 }
 
