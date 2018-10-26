@@ -175,7 +175,7 @@ void GlobalPlacer::create_boxes() {
         // calculate the width
         box.width = (uint32_t)std::ceil(std::sqrt(box.clb_size /
                                                   aspect_ratio_));
-        box.height = (uint32_t)std::ceil(box.clb_size / box.width);
+        box.height = (uint32_t)std::ceil(box.clb_size / (double)box.width);
         boxes_.emplace_back(box);
 
         // calculate the legal cost function
@@ -969,9 +969,9 @@ void GlobalPlacer::move() {
         int dx = global_rand_.uniform<int>(-2, 2);
         int new_width = std::max(box.width + dx, 1);
         box.xmin = (int)(box.cx - new_width / 2.0);
-        box.xmax = (int)(box.cx + new_width / 2.0);
-        box.width = (int)(box.xmax - box.xmin);
-        box.height = (int)(std::ceil(box.clb_size / box.width));
+        box.xmax = (int)(box.xmin + new_width);
+        box.width = new_width;
+        box.height = (int)(std::ceil(box.clb_size / (double)box.width));
         box.ymax = box.ymin + box.height;
         // recompute the centroid
         box.cx = (box.xmin + box.xmax) / 2.0;
@@ -981,6 +981,11 @@ void GlobalPlacer::move() {
         // swap
         auto box_index2 = global_rand_.uniform<uint64_t>(fixed_pos_.size(),
                                                          boxes_.size() - 1);
+        if (box_index2 == box_index) {
+            current_move_.box1.index = -1;
+            current_move_.box2.index = -1;
+            return;
+        }
         current_move_.box1.assign(boxes_[box_index]);
         current_move_.box2.assign(boxes_[box_index2]);
 
