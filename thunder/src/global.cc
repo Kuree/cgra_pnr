@@ -105,7 +105,7 @@ void GlobalPlacer::setup_reduced_layout() {
     reduced_height_ = (uint32_t)reduced_board_layout_.size();
     reduced_width_ = (uint32_t)reduced_board_layout_[0].size();
     aspect_ratio_ = (double)reduced_height_ / reduced_width_;
-    aspect_param_ = std::max(reduced_width_, reduced_height_);
+    aspect_param_ = reduced_width_ * reduced_height_ * aspect_ratio_;
 
     // compute the gaussian table for the global placement
     compute_gaussian_table();
@@ -291,10 +291,18 @@ void GlobalPlacer::solve() {
     const double precision = 1.01;
     double obj_value = 0;
     double old_obj_value = 0;
+    ::map<double, ::vector<ClusterBox>> states;
 
     for (uint32_t iter = 0; iter < max_iter; iter++) {
         obj_value = eval_f();
         printf("HPWL: %f\n", obj_value);
+
+        // copy the current state
+        ::vector<ClusterBox> current_state;
+        for (const auto &box : boxes_)
+            current_state.emplace_back(ClusterBox::copy(box));
+        states[obj_value] = current_state;
+
         if (iter > 0 && obj_value >= precision * old_obj_value)
             break;
         uint32_t inner_iter = 0;
@@ -381,6 +389,23 @@ void GlobalPlacer::solve() {
         if (iter % 2 == 1)
             legalize_box();
     }
+
+    // use the best state
+    ::vector<uint32_t> state_index;
+    ::vector<double> state_keys;
+    for (const auto &iter : states) {
+        state_keys.emplace_back(iter.first);
+    }
+    for (uint32_t i = 0; i < states.size(); i++)
+        state_index.emplace_back(i);
+
+    std::sort(state_index.begin(), state_index.end(), [=](const auto &i1,
+                                                          const auto &i2) {
+        return state_keys[i1] < state_keys[i2];
+    });
+    double hpwl = state_keys[state_index[0]];
+    this->boxes_ = states[hpwl];
+    printf("Using HPWL: %f\n", hpwl);
 
     legalize_box();
     this->curr_energy = eval_f(anneal_param_);

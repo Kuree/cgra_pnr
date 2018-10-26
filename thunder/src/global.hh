@@ -20,6 +20,26 @@ struct ClusterBox {
     int height = 0;
     bool fixed = false;
     std::set<int> nets = {};
+
+    inline static ClusterBox copy(const ClusterBox &box) {
+        ClusterBox new_box {
+            box.xmin,
+            box.xmax,
+            box.ymin,
+            box.ymax,
+            box.cx,
+            box.cy,
+            box.id,
+            box.index,
+            box.clb_size,
+            box.width,
+            box.height,
+            box.fixed,
+        };
+        for (const auto &index : box.nets)
+            new_box.nets.insert(index);
+        return new_box;
+    }
 };
 
 struct ClusterMove {
@@ -94,7 +114,7 @@ private:
 
     // CG parameters
     double hpwl_param_ = .05;
-    double potential_param_ = 0.1;
+    double potential_param_ = 0.05;
     double legal_param_ = .05;
     double aspect_param_ = 1;
 
