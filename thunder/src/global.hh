@@ -89,6 +89,7 @@ private:
     std::vector<ClusterBox> boxes_;
     std::vector<std::map<char, tk::spline>> legal_spline_;
     std::map<uint32_t, uint32_t> column_mapping_;
+    std::map<std::string, std::map<char, int>> box_dsp_blocks_;
     randutils::random_generator<std::mt19937> global_rand_;
 
     // helper values
@@ -107,7 +108,7 @@ private:
     double aspect_param_ = 1;
 
     // Anneal parameters
-    double anneal_param_ = 10;
+    double anneal_param_ = 1;
     ClusterMove current_move_ = {};
     ClusterMove backup_move = {};
 
