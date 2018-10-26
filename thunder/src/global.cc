@@ -105,7 +105,8 @@ void GlobalPlacer::setup_reduced_layout() {
     reduced_height_ = (uint32_t)reduced_board_layout_.size();
     reduced_width_ = (uint32_t)reduced_board_layout_[0].size();
     aspect_ratio_ = (double)reduced_height_ / reduced_width_;
-    aspect_param_ = reduced_width_ * reduced_height_ * aspect_ratio_;
+    aspect_param_ =  std::min(reduced_width_ * reduced_height_,
+                              10 * std::max(reduced_width_, reduced_height_));
 
     // compute the gaussian table for the global placement
     compute_gaussian_table();
@@ -288,7 +289,7 @@ GlobalPlacer::collapse_netlist(::map<::string,
 
 void GlobalPlacer::solve() {
     uint32_t max_iter = 50;
-    const double precision = 0.99;
+    const double precision = 0.99999;
     double obj_value = 0;
     double old_obj_value = 0;
     ::map<double, ::vector<ClusterBox>> states;
@@ -550,14 +551,16 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f,
             if (d_2 >= ref_d_2) {
                 continue;
             } else if (d_2 == 0) {
-                throw std::runtime_error("not implemented");
-            } else {
-                // compute the gradient
-                double value = std::abs(2 * (d_2 - ref_d_2));
-                double norm = std::sqrt(d_2);
-                overlap[box1.index].first -= (x1 - x2) / norm * value;
-                overlap[box1.index].second -= (y1 - y2) / norm * value;
+                //give a little bit nudge
+                x1 = x2 + global_rand_.uniform(-1.0, 1.0);
+                y1 = y2 + global_rand_.uniform(-1.0, 1.0);
             }
+            // compute the gradient
+            double value = std::abs(2 * (d_2 - ref_d_2));
+            double norm = std::sqrt(d_2);
+            overlap[box1.index].first -= (x1 - x2) / norm * value;
+            overlap[box1.index].second -= (y1 - y2) / norm * value;
+
         }
     }
 
@@ -597,13 +600,13 @@ void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f,
         auto index = box.index;
         grad_f[index].first = hpwl[index].first * hpwl_param_
                               + overlap[index].first * potential_param_
-                                * (current_step + 0.5)
-                              + legal[index].first * legal_param_
+                                * (std::max<double>(current_step, 0.5))
+                                + legal[index].first * legal_param_
                               + aspect[index].first * aspect_param_;
         grad_f[index].second = hpwl[index].second * hpwl_param_
                                + overlap[index].second * potential_param_
-                                * (current_step + 0.5)
-                               + legal[index].second * legal_param_
+                                 * (std::max<double>(current_step, 0.5))
+                                 + legal[index].second * legal_param_
                                + aspect[index].second * aspect_param_;
     }
 }
