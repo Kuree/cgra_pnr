@@ -21,31 +21,15 @@ struct ClusterBox {
     bool fixed = false;
     std::set<int> nets = {};
 
-    inline static ClusterBox copy(const ClusterBox &box) {
-        ClusterBox new_box {
-            box.xmin,
-            box.xmax,
-            box.ymin,
-            box.ymax,
-            box.cx,
-            box.cy,
-            box.id,
-            box.index,
-            box.clb_size,
-            box.width,
-            box.height,
-            box.fixed,
-        };
-        for (const auto &index : box.nets)
-            new_box.nets.insert(index);
-        return new_box;
-    }
+    ClusterBox() = default;
+    ClusterBox(const ClusterBox &box) { assign(box); }
+
+    void assign(const ClusterBox &box);
 };
 
 struct ClusterMove {
-    uint64_t box_index = 0;
-    int dx;
-    int dy;
+    ClusterBox box1;
+    ClusterBox box2;
 };
 
 class GlobalPlacer : public SimAnneal {
@@ -66,6 +50,7 @@ protected:
     void move() override;
     void commit_changes() override;
     double energy() override;
+    double init_energy() override;
 
 private:
 
@@ -90,6 +75,9 @@ private:
 
     std::pair<std::vector<std::vector<int>>, std::map<std::string, uint32_t>>
     collapse_netlist(std::map<std::string, std::vector<std::string>>);
+
+    // SA
+    void bound_box(ClusterBox &box);
 
     char clb_type_;
     bool reg_fold_;
@@ -121,6 +109,7 @@ private:
     // Anneal parameters
     double anneal_param_ = 10;
     ClusterMove current_move_ = {};
+    ClusterMove backup_move = {};
 
     // TODO: add it abck to board info
     uint32_t clb_margin_ = 1;

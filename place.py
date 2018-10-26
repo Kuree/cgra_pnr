@@ -296,7 +296,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
                                 new_layout, clb_type, fold_reg)
 
     gp.solve()
-    #gp.anneal()
+    gp.anneal()
     cluster_cells_ = gp.realize()
 
     cluster_cells = {}

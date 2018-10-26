@@ -10,6 +10,24 @@ using std::move;
 using std::pair;
 using std::set;
 
+void ClusterBox::assign(const ClusterBox &box) {
+    xmin = box.xmin;
+    xmax = box.xmax;
+    ymin = box.ymin;
+    ymax = box.ymax;
+    cx = box.cx;
+    cy = box.cy;
+    id = box.id;
+    index = box.index;
+    clb_size = box.clb_size;
+    width = box.width;
+    height = box.height;
+    fixed = box.fixed;
+
+    nets = box.nets;
+}
+
+
 GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
                            ::map<::string, ::vector<::string>> netlists,
                            std::map<std::string, std::pair<int, int>> fixed_pos,
@@ -50,8 +68,8 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
     init_place();
 
     // set annealing parameters
-    this->tmax = tmin + 0.01f;
-    this->steps = (int)(clusters_.size() * clusters_.size());
+    this->tmax = tmin * 2;
+    this->steps = (int)(clusters_.size() * nets.size());
 }
 
 void GlobalPlacer::setup_reduced_layout() {
@@ -114,20 +132,19 @@ void GlobalPlacer::setup_reduced_layout() {
 
 void GlobalPlacer::create_fixed_boxes() {
     for (const auto &iter : fixed_pos_) {
-        ClusterBox box {
-            (double)iter.second.first, // xmin
-            (double)iter.second.first, // xmax
-            (double)iter.second.second, // ymin
-            (double)iter.second.second, // ymax
-            (double)iter.second.first,  // cx
-            (double)iter.second.second, // cy
-            iter.first,                 // id
-            0,                          // clb_size
-            1,                          // width
-            1,                          // height
-            (int)boxes_.size(),      // index
-            true                     //fixed
-        };
+        ClusterBox box;
+        box.xmin = (double)iter.second.first; // xmin
+        box.xmax = (double)iter.second.first; // xmax
+        box.ymin = (double)iter.second.second; // ymin
+        box.ymax = (double)iter.second.second; // ymax
+        box.cx = (double)iter.second.first;  // cx
+        box.cy = (double)iter.second.second; // cy
+        box.id = iter.first;                 // id
+        box.clb_size = 0;                          // clb_size
+        box.width = 1;                          // width
+        box.height = 1;                          // height
+        box.index = (int)boxes_.size();         // index
+        box.fixed = true;                       //fixed
         boxes_.emplace_back(box);
     }
 }
@@ -301,7 +318,7 @@ void GlobalPlacer::solve() {
         // copy the current state
         ::vector<ClusterBox> current_state;
         for (const auto &box : boxes_)
-            current_state.emplace_back(ClusterBox::copy(box));
+            current_state.emplace_back(ClusterBox(box));
         states[obj_value] = current_state;
 
         if (iter > 0 && obj_value >= precision * old_obj_value)
@@ -409,7 +426,7 @@ void GlobalPlacer::solve() {
     printf("Using HPWL: %f\n", hpwl);
 
     legalize_box();
-    this->curr_energy = eval_f(anneal_param_);
+    this->curr_energy = init_energy();
 
 }
 
@@ -907,77 +924,180 @@ void GlobalPlacer::move() {
     auto box_index = global_rand_.uniform<uint64_t>(fixed_pos_.size(),
                                                         boxes_.size() - 1);
 
-    int dx = global_rand_.uniform<int>(-1, 1);
-    int dy = global_rand_.uniform<int>(-1, 1);
+    // we have four choices
+    // 1. translate
+    // 2. rotate
+    // 3. change shape
+    // 4. swap locations
 
-    double xmin = boxes_[box_index].xmin + dx;
-    double ymin = boxes_[box_index].ymin + dy;
-    xmin = std::min<double>(xmin,
-                            reduced_width_ - boxes_[box_index].width);
-    xmin = std::max<double>(0, xmin);
-    ymin = std::min<double>(ymin,
-                            reduced_height_ - boxes_[box_index].height
-                            - clb_margin_);
-    ymin = std::max<double>(clb_margin_, ymin);
+    double action = global_rand_.uniform(0.0, 1.0);
 
-    dx = (int)(xmin - boxes_[box_index].xmin);
-    dy = (int)(ymin - boxes_[box_index].ymin);
+    if (action <= 0.3) {
+        // translate
+        int dx = global_rand_.uniform<int>(-1, 1);
+        int dy = global_rand_.uniform<int>(-1, 1);
 
-    if (dx == 0 and dy == 0) {
-        // assume we always have at least a fixed box
-        current_move_.box_index = 0;
+        current_move_.box1.assign(boxes_[box_index]);
+        current_move_.box1.xmin += dx;
+        current_move_.box1.ymin += dy;
+        current_move_.box1.xmax += dx;
+        current_move_.box1.ymax += dy;
+        current_move_.box1.cx += dx;
+        current_move_.box1.cy += dy;
+        current_move_.box2.index = -1;
+
+    } else if (action <= 0.5) {
+        // rotate around the centroid
+        current_move_.box1.assign(boxes_[box_index]);
+        ClusterBox &box = current_move_.box1;
+        box.xmin = (int)(box.cx - box.height / 2.0);
+        box.ymin = (int)(box.cy - box.width / 2.0);
+        box.xmax = box.xmin + box.height;
+        box.ymax = box.ymin + box.width;
+        // recompute the centroid
+        box.cx = (box.xmin + box.xmax) / 2.0;
+        box.cy = (box.ymin + box.ymax) / 2.0;
+        int temp = box.height;
+        box.height = box.width;
+        box.width = temp;
+        current_move_.box2.index = -1;
+
+    } else if (action <= 0.8) {
+        // change the shape a little bit
+        current_move_.box1.assign(boxes_[box_index]);
+        ClusterBox &box = current_move_.box1;
+        int dx = global_rand_.uniform<int>(-2, 2);
+        int new_width = std::max(box.width + dx, 1);
+        box.xmin = (int)(box.cx - new_width / 2.0);
+        box.xmax = (int)(box.cx + new_width / 2.0);
+        box.width = (int)(box.xmax - box.xmin);
+        box.height = (int)(std::ceil(box.clb_size / box.width));
+        box.ymax = box.ymin + box.height;
+        // recompute the centroid
+        box.cx = (box.xmin + box.xmax) / 2.0;
+        box.cy = (box.ymin + box.ymax) / 2.0;
+        current_move_.box2.index = -1;
     } else {
-        current_move_.box_index = box_index;
-        current_move_.dx = dx;
-        current_move_.dy = dy;
+        // swap
+        auto box_index2 = global_rand_.uniform<uint64_t>(fixed_pos_.size(),
+                                                         boxes_.size() - 1);
+        current_move_.box1.assign(boxes_[box_index]);
+        current_move_.box2.assign(boxes_[box_index2]);
+
+        ClusterBox &box1 = current_move_.box1;
+        ClusterBox &box2 = current_move_.box2;
+
+        auto temp_cx = box2.cx;
+        auto temp_cy = box2.cy;
+        // change centroid
+        box2.cx = box1.cx;
+        box2.cy = box1.cy;
+        box1.cx = temp_cx;
+        box1.cy = temp_cy;
+
+        // compute the x/y
+        box1.xmin = (int)(box1.cx - box1.width / 2.0);
+        box1.ymin = (int)(box1.cy - box1.height / 2.0);
+        box2.xmin = (int)(box2.cx - box2.width / 2.0);
+        box2.ymin = (int)(box2.cy - box2.height / 2.0);
+
+        box1.xmax = box1.xmin + box1.width;
+        box1.ymax = box1.ymin + box1.height;
+        box2.xmax = box2.xmin + box2.width;
+        box2.ymax = box2.ymin + box2.height;
+
+        // recompute the cs because of the minor shifting
+        box1.cx = (box1.xmin + box1.xmax) / 2.0;
+        box1.cy = (box1.ymin + box1.ymax) / 2.0;
+        box2.cx = (box2.xmin + box2.xmax) / 2.0;
+        box2.cy = (box2.ymin + box2.ymax) / 2.0;
     }
+
+    if (current_move_.box1.index >= 0)
+        bound_box(current_move_.box1);
+    if (current_move_.box2.index >= 0)
+        bound_box(current_move_.box2);
+}
+
+void GlobalPlacer::bound_box(ClusterBox &box) {
+    if (box.fixed)
+        return;
+    box.xmin = std::min<double>(std::round(box.xmin),
+                                reduced_width_ - box.width);
+    box.xmin = std::max<double>(0, box.xmin);
+    box.ymin = std::min<double>(std::round(box.ymin),
+                                reduced_height_ - box.height - clb_margin_);
+    box.ymin = std::max<double>(clb_margin_, box.ymin);
+    box.xmax = box.xmin + box.width;
+    box.ymax = box.ymin + box.height;
+    box.cx = box.xmin + box.width / 2.0;
+    box.cy = box.ymax + box.height / 2.0;
 }
 
 double GlobalPlacer::energy() {
-    if (current_move_.box_index == 0)
+    if (current_move_.box1.index == -1)
         return curr_energy;
-    auto &box = boxes_[current_move_.box_index];
-    int dx = current_move_.dx;
-    int dy = current_move_.dy;
 
-    // make the change
-    box.xmin += dx;
-    box.xmax += dx;
-    box.cx += dx;
-    box.ymin += dy;
-    box.ymax += dy;
-    box.cy += dy;
+    backup_move.box1.assign(boxes_[current_move_.box1.index]);
+    if (current_move_.box2.index >= 0)
+        backup_move.box2.assign(boxes_[current_move_.box2.index]);
+    else
+        backup_move.box2.index = -1;
 
-    double new_energy = eval_f(anneal_param_);
+    ClusterBox &box1_backup = backup_move.box1;
+    ClusterBox &box2_backup = backup_move.box2;
 
-    // revert back
-    box.xmin -= dx;
-    box.xmax -= dx;
-    box.cx -= dx;
-    box.ymin -= dy;
-    box.ymax -= dy;
-    box.cy -= dy;
+    boxes_[box1_backup.index].assign(current_move_.box1);
+    if (box2_backup.index >= 0)
+        boxes_[box2_backup.index].assign(current_move_.box2);
+
+    double new_energy = init_energy();
+
+    // revert it back
+    boxes_[box1_backup.index].assign(box1_backup);
+    if (box2_backup.index >= 0)
+        boxes_[box2_backup.index].assign(box2_backup);
 
     return new_energy;
 }
 
+double GlobalPlacer::init_energy() {
+    // compute the HPWL
+    double hpwl = compute_hpwl();
+
+    // compute the overlap
+    double overlap = 0;
+    for (const auto &box1 : boxes_) {
+        if (box1.fixed)
+            continue;
+        for (const auto &box2 : boxes_) {
+            if (box2.fixed || box1.index == box2.index)
+                continue;
+            auto [dx, dy] = compute_overlap({(int)box1.xmin, (int)box1.ymin},
+                                            {(int)box1.xmax, (int)box1.ymax},
+                                            {(int)box2.xmin, (int)box2.ymin},
+                                            {(int)box2.xmax, (int)box2.ymax});
+            if (dx <= 0 || dy <= 0)
+                continue;
+
+            overlap += dx * dy;
+        }
+    }
+    // the main job is to reduce overlap
+    return hpwl * hpwl_param_ + overlap * anneal_param_;
+}
+
 void GlobalPlacer::commit_changes() {
-    if (current_move_.box_index == 0)
+    if (current_move_.box1.index < 0)
         return;
 
-    auto &box = boxes_[current_move_.box_index];
-    int dx = current_move_.dx;
-    int dy = current_move_.dy;
+    boxes_[current_move_.box1.index] = current_move_.box1;
 
-    // make the change
-    box.xmin += dx;
-    box.xmax += dx;
-    box.cx += dx;
-    box.ymin += dy;
-    box.ymax += dy;
-    box.cy += dy;
+    if (current_move_.box2.index >= 0)
+        boxes_[current_move_.box2.index] = current_move_.box2;
 
-    current_move_.box_index = 0;
+    current_move_.box1.index = -1;
+    current_move_.box2.index = -1;
 }
 
 void GlobalPlacer
@@ -1019,25 +1139,13 @@ void GlobalPlacer::anneal() {
     SimAnneal::anneal();
     printf("After annealing energy: %f improvement: %f ",
             curr_energy, (old_energy - curr_energy) / old_energy);
-    printf("scaled energy: %f\n", eval_f());
 }
 
 
 void GlobalPlacer::legalize_box() {
     // legalize them into integers
     for (auto &box : boxes_) {
-        if (box.fixed)
-            continue;
-        box.xmin = std::min<double>(std::round(box.xmin),
-                                    reduced_width_ - box.width);
-        box.xmin = std::max<double>(0, box.xmin);
-        box.ymin = std::min<double>(std::round(box.ymin),
-                                    reduced_height_ - box.height - clb_margin_);
-        box.ymin = std::max<double>(clb_margin_, box.ymin);
-        box.xmax = box.xmin + box.width;
-        box.ymax = box.ymin + box.height;
-        box.cx = box.xmin + box.width / 2.0;
-        box.cy = box.ymax + box.height / 2.0;
+        bound_box(box);
     }
 }
 
@@ -1054,7 +1162,7 @@ void GlobalPlacer::compute_gaussian_table() {
     }
 
     const auto denominator = std::accumulate(gaussian_table_.begin(),
-                                             gaussian_table_.end(), 0);
+                                             gaussian_table_.end(), 0.0);
     for (auto &v : gaussian_table_)
         v /= denominator;
 }
