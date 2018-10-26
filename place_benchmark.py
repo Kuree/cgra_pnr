@@ -294,18 +294,45 @@ def perform_global_placement_cluster(cluster_file, fixed_blk_pos, netlists,
             if blk_id not in fixed_blk_pos:
                 clusters[c_id].add(blk_id)
 
-    cluster_placer = SAClusterPlacer(clusters, netlists,
-                                     fixed_blk_pos,
-                                     board_meta=board_meta,
-                                     fold_reg=fold_reg,
-                                     seed=seed)  # num_mb=num_mb)
-    # use the following code to debug
-    # cluster_placer.steps = 0
-    cluster_placer.anneal()
-    cluster_cells, centroids = cluster_placer.realize()
+    new_clusters = {}
+    for c_id in clusters:
+        new_id = "x" + str(c_id)
+        new_clusters[new_id] = set()
+        for blk in clusters[c_id]:
+            # make sure that fixed blocks are not in the clusters
+            if blk not in fixed_blk_pos:
+                new_clusters[new_id].add(blk)
 
-    # if vis:
-    #    visualize_clustering_cgra(board_meta, cluster_cells)
+    # prepare for the input
+    new_layout = []
+    board_layout = board_meta[0]
+    for y in range(len(board_layout)):
+        row = []
+        for x in range(len(board_layout[y])):
+            if board_layout[y][x] is None:
+                row.append(' ')
+            else:
+                row.append(board_layout[y][x])
+        new_layout.append(row)
+
+    board_info = board_meta[-1]
+    clb_type = board_info["clb_type"]
+    gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
+                                new_layout, clb_type, fold_reg)
+
+    gp.solve()
+    # gp.anneal()
+    cluster_cells_ = gp.realize()
+
+    cluster_cells = {}
+    for c_id in cluster_cells_:
+        cells = cluster_cells_[c_id]
+        c_id = int(c_id[1:])
+        cluster_cells[c_id] = cells
+    centroids = compute_centroids(cluster_cells, b_type=clb_type)
+
+    if vis:
+        visualize_clustering_cgra(board_meta, cluster_cells)
 
     return centroids, cluster_cells, clusters
 

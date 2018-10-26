@@ -3,7 +3,7 @@ project(thunder)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread -g\
-    -funroll-all-loops -march=native -O2")
+    -funroll-all-loops -march=native")
 
 set(HEADER_LIBRARY src/include/randutils.hpp
                    src/include/tqdm.h
