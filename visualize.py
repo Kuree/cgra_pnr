@@ -62,7 +62,7 @@ def visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe):
     for blk_id in blk_id_list:
         pos = board_pos[blk_id]
         index = color_index.index(blk_id[0])
-        color = color_palette[index]
+        color = color_palette[index % len(color_palette)]
         if blk_id in changed_pe:
             color = color_palette[color_index.index("r")]
         if blk_id[0] == "r":
@@ -93,7 +93,7 @@ def visualize_clustering_cgra(board_meta, cluster_cells):
     im, draw = draw_board(width, height, scale)
     for c_id in cluster_cells:
         cells = cluster_cells[c_id]
-        color = color_palette[c_id]
+        color = color_palette[c_id % len(color_palette)]
         for blk_type in cells:
             for pos in cells[blk_type]:
                 draw_cell(draw, pos, color, scale)

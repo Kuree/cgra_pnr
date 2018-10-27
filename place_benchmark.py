@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-from placer import SAClusterPlacer
+
 from placer.util import compute_centroids
 from util import reduce_cluster_graph
 from argparse import ArgumentParser
@@ -19,9 +19,6 @@ from arch import mock_board_meta
 import pythunder
 import json
 import sys
-from arch.bookshelf import write_detailed_placement, parse_pl
-import tempfile
-import subprocess
 
 
 def detailed_placement_thunder(args, context=None):
@@ -60,30 +57,6 @@ def detailed_placement_thunder(args, context=None):
                 'headers': {'Content-Type': 'application/json'},
                 'body': placement
                 }
-
-
-def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
-                          fold_reg):
-    board_layout = board_meta[0]
-    board_info = board_meta[-1]
-    clb_type = board_info["clb_type"]
-    available_pos = {}
-    for y in range(len(board_layout)):
-        for x in range(len(board_layout[y])):
-            blk_type = board_layout[y][x]
-            if blk_type is not None:
-                if blk_type not in available_pos:
-                    available_pos[blk_type] = []
-                available_pos[blk_type].append((x, y))
-    global_refine = pythunder.DetailedPlacer(pre_placement,
-                                             netlists,
-                                             available_pos,
-                                             fixed_pos,
-                                             clb_type,
-                                             fold_reg)
-
-    global_refine.anneal()
-    return global_refine.realize()
 
 
 def setup_embeddings(netlist_embedding):
@@ -321,9 +294,9 @@ def perform_global_placement_cluster(cluster_file, fixed_blk_pos, netlists,
                                 new_layout, clb_type, fold_reg)
 
     gp.solve()
-    # gp.anneal()
+    gp.anneal()
     cluster_cells_ = gp.realize()
-
+    print("finished realize")
     cluster_cells = {}
     for c_id in cluster_cells_:
         cells = cluster_cells_[c_id]
@@ -388,7 +361,8 @@ def perform_global_placement_emb(emb_filename, fixed_blk_pos, netlists,
                                 new_layout, clb_type, fold_reg)
 
     gp.solve()
-    #gp.anneal()
+    gp.anneal()
+    print("annealing step", gp.steps)
     cluster_cells_ = gp.realize()
 
     cluster_cells = {}
@@ -474,6 +448,31 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
             r = res.json()
             board_pos.update(r)
         return board_pos
+
+
+def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
+                          fold_reg):
+    board_layout = board_meta[0]
+    board_info = board_meta[-1]
+    clb_type = board_info["clb_type"]
+    available_pos = {}
+    for y in range(len(board_layout)):
+        for x in range(len(board_layout[y])):
+            blk_type = board_layout[y][x]
+            if blk_type is not None:
+                if blk_type not in available_pos:
+                    available_pos[blk_type] = []
+                available_pos[blk_type].append((x, y))
+    global_refine = pythunder.DetailedPlacer(pre_placement,
+                                             netlists,
+                                             available_pos,
+                                             fixed_pos,
+                                             clb_type,
+                                             fold_reg)
+
+    global_refine.refine(int(len(netlists) * min(len(netlists), 500)),
+                         0.001)
+    return global_refine.realize()
 
 
 if __name__ == "__main__":
