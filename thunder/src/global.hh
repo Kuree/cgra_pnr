@@ -90,6 +90,7 @@ private:
     std::vector<std::map<char, tk::spline>> legal_spline_;
     std::map<uint32_t, uint32_t> column_mapping_;
     std::map<std::string, std::map<char, int>> box_dsp_blocks_;
+    std::map<std::string, uint32_t> intra_count_;
     randutils::random_generator<std::mt19937> global_rand_;
 
     // helper values
