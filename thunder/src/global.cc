@@ -27,7 +27,6 @@ void ClusterBox::assign(const ClusterBox &box) {
     nets = box.nets;
 }
 
-
 GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
                            ::map<::string, ::vector<::string>> netlists,
                            std::map<std::string, std::pair<int, int>> fixed_pos,
@@ -53,8 +52,8 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
 
     // setup reduced netlist
     auto [nets, intra_count] = this->collapse_netlist(::move(netlists));
-    (void)intra_count;
     netlists_ = nets;
+    intra_count_ = intra_count;
 
     /*
     for (auto const &iter : intra_count)
@@ -69,14 +68,14 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
 
     // set annealing parameters
     this->tmax = tmin * 2;
-    this->steps = (int)(std::pow(clusters_.size(), 2) * nets.size());
+    this->steps = (int)(std::pow(clusters_.size()* nets.size(), 1.8));
     this->anneal_param_ = std::pow((nets.size() / (double)clusters_.size()), 2)
                           * hpwl_param_;
     printf("Use anneal param: %f\n", anneal_param_);
 }
 
 void GlobalPlacer::setup_reduced_layout() {
-    const int margin = 2;   // TODO: fix this
+    const int margin = 10;   // TODO: fix this
     std::vector<char> lane_types;
     for (auto &blk_type : board_layout_[margin]) {
         lane_types.emplace_back(blk_type);
@@ -87,7 +86,8 @@ void GlobalPlacer::setup_reduced_layout() {
     for (uint32_t y = 0; y < board_layout_.size(); y++) {
         reduced_board_layout_.emplace_back(::vector<char>());
         uint32_t new_x = 0;
-        for (uint32_t x = 0; x < board_layout_[y].size(); x++) {
+        for (uint32_t x = clb_margin_;
+             x < board_layout_[y].size() - clb_margin_; x++) {
             const char blk_type = lane_types[x];
             if (blk_type != clb_type_ && blk_type != ' ') {
                 // skip this one
@@ -804,8 +804,15 @@ GlobalPlacer::realize() {
             const int new_y = pos.y;
             clb_cells.insert(std::make_pair(new_x, new_y));
             bboard[new_y][new_x] = false;
-            if (board_layout_[new_y][new_x] != clb_type_)
-                throw std::runtime_error("error in assign clb cells");
+            if (board_layout_[new_y][new_x] != clb_type_) {
+                printf("new_y: %d new_x: %d %c\n", new_y, new_x,
+                       board_layout_[new_y][new_x]);
+                printf("pos x: %d y: %d\n", pos.x, pos.y);
+                throw std::runtime_error("error in assign clb cells "
+                    "got cell type " + std::string(1,
+                     board_layout_[new_y][new_x])
+                     + " " + std::to_string(board_layout_[new_y][new_x]));
+            }
         }
         result[boxes_[box_index].id][clb_type_] = clb_cells;
     }
@@ -834,13 +841,14 @@ GlobalPlacer::realize() {
         double c_y = y_sum / result[boxes_[index].id][clb_type_].size();
         if (needed > 0) {
             // find exterior set
-            for (int effort = 0;
-                 effort < (int) board_layout_.size(); effort++) {
+            int effort;
+            for (effort = 0;
+                 effort < (int) board_layout_.size() / 2; effort++) {
                 if (needed <= 0)
                     break;
                 ::vector<::pair<int, int>> cells;
                 find_exterior_set(bboard, result[boxes_[index].id][clb_type_],
-                                  cells, effort * 2 + 1);
+                                  cells, effort + 1);
 
                 ::vector<uint32_t> cell_index;
                 cell_index.resize(cells.size());
@@ -1081,6 +1089,12 @@ double GlobalPlacer::energy() {
 double GlobalPlacer::init_energy() {
     // compute the HPWL
     double hpwl = compute_hpwl();
+
+    // approximate the intra HPWL use the intra count
+    for (const auto &box : boxes_) {
+        double w = (box.width + box.height) / 4.0;
+        hpwl += w * intra_count_[box.id];
+    }
 
     // compute the overlap
     double overlap = 0;
