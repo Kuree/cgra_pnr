@@ -937,11 +937,12 @@ void GlobalPlacer::move() {
     auto box_index = global_rand_.uniform<uint64_t>(fixed_pos_.size(),
                                                         boxes_.size() - 1);
 
-    // we have four choices
-    // 1. translate
+    // we have five choices
+    // 1. translate a little bit
     // 2. rotate
     // 3. change shape
     // 4. swap locations
+    // 5. teleport
 
     double action = global_rand_.uniform(0.0, 1.0);
 
@@ -994,6 +995,23 @@ void GlobalPlacer::move() {
         }
         box.ymax = box.ymin + box.height;
         // recompute the centroid
+        box.cx = (box.xmin + box.xmax) / 2.0;
+        box.cy = (box.ymin + box.ymax) / 2.0;
+        current_move_.box2.index = -1;
+    } else if (action <= 0.9) {
+        // just jump around the box somewhere in the region
+        current_move_.box1.assign(boxes_[box_index]);
+        ClusterBox &box = current_move_.box1;
+        auto new_x = global_rand_.uniform<uint32_t>(0,
+                                                    reduced_width_
+                                                    - box.width);
+        auto new_y = global_rand_.uniform<uint32_t>(0,
+                                                    reduced_height_
+                                                    - box.height);
+        box.xmin = new_x;
+        box.ymin = new_y;
+        box.xmax = new_x + box.width;
+        box.ymax = new_y + box.height;
         box.cx = (box.xmin + box.xmax) / 2.0;
         box.cy = (box.ymin + box.ymax) / 2.0;
         current_move_.box2.index = -1;
