@@ -15,6 +15,13 @@ $ make
 $ pip install thunder/
 $ pip install -r requirements.txt
 ```
+#### Use Thunder in other projects
+The core library, `thunder`, can be used outside this repo. Simply do
+```
+pip install -e git+https://github.com/Kuree/cgra_pnr#egg=pkg\&subdirectory=thunder
+```
+Usage of this library can be found in `place.py`.
+
 ### Usage
 ```
 $ ./scripts/pnr_flow.sh [--no-reg-fold] <cgra_info.txt> <mapped_design.json> [output.bsb]
