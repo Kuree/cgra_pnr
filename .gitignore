@@ -133,6 +133,7 @@ figures
 test_dataset
 tmp
 test_dataset
+test
 
 # images
 *.png
