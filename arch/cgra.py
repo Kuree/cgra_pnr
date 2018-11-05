@@ -675,7 +675,7 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
         lut_pins = get_lut_pins(instances[instance_name])
         pins = ["const{0}_{0}".format(i) for i in lut_pins]
         assert len(pins) == 3
-    elif op[:3] == "mux":
+    elif op[:3] == "mux" or op[:3] == "sel":
         pins = [None, None, None]
     else:
         pins = [None, None]
@@ -686,7 +686,7 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
             pin_name = conn.split(".")[0]
             pin_port = ".".join(conn.split(".")[1:])
             if pin_name == instance_name and "out" not in pin_port:
-                if op == "mux" and "bit.in.0" == pin_port:
+                if (op == "mux" or op == "sel") and "bit.in.0" == pin_port:
                     index = 2
                 elif pin_port != "in":
                     index = int(pin_port[-1])
@@ -710,7 +710,7 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
             raise Exception("Unknown folded block data " + str(entry_data))
         if b_id == blk_id:
             # mux is very special
-            if port == "bit0" and op == "mux":
+            if port == "bit0" and (op == "mux" or op == "sel"):
                 index = 2
             else:
                 index = int(port[-1])
