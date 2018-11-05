@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from placer import deepcopy
 from tqdm import tqdm
 from argparse import ArgumentParser
-import random
 
 
 class Router:
@@ -68,10 +67,6 @@ class Router:
                     channel_set.add(entry[0][-1])
             self.channel_width = len(channel_set)
         print("Using", self.channel_width, "channels to route")
-
-        # set up the random
-        self.random = random.Random()
-        self.random.seed(0)
 
     @staticmethod
     def manhattan_dist(p1, p2):
@@ -504,18 +499,10 @@ class Router:
                         chan_resources[chan] = routing_resource
 
             # find the minimum route path
-            indexies = list(range(self.channel_width))
-            # sort the list
-            indexies.sort(key=lambda index: route_length[index])
-            min_indexies = [indexies[0]]
+            min_chan = 0
             for i in range(1, self.channel_width):
-                if route_length[i] == route_length[min_indexies[0]]:
-                    min_indexies.append(i)
-                else:
-                    break
-            assert len(min_indexies) >= 1
-            # randomly select one to reduce congestion
-            min_chan = self.random.choice(min_indexies)
+                if route_length[i] < route_length[min_chan]:
+                    min_chan = i
             if route_length[min_chan] >= self.MAX_PATH_LENGTH:
                 raise Exception("Failed to route for net " + net_id)
             # add the final path to the design
