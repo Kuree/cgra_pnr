@@ -1,3 +1,6 @@
+import json
+
+
 def reduce_cluster_graph(netlists, clusters, fixed_blocks,
                          cluster_id=None):
     """NOTE: cluster_blocks holds block IDs, not cell locations"""
@@ -103,3 +106,8 @@ def deepcopy(obj_to_copy):
         d = obj_to_copy
     return d
 
+class SetEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, set):
+            return list(obj)
+        return json.JSONEncoder.default(self, obj)

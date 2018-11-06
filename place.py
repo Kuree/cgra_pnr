@@ -1,15 +1,17 @@
 from __future__ import print_function
 
 from util import reduce_cluster_graph, compute_centroids
+from util import SetEncoder
 import os
-import pickle
 import random
 import pythunder
+import json
+import boto3
+import threading
+from six.moves import queue
 
 
 def detailed_placement_thunder(args, context=None):
-    if context is not None:
-        args = pickle.loads(args["body"])
     blks = list(args["clusters"])
     cells = args["cells"]
     netlist = args["new_netlist"]
@@ -22,8 +24,6 @@ def detailed_placement_thunder(args, context=None):
     for blk_id in blk_pos:
         fixed_pos[blk_id] = list(blk_pos[blk_id])
     available_cells = {}
-    for blk_type in cells:
-        available_cells[blk_type] = list(cells[blk_type])
     placer = pythunder.DetailedPlacer(list(blks), netlist, available_cells,
                                       fixed_pos, clb_type,
                                       fold_reg)
@@ -348,9 +348,9 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
     height, width = board_info["height"], board_info["width"]
     margin = board_info["margin"]
     clb_type = board_info["clb_type"]
-    disallowed_pos = {(margin, margin), (margin, margin + height),
+    disallowed_pos = [(margin, margin), (margin, margin + height),
                       (margin + width, margin),
-                      (margin + width, margin + height)}
+                      (margin + width, margin + height)]
 
     for c_id in cluster_cells:
         cells = cluster_cells[c_id]
@@ -368,23 +368,35 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
                 "blk_pos": blk_pos, "fold_reg": fold_reg,
                 "seed": seed, "clb_type": clb_type,
                 "disallowed_pos": disallowed_pos}
-
         map_args.append(args)
     if not lambda_url:
         return detailed_placement_thunder_wrapper(map_args)
     else:
-        from requests_futures.sessions import FuturesSession
-        session = FuturesSession()
-        res_list = []
+        # user need to specify a region in the environment
+        client = boto3.client("lambda")
         import time
-        for arg in map_args:
+        threads = []
+        que = queue.Queue()
+        for i in range(len(map_args)):
             print("time:", time.time())
-            r = session.post(lambda_url, data=pickle.dumps(arg))
-            res_list.append(r)
+            t = threading.Thread(target=lambda q, arg:
+                                 q.put(client.invoke(
+                                    **{"FunctionName": lambda_url,
+                                       "InvocationType": "RequestResponse",
+                                       "Payload":
+                                       bytes(json.dumps(arg, cls=SetEncoder))})
+                                       ["Payload"].read()),
+                                 args=(que, map_args[i]))
+            threads.append(t)
+        # start
+        for t in threads:
+            t.start()
+        # join
+        for t in threads:
+            t.join()
         # merge
-        for res in res_list:
-            r = res.result().json()
-            print(r)
+        while not que.empty():
+            r = json.loads(que.get())["body"]
             board_pos.update(r)
         return board_pos
 
