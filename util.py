@@ -86,3 +86,23 @@ def compute_centroids(cluster_cells, b_type):
         pos = compute_centroid(cells)
         result[cluster_id] = pos
     return result
+
+
+def deepcopy(obj_to_copy):
+    if isinstance(obj_to_copy, dict):
+        d = obj_to_copy.copy()  # shallow dict copy
+        for k, v in six.iteritems(d):
+            d[k] = deepcopy(v)
+    elif isinstance(obj_to_copy, list):
+        d = obj_to_copy[:]  # shallow list/tuple copy
+        i = len(d)
+        while i:
+            i -= 1
+            d[i] = deepcopy(d[i])
+    elif isinstance(obj_to_copy, set):
+        d = obj_to_copy.copy()
+    else:
+        # tuple is fine since we're not modifying tuples
+        d = obj_to_copy
+    return d
+
