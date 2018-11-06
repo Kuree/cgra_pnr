@@ -426,6 +426,8 @@ def generate_io(id_to_name, io16_tile, io_pad_bit, io_pad_name, placement,
             pos = placement[blk_id]
             pad_name = io_pad_name[pos]
             if "io1_" in id_to_name[blk_id]:
+                # hack to make it consistent with run_tbg.csh
+                id_to_name[blk_id] = "io1_out_0_0"
                 io_pad_info[id_to_name[blk_id]] = {"bits":
                                                        {"0": {"pad_bit":
                                                                   io_pad_bit[
