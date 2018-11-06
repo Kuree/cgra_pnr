@@ -46,7 +46,7 @@ def detailed_placement_thunder(args, context=None):
         if blk_id[0] == "x":
             keys_to_remove.add(blk_id)
     for blk_id in keys_to_remove:
-        placement.remove(blk_id)
+        placement.pop(blk_id, None)
     if context is None:
         return placement
     else:
@@ -380,7 +380,9 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
             res_list.append(r)
         # merge
         for res in res_list:
-            r = res.json()
+            r = res.result().json()
+            print(r)
+            exit(0)
             board_pos.update(r)
         return board_pos
 

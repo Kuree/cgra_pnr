@@ -24,11 +24,11 @@ fi
 
 # first install python packages over
 pip install -r ${ROOTDIR}/requirements.txt -t ${DST_DIR} --system
+pip install thunder/ -t ${DST_DIR} --system
 
 # then copy files that will be used for detailed placement
-cp -r ${ROOTDIR}/simanneal ${DST_DIR}/
+cp -r ${ROOTDIR}/placer ${DST_DIR}/
 cp -r ${ROOTDIR}/arch ${DST_DIR}/
-cp ${ROOTDIR}/sa.py ${DST_DIR}/
 cp ${ROOTDIR}/place.py ${DST_DIR}/
 cp ${ROOTDIR}/util.py ${DST_DIR}/
 cp ${ROOTDIR}/visualize.py ${DST_DIR}
@@ -50,7 +50,7 @@ custom:
 
 functions:
    place:
-     handler: place.detailed_placement
+     handler: place.detailed_placement_thunder
      events:
        - http:
            path: place
