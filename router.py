@@ -542,7 +542,10 @@ class Router:
                 p, _ = conn[0]
             elif len(conn) == 3:
                 # direct sink
-                _, p, _ = conn
+                _, p, port = conn
+                if port == "reg":
+                    # can make a nice turn with reg sb blocked
+                    continue
             elif len(conn) == 4:
                 # self-connection sink
                 _, _, p, _ = conn
