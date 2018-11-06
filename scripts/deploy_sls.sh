@@ -23,7 +23,7 @@ if [ ! -d ${DST_DIR} ]; then
 fi
 
 # first install python packages over
-pip install -r ${ROOTDIR}/requirements.txt -t ${DST_DIR} --system
+# pip install -r ${ROOTDIR}/requirements.txt -t ${DST_DIR} --system
 pip install thunder/ -t ${DST_DIR} --system
 
 # then copy files that will be used for detailed placement

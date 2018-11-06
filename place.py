@@ -1,20 +1,9 @@
 from __future__ import print_function
 
-from placer.util import compute_centroids
-from util import reduce_cluster_graph
-from argparse import ArgumentParser
-from arch.parser import parse_emb
-from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
-import numpy as np
+from util import reduce_cluster_graph, compute_centroids
 import os
 import pickle
-from visualize import visualize_placement_cgra, visualize_clustering_cgra
-from sklearn.cluster import KMeans
 import random
-from arch.cgra import place_special_blocks, save_placement, prune_netlist
-from arch.cgra_packer import load_packed_file
-from arch.fpga import load_packed_fpga_netlist
-from arch import mock_board_meta
 import pythunder
 
 
@@ -82,6 +71,17 @@ def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
 
 
 def main():
+    # only the main thread needs it
+    import numpy as np
+    from argparse import ArgumentParser
+    from arch.parser import parse_emb
+    from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
+    from arch.cgra import place_special_blocks, save_placement, prune_netlist
+    from arch.cgra_packer import load_packed_file
+    from arch.fpga import load_packed_fpga_netlist
+    from arch import mock_board_meta
+    from visualize import visualize_placement_cgra
+
     parser = ArgumentParser("CGRA Placer")
     parser.add_argument("-i", "--input", help="Packed netlist file, " +
                                               "e.g. harris.packed",
@@ -250,6 +250,9 @@ def get_num_clusters(id_to_name):
 def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
                              board_meta, fold_reg, seed,
                              num_clusters=None, fpga_place=False, vis=True):
+    from sklearn.cluster import KMeans
+    import numpy as np
+    from visualize import visualize_clustering_cgra
     # simple heuristics to calculate the clusters
     if fpga_place:
         num_clusters = int(np.ceil(len(emb) / 300)) + 1
@@ -382,7 +385,6 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
         for res in res_list:
             r = res.result().json()
             print(r)
-            exit(0)
             board_pos.update(r)
         return board_pos
 

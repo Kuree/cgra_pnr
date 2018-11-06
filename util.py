@@ -49,7 +49,40 @@ def reduce_cluster_graph(netlists, clusters, fixed_blocks,
     return new_netlist
 
 
+def compute_centroid(cluster_cells):
+    if type(cluster_cells) == list or type(cluster_cells) == set:
+        x_sum = 0
+        y_sum = 0
+        cluster_size = len(cluster_cells)
+        for cell in cluster_cells:
+            x_sum += cell[0]
+            y_sum += cell[1]
+        pos_x = int(x_sum / cluster_size)
+        pos_y = int(y_sum / cluster_size)
+        return pos_x, pos_y
+    elif type(cluster_cells) == dict:
+        x_sum = 0
+        y_sum = 0
+        cluster_size = len(cluster_cells)
+        for cell_id in cluster_cells:
+            cell = cluster_cells[cell_id]
+            x_sum += cell[0]
+            y_sum += cell[0]
+        pos_x = int(x_sum / cluster_size)
+        pos_y = int(y_sum / cluster_size)
+        return pos_x, pos_y
+    else:
+        raise Exception("Unknown type: " + str(type(cluster_cells)))
 
 
-
-
+def compute_centroids(cluster_cells, b_type):
+    result = {}
+    for cluster_id in cluster_cells:
+        cells = set()
+        for blk_type in cluster_cells[cluster_id]:
+            if b_type != blk_type:
+                continue
+            cells.update(cluster_cells[cluster_id][blk_type])
+        pos = compute_centroid(cells)
+        result[cluster_id] = pos
+    return result
