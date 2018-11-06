@@ -1,7 +1,3 @@
-import numpy as np
-import six
-
-
 def reduce_cluster_graph(netlists, clusters, fixed_blocks,
                          cluster_id=None):
     """NOTE: cluster_blocks holds block IDs, not cell locations"""
@@ -89,6 +85,7 @@ def compute_centroids(cluster_cells, b_type):
 
 
 def deepcopy(obj_to_copy):
+    import six
     if isinstance(obj_to_copy, dict):
         d = obj_to_copy.copy()  # shallow dict copy
         for k, v in six.iteritems(d):

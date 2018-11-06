@@ -9,7 +9,7 @@ import os
 import numpy as np
 from visualize import draw_board, draw_cell
 import matplotlib.pyplot as plt
-from placer import deepcopy
+from util import deepcopy
 from tqdm import tqdm
 from argparse import ArgumentParser
 

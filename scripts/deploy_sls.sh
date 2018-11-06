@@ -24,7 +24,7 @@ fi
 
 # first install python packages over
 # pip install -r ${ROOTDIR}/requirements.txt -t ${DST_DIR} --system
-pip install thunder/ -t ${DST_DIR} --system
+pip install thunder/ -t ${DST_DIR}
 
 # then copy files that will be used for detailed placement
 cp -r ${ROOTDIR}/placer ${DST_DIR}/
@@ -35,14 +35,12 @@ cp ${ROOTDIR}/visualize.py ${DST_DIR}
 
 pushd ${DST_DIR}
 touch serverless.yml
-echo "service: threadreaper-place
+echo "service: thunder
 
 provider:
    name: aws
    runtime: python2.7
-
-plugins:
-  - serverless-offline-python
+   region: us-west-2
 
 custom:
   serverless-offline:
