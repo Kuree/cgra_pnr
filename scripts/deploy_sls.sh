@@ -53,10 +53,6 @@ do
 "   place_${mem}:
      handler: place.detailed_placement_thunder
      timeout: 900
-     memorySize: ${mem}
-     events:
-       - http:
-           path: place_${mem}
-           method: post" >> serverless.yml
+     memorySize: ${mem}" >> serverless.yml
 done
 popd

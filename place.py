@@ -23,8 +23,7 @@ def detailed_placement_thunder(args, context=None):
     fixed_pos = {}
     for blk_id in blk_pos:
         fixed_pos[blk_id] = list(blk_pos[blk_id])
-    available_cells = {}
-    placer = pythunder.DetailedPlacer(list(blks), netlist, available_cells,
+    placer = pythunder.DetailedPlacer(blks, netlist, available_cells,
                                       fixed_pos, clb_type,
                                       fold_reg)
     placer.anneal()
