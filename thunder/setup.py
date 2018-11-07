@@ -59,14 +59,14 @@ class CMakeBuild(build_ext):
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
 
 setup(
-    name='thunder',
-    version='0.0.1',
+    name='pythunder',
+    version='0.0.2',
     author='Keyi Zhang',
     author_email='keyi@stanford.edu',
     description='Fast CGRA Placement',
     long_description='',
-    ext_modules=[CMakeExtension('thunder')],
+    url="https://github.com/Kuree/cgra_pnr/tree/master/thunder",
+    ext_modules=[CMakeExtension('pythunder')],
     cmdclass=dict(build_ext=CMakeBuild),
-    #setup_requires=['numpy'],
     zip_safe=False,
 )
