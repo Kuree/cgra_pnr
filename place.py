@@ -396,7 +396,8 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
             t.join()
         # merge
         while not que.empty():
-            r = json.loads(que.get())["body"]
+            res = json.loads(que.get())
+            r = res["body"]
             board_pos.update(r)
         return board_pos
 
