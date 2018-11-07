@@ -2,6 +2,7 @@ from __future__ import print_function, division
 import arch
 import networkx as nx
 import json
+import six
 
 from . import load_packed_file, read_netlist_json
 
@@ -772,8 +773,15 @@ def get_tile_op(instance, blk_id, changed_pe, rename_op=True):
                 op = instance["modargs"]["alu_op"][-1]
             if not rename_op:
                 op = "alu"
+            # get signed or unsigned
+            if "signed" in instance["modargs"]:
+                signed = instance["modargs"]["signed"][-1]
+                if type(signed) != bool:
+                    assert isinstance(signed, six.string_types)
+                    signed = False if signed[-1] == "0" else True
+                if signed and rename_op:
+                    op = "s" + op
             print_order = 0
-
         else:
             raise Exception("Unknown PE op type " + op)
     return op, print_order
