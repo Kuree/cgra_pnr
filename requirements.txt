@@ -14,3 +14,5 @@ futures
 boto3
 # should be installed with matplotlib; just in case
 six
+# this is to deal with serverless configuration
+pyyaml

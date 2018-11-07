@@ -23,7 +23,7 @@ if [ ! -d ${DST_DIR} ]; then
 fi
 
 # first install python packages over
-# pip install -r ${ROOTDIR}/requirements.txt -t ${DST_DIR} --system
+# some pip may need --system, some may not
 pip install thunder/ -t ${DST_DIR}
 
 # then copy files that will be used for detailed placement
@@ -33,6 +33,8 @@ cp ${ROOTDIR}/util.py ${DST_DIR}/
 
 pushd ${DST_DIR}
 touch serverless.yml
+
+declare -a mem_sizes=("256" "512" "1024" "1600" "2048" "3008")
 echo "service: thunder
 
 provider:
@@ -44,15 +46,17 @@ custom:
   serverless-offline:
     port: 4000
 
-functions:
-   place:
+functions:"  > serverless.yml
+for mem in "${mem_sizes[@]}"
+do
+   echo \
+"   place_${mem}:
      handler: place.detailed_placement_thunder
      timeout: 900
+     memorySize: ${mem}
      events:
        - http:
-           path: place
-           method: post
-
-   " > serverless.yml
-
+           path: place_${mem}
+           method: post" >> serverless.yml
+done
 popd

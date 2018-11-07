@@ -106,6 +106,21 @@ def deepcopy(obj_to_copy):
         d = obj_to_copy
     return d
 
+
+def get_sls_config(config_file):
+    import yaml
+    with open(config_file) as f:
+        data = yaml.load(f)
+    functions = data["functions"]
+    result = {}
+    for func_name in functions:
+        func = functions[func_name]
+        mem_size = int(func["memorySize"])
+        entry = func["events"][0]["http"]["path"]
+        result[mem_size] = entry
+    return result
+
+
 class SetEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, set):
