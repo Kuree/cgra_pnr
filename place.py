@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 from util import reduce_cluster_graph, compute_centroids
-from util import SetEncoder
+from util import SetEncoder, choose_resource
 import os
 import random
 import pythunder
@@ -17,13 +17,13 @@ def detailed_placement_thunder(args, context=None):
     netlist = args["new_netlist"]
     blk_pos = args["blk_pos"]
     fold_reg = args["fold_reg"]
-    seed = args["seed"]
+    # seed = args["seed"]
     # disallowed_pos = args["disallowed_pos"]
     clb_type = args["clb_type"]
     fixed_pos = {}
     for blk_id in blk_pos:
         fixed_pos[blk_id] = list(blk_pos[blk_id])
-    placer = pythunder.DetailedPlacer(blks, netlist, available_cells,
+    placer = pythunder.DetailedPlacer(blks, netlist, cells,
                                       fixed_pos, clb_type,
                                       fold_reg)
     placer.anneal()
@@ -42,6 +42,47 @@ def detailed_placement_thunder(args, context=None):
                 'headers': {'Content-Type': 'application/json'},
                 'body': placement
                 }
+
+
+def estimate_placement_time(args):
+    blks = list(args["clusters"])
+    cells = args["cells"]
+    netlist = args["new_netlist"]
+    blk_pos = args["blk_pos"]
+    fold_reg = args["fold_reg"]
+    clb_type = args["clb_type"]
+    fixed_pos = {}
+    for blk_id in blk_pos:
+        fixed_pos[blk_id] = list(blk_pos[blk_id])
+    new_cells = {}
+    for blk_type in cells:
+        new_cells[blk_type] = list(cells[blk_type])
+    placer = pythunder.DetailedPlacer(blks, netlist, new_cells,
+                                      fixed_pos, clb_type,
+                                      fold_reg)
+    t = placer.estimate(10000)
+    return t
+
+
+def get_lambda_arn(map_args, aws_config):
+    threads = []
+    que = queue.Queue()
+    for i in range(len(map_args)):
+        t = threading.Thread(target=lambda q, arg, index: q.put(
+            (index, estimate_placement_time(arg))), args=(que, map_args[i], i))
+        threads.append(t)
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    estimates = [-1] * len(map_args)
+    while not que.empty():
+        index, estimate = que.get()
+        estimates[index] = estimate
+
+    for t in estimates:
+        assert t != -1
+    return choose_resource(estimates, aws_config)
 
 
 def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
@@ -86,7 +127,7 @@ def main():
                                               "e.g. harris.packed",
                         required=True, action="store", dest="packed_filename")
     parser.add_argument("-e", "--embedding", help="Netlist embedding file, " +
-                        "e.g. harris.emb",
+                                                  "e.g. harris.emb",
                         required=True, action="store", dest="netlist_embedding")
     parser.add_argument("-o", "--output", help="Placement result, " +
                                                "e.g. harris.place",
@@ -99,23 +140,24 @@ def main():
                         action="store_true",
                         required=False, dest="no_reg_fold", default=False)
     parser.add_argument("--no-vis", help="If set, the placer won't show " +
-                        "visualization result for placement",
+                                         "visualization result for placement",
                         action="store_true",
                         required=False, dest="no_vis", default=False)
     parser.add_argument("-s", "--seed", help="Seed for placement. " +
-                        "default is 0", type=int, default=0,
+                                             "default is 0", type=int,
+                        default=0,
                         required=False, action="store", dest="seed")
 
-    parser.add_argument("-u", "--url", help="Lambda function entry for " +
+    parser.add_argument("-a", "--aws", help="Serverless configuration for " +
                         "detailed placement. If set, will try to connect to "
-                        "that URL",
-                        dest="lambda_url", type=str, required=False,
+                        "that arn",
+                        dest="aws_config", type=str, required=False,
                         action="store", default="")
     parser.add_argument("-f", "--fpga", action="store", dest="fpga_arch",
                         default="", help="ISPD FPGA architecture file")
     parser.add_argument("--mock", action="store", dest="mock_size",
                         default=0, type=int, help="Mock CGRA board with "
-                        "provided size")
+                                                  "provided size")
     args = parser.parse_args()
 
     cgra_arch = args.cgra_arch
@@ -128,7 +170,7 @@ def main():
     packed_filename = args.packed_filename
     netlist_embedding = args.netlist_embedding
     placement_filename = args.placement_filename
-    lambda_url = args.lambda_url
+    aws_config = args.aws_config
     fpga_place = len(fpga_arch) > 0
 
     seed = args.seed
@@ -216,7 +258,7 @@ def main():
                                            fixed_blk_pos, netlists,
                                            fold_reg, seed,
                                            board_info,
-                                           lambda_url)
+                                           aws_config)
     # refinement
     board_pos = refine_global_thunder(board_meta, board_pos, netlists,
                                       fixed_blk_pos, fold_reg)
@@ -311,7 +353,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
 
     if vis:
         visualize_clustering_cgra(board_meta, cluster_cells)
-    assert(cluster_cells is not None and centroids is not None)
+    assert (cluster_cells is not None and centroids is not None)
     return centroids, cluster_cells, clusters
 
 
@@ -336,7 +378,7 @@ def detailed_placement_thunder_wrapper(args):
 def perform_detailed_placement(centroids, cluster_cells, clusters,
                                fixed_blk_pos, netlists,
                                fold_reg, seed, board_info,
-                               lambda_url=""):
+                               aws_config=""):
     board_pos = fixed_blk_pos.copy()
     map_args = []
 
@@ -368,24 +410,25 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
                 "seed": seed, "clb_type": clb_type,
                 "disallowed_pos": disallowed_pos}
         map_args.append(args)
-    if not lambda_url:
+    if not aws_config:
         return detailed_placement_thunder_wrapper(map_args)
     else:
         # user need to specify a region in the environment
         client = boto3.client("lambda")
         import time
         threads = []
+        lambda_arns = get_lambda_arn(map_args, aws_config)
         que = queue.Queue()
         for i in range(len(map_args)):
             print("time:", time.time())
-            t = threading.Thread(target=lambda q, arg:
-                                 q.put(client.invoke(
-                                    **{"FunctionName": lambda_url,
-                                       "InvocationType": "RequestResponse",
-                                       "Payload":
-                                       bytes(json.dumps(arg, cls=SetEncoder))})
-                                       ["Payload"].read()),
-                                 args=(que, map_args[i]))
+            t = threading.Thread(target=lambda q, arg, arn:
+            q.put(client.invoke(
+                **{"FunctionName": arn,
+                   "InvocationType": "RequestResponse",
+                   "Payload":
+                       bytes(json.dumps(arg, cls=SetEncoder))})
+                  ["Payload"].read()),
+                                 args=(que, map_args[i], lambda_arns[i]))
             threads.append(t)
         # start
         for t in threads:

@@ -62,6 +62,5 @@ double SimAnneal::estimate(const uint32_t steps) {
     double time = elapsed.count();
     // this is in ms
     double total_time = time * this->steps / steps;
-
     return total_time;
 }

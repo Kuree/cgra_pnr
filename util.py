@@ -1,3 +1,4 @@
+from __future__ import division
 import json
 
 
@@ -116,8 +117,41 @@ def get_sls_config(config_file):
     for func_name in functions:
         func = functions[func_name]
         mem_size = int(func["memorySize"])
-        entry = func["events"][0]["http"]["path"]
-        result[mem_size] = entry
+        result[mem_size] = func_name
+    # find arn, which has to be manually set
+    assert "arn" in data
+    # arm is a prefix which will be merged with real arn
+    prefix = data["arn"]
+    merged_result = {}
+    for key in result:
+        merged_result[key] = prefix + result[key]
+    return merged_result
+
+
+def choose_resource(estimated_time, config_file):
+    index_list = list(range(len(estimated_time)))
+    index_list.sort(key=lambda x:estimated_time[x])
+    max_index = index_list[-1]
+
+    # always assign the max one with max resource
+    # may need better one since not all the computation needs the max resource
+
+    # load and sort the resources
+    mem_sizes = get_sls_config(config_file)
+    sizes = list(mem_sizes.keys())
+    sizes.sort()
+    max_mem = sizes[-1]
+    max_time = estimated_time[max_index]
+
+    result = {max_index: mem_sizes[max_mem]}
+    index_list.remove(max_index)
+    for index in index_list:
+        # best match search
+        resource = estimated_time[index] / max_time * max_mem
+        diff = [mem - resource for mem in sizes]
+        diff.sort(key=lambda x: abs(x))
+        best_mem = diff[0] + resource
+        result[index] = mem_sizes[best_mem]
     return result
 
 
