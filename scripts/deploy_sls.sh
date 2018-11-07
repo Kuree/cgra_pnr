@@ -23,39 +23,36 @@ if [ ! -d ${DST_DIR} ]; then
 fi
 
 # first install python packages over
-pip install -r ${ROOTDIR}/requirements.txt -t ${DST_DIR} --system
+# some pip may need --system, some may not
+pip install thunder/ -t ${DST_DIR}
 
 # then copy files that will be used for detailed placement
-cp -r ${ROOTDIR}/simanneal ${DST_DIR}/
 cp -r ${ROOTDIR}/arch ${DST_DIR}/
-cp ${ROOTDIR}/sa.py ${DST_DIR}/
 cp ${ROOTDIR}/place.py ${DST_DIR}/
 cp ${ROOTDIR}/util.py ${DST_DIR}/
-cp ${ROOTDIR}/visualize.py ${DST_DIR}
 
 pushd ${DST_DIR}
 touch serverless.yml
-echo "service: threadreaper-place
+
+declare -a mem_sizes=("256" "512" "1024" "1600" "2048" "3008")
+echo "service: thunder
 
 provider:
    name: aws
    runtime: python2.7
-
-plugins:
-  - serverless-offline-python
+   region: us-west-2
 
 custom:
   serverless-offline:
     port: 4000
 
-functions:
-   place:
-     handler: place.detailed_placement
-     events:
-       - http:
-           path: place
-           method: post
-
-   " > serverless.yml
-
+functions:"  > serverless.yml
+for mem in "${mem_sizes[@]}"
+do
+   echo \
+"   place_${mem}:
+     handler: place.detailed_placement_thunder
+     timeout: 900
+     memorySize: ${mem}" >> serverless.yml
+done
 popd

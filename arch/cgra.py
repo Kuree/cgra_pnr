@@ -2,6 +2,7 @@ from __future__ import print_function, division
 import arch
 import networkx as nx
 import json
+import six
 
 from . import load_packed_file, read_netlist_json
 
@@ -426,6 +427,8 @@ def generate_io(id_to_name, io16_tile, io_pad_bit, io_pad_name, placement,
             pos = placement[blk_id]
             pad_name = io_pad_name[pos]
             if "io1_" in id_to_name[blk_id]:
+                # hack to make it consistent with run_tbg.csh
+                id_to_name[blk_id] = "io1_out_0_0"
                 io_pad_info[id_to_name[blk_id]] = {"bits":
                                                        {"0": {"pad_bit":
                                                                   io_pad_bit[
@@ -675,7 +678,7 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
         lut_pins = get_lut_pins(instances[instance_name])
         pins = ["const{0}_{0}".format(i) for i in lut_pins]
         assert len(pins) == 3
-    elif op[:3] == "mux":
+    elif op[:3] == "mux" or op[:3] == "sel":
         pins = [None, None, None]
     else:
         pins = [None, None]
@@ -686,7 +689,7 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
             pin_name = conn.split(".")[0]
             pin_port = ".".join(conn.split(".")[1:])
             if pin_name == instance_name and "out" not in pin_port:
-                if op == "mux" and "bit.in.0" == pin_port:
+                if (op == "mux" or op == "sel") and "bit.in.0" == pin_port:
                     index = 2
                 elif pin_port != "in":
                     index = int(pin_port[-1])
@@ -710,7 +713,7 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
             raise Exception("Unknown folded block data " + str(entry_data))
         if b_id == blk_id:
             # mux is very special
-            if port == "bit0" and op == "mux":
+            if port == "bit0" and (op == "mux" or op == "sel"):
                 index = 2
             else:
                 index = int(port[-1])
@@ -770,8 +773,15 @@ def get_tile_op(instance, blk_id, changed_pe, rename_op=True):
                 op = instance["modargs"]["alu_op"][-1]
             if not rename_op:
                 op = "alu"
+            # get signed or unsigned
+            if "signed" in instance["modargs"]:
+                signed = instance["modargs"]["signed"][-1]
+                if type(signed) != bool:
+                    assert isinstance(signed, six.string_types)
+                    signed = False if signed[-1] == "0" else True
+                if signed and rename_op:
+                    op = "s" + op
             print_order = 0
-
         else:
             raise Exception("Unknown PE op type " + op)
     return op, print_order

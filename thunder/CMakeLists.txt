@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.0)
 project(thunder)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread -g\
-    -funroll-all-loops -march=native")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread \
+    -funroll-all-loops -O3 -march=native")
 
 set(HEADER_LIBRARY src/include/randutils.hpp
                    src/include/tqdm.h

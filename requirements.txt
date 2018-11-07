@@ -10,6 +10,9 @@ pillow
 tqdm
 # futures for python 2 support
 futures
-requests-futures
+# aws python sdk
+boto3
 # should be installed with matplotlib; just in case
 six
+# this is to deal with serverless configuration
+pyyaml

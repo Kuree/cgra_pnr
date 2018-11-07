@@ -9,7 +9,7 @@ import os
 import numpy as np
 from visualize import draw_board, draw_cell
 import matplotlib.pyplot as plt
-from placer import deepcopy
+from util import deepcopy
 from tqdm import tqdm
 from argparse import ArgumentParser
 
@@ -523,7 +523,7 @@ class Router:
         # src points
         reg_pos = None
         distance = {}
-
+        skipped_pos = None
         for index, conn in enumerate(final_path):
             if is_reg_net and index == 0:
                 if len(final_path[index]) != 2:
@@ -542,7 +542,11 @@ class Router:
                 p, _ = conn[0]
             elif len(conn) == 3:
                 # direct sink
-                _, p, _ = conn
+                _, p, port = conn
+                if port == "reg":
+                    # can make a nice turn with reg sb blocked
+                    skipped_pos = p
+                    continue
             elif len(conn) == 4:
                 # self-connection sink
                 _, _, p, _ = conn
@@ -563,7 +567,9 @@ class Router:
             if src_pos in keys:
                 keys.remove(src_pos)
         keys.sort(key=lambda x: distance[x])
-
+        if len(keys) == 0:
+            assert skipped_pos is not None
+            return skipped_pos
         return keys[0]
 
     def route_net(self, bus, chan, net, routing_resource, final_path=None,

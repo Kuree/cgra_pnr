@@ -1203,11 +1203,24 @@ void GlobalPlacer
 }
 
 void GlobalPlacer::anneal() {
+    // in a very rare situation where the annealing will fail
+    // (very small netlists)
+    // so we save the boxes for backup
+    ::vector<ClusterBox> old_boxes;
+    for (const auto &box : boxes_) {
+        ClusterBox b;
+        b.assign(box);
+        old_boxes.emplace_back(b);
+    }
     double old_energy = curr_energy;
     printf("Before annealing energy: %f\n", old_energy);
     SimAnneal::anneal();
     printf("After annealing energy: %f improvement: %f\n",
             curr_energy, (old_energy - curr_energy) / old_energy);
+    if (curr_energy > old_energy) {
+        printf("Annealing failed. Reverting to the old stage\n");
+        boxes_ = old_boxes;
+    }
 }
 
 

@@ -316,7 +316,11 @@ void DetailedPlacer
                               iter.second.size();
         if (empty_space < 0)
             throw ::runtime_error("Not enough block pos for " +
-                                  ::string(1, blk_type));
+                                  ::string(1, blk_type) + " got " +
+                                  std::to_string(
+                                          available_pos[blk_type].size())
+                                  + " need " +
+                                  std::to_string(iter.second.size()) );
         empty_spaces.insert({blk_type, empty_space});
     }
 }

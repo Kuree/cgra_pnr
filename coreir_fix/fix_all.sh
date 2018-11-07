@@ -20,14 +20,10 @@ fi
 BASEDIR=$(dirname "$0")
 
 # fix things in order since const fix broke the json formatting
-mux_fix=${output_json}.mux
 smax_fix=${output_json}.smax
 
-echo "Fixing mux..."
-python ${BASEDIR}/fix_mux.py ${input_json} ${mux_fix}
-
 echo "Fixing smax..."
-python ${BASEDIR}/fix_smax.py ${mux_fix} ${smax_fix}
+python ${BASEDIR}/fix_smax.py ${input_json} ${smax_fix}
 
 echo "Fixing constants..."
 python ${BASEDIR}/fix_const.py ${smax_fix} ${output_json}

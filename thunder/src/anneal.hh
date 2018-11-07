@@ -1,7 +1,3 @@
-//
-// Created by keyi on 10/17/18.
-//
-
 #ifndef THUNDER_ANNEAL_HH
 #define THUNDER_ANNEAL_HH
 
@@ -19,6 +15,7 @@ public:
     virtual double energy() { return 0; }
     virtual void anneal();
     void refine(int num_iter, double threshold);
+    double estimate(uint32_t steps=10000);
 
     // attributes
     // default values

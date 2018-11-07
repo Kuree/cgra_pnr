@@ -1,7 +1,5 @@
-//
-// Created by keyi on 10/17/18.
-//
 #include <math.h>
+#include <chrono>
 #include "anneal.hh"
 #include "include/tqdm.h"
 
@@ -49,4 +47,20 @@ void SimAnneal::refine(int num_iter, double threshold) {
             break;
     }
     bar.finish();
+}
+
+double SimAnneal::estimate(const uint32_t steps) {
+    auto start = std::chrono::system_clock::now();
+    for (uint32_t i = 0; i < steps; i++) {
+        move();
+        energy();
+    }
+
+    auto end = std::chrono::system_clock::now();
+    auto elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    double time = elapsed.count();
+    // this is in ms
+    double total_time = time * this->steps / steps;
+    return total_time;
 }

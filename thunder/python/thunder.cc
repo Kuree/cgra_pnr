@@ -49,6 +49,7 @@ void init_pythunder(py::module &m) {
             .def("anneal", &SimAnneal::anneal)
             .def("realize", &DetailedPlacer::realize)
             .def("refine", &SimAnneal::refine)
+            .def("estimate", &SimAnneal::estimate)
             .def_readwrite("steps", &DetailedPlacer::steps)
             .def_readwrite("tmax", &DetailedPlacer::tmax)
             .def_readwrite("tmin", &DetailedPlacer::tmin);
