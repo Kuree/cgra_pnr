@@ -69,10 +69,6 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
     // set annealing parameters
     this->tmax = tmin * 2;
     this->steps = (int)(std::pow(clusters_.size()* nets.size(), 1.8));
-    this->anneal_param_ = std::pow((nets.size() / (double)clusters_.size())
-                                  * 1.4 , 2) * hpwl_param_ *
-                                  anneal_param_factor;
-    printf("Use anneal param: %f\n", anneal_param_);
 }
 
 void GlobalPlacer::setup_reduced_layout() {
@@ -434,6 +430,11 @@ void GlobalPlacer::solve() {
     legalize_box();
     this->curr_energy = init_energy();
 
+    this->anneal_param_ = std::pow((this->netlists_.size() /
+                                    (double)clusters_.size())
+                                   * 1.4 , 2) * hpwl_param_ *
+                          anneal_param_factor;
+    printf("Use anneal param: %f\n", anneal_param_);
 }
 
 double GlobalPlacer::eval_f(double overlap_param) const {
