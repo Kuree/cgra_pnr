@@ -524,7 +524,7 @@ def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
                                              fold_reg)
 
     global_refine.refine(int(len(netlists) * min(len(netlists), 500)),
-                         0.001)
+                         0.015, True)
     return global_refine.realize()
 
 
