@@ -29,8 +29,9 @@ void SimAnneal::anneal() {
     bar.finish();
 }
 
-void SimAnneal::refine(int num_iter, double threshold) {
+void SimAnneal::refine(int num_iter, double threshold, bool print_improvement) {
     tqdm bar;
+    double total_improvement = 0;
     while (true) {
         double old_energy = this->curr_energy;
         for (int i = 0; i < num_iter; i++) {
@@ -46,8 +47,11 @@ void SimAnneal::refine(int num_iter, double threshold) {
         double improvement = (old_energy - this->curr_energy) / old_energy;
         if (improvement < threshold)
             break;
-        printf("old energy: %f new energy: %f improvement: %f\n",
-                old_energy, this->curr_energy, improvement);
+        if (print_improvement) {
+            printf("%f -> %f improvement: %f total: %f\n",
+                   old_energy, this->curr_energy, improvement,
+                   total_improvement);
+        }
     }
     bar.finish();
 }
