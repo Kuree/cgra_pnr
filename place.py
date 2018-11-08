@@ -25,7 +25,7 @@ def detailed_placement_thunder(args, context=None):
                                       fixed_pos, clb_type,
                                       fold_reg)
     placer.anneal()
-    placer.refine(1000, 0.01)
+    placer.refine(1000, 0.01, False)
     placement = placer.realize()
     keys_to_remove = set()
     for blk_id in placement:
@@ -105,7 +105,7 @@ def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
                                              fold_reg)
 
     global_refine.refine(int(len(netlists) * min(len(netlists), 500)),
-                         1.0 / len(netlists))
+                         1.0 / len(netlists), True)
     return global_refine.realize()
 
 
