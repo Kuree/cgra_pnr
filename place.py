@@ -420,8 +420,9 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
         threads = []
         lambda_arns = get_lambda_arn(map_args, aws_config)
         que = queue.Queue()
+        lambda_res = {}
+        start = time.time()
         for i in range(len(map_args)):
-            print("time:", time.time())
             t = threading.Thread(target=lambda q, arg, arn:
             q.put(client.invoke(
                 **{"FunctionName": arn,
@@ -429,19 +430,29 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
                    "Payload":
                        bytes(json.dumps(arg, cls=SetEncoder))})
                   ["Payload"].read()),
-                                 args=(que, map_args[i], lambda_arns[i]))
+                                 args=(que, map_args[i], lambda_arns[i][1]))
             threads.append(t)
+            lambda_res[i] = lambda_arns[i][0]
+        # sort the threads so that the ones needs most resources runs first
+        # this gives us some spaces for mis-calculated runtime approximation
+        index_list = list(range(len(map_args)))
+        index_list.sort(key=lambda x: lambda_res[x], reverse=True)
         # start
-        for t in threads:
+        for i in index_list:
+            t = threads[i]
             t.start()
-        # join
-        for t in threads:
-            t.join()
+        # skip join, use blocking while loop to aggressively waiting threads
+        # to finish
+        job_count = 0
         # merge
-        while not que.empty():
-            res = json.loads(que.get())
-            r = res["body"]
-            board_pos.update(r)
+        while job_count < len(map_args):
+            if not que.empty():
+                res = json.loads(que.get())
+                r = res["body"]
+                board_pos.update(r)
+                job_count += 1
+        end = time.time()
+        print("Lambda takes", end - start, "seconds")
         return board_pos
 
 
