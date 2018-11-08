@@ -63,7 +63,10 @@ void init_pythunder(py::module &m) {
                     bool>())
             .def("solve", &GlobalPlacer::solve)
             .def("realize", &GlobalPlacer::realize)
-            .def("anneal", &SimAnneal::anneal);
+            .def("anneal", &SimAnneal::anneal)
+            .def_readwrite("anneal_param_factor",
+                           &GlobalPlacer::anneal_param_factor)
+            .def_readwrite("steps", &GlobalPlacer::steps);
 }
 
 void init_detailed_placement(py::module &m) {
