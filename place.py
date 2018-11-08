@@ -6,9 +6,7 @@ import os
 import random
 import pythunder
 import json
-import boto3
 import threading
-from six.moves import queue
 
 
 def detailed_placement_thunder(args, context=None):
@@ -27,7 +25,7 @@ def detailed_placement_thunder(args, context=None):
                                       fixed_pos, clb_type,
                                       fold_reg)
     placer.anneal()
-    placer.refine(1000, 0.01)
+    placer.refine(1000, 0.01, False)
     placement = placer.realize()
     keys_to_remove = set()
     for blk_id in placement:
@@ -65,6 +63,7 @@ def estimate_placement_time(args):
 
 
 def get_lambda_arn(map_args, aws_config):
+    from six.moves import queue
     threads = []
     que = queue.Queue()
     for i in range(len(map_args)):
@@ -106,7 +105,7 @@ def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
                                              fold_reg)
 
     global_refine.refine(int(len(netlists) * min(len(netlists), 500)),
-                         1.0 / len(netlists))
+                         1.0 / len(netlists), True)
     return global_refine.realize()
 
 
@@ -181,7 +180,6 @@ def main():
 
     vis_opt = not args.no_vis
     fold_reg = not args.no_reg_fold
-
     # FPGA params override
     if mock_size > 0:
         fold_reg = False
@@ -191,7 +189,7 @@ def main():
         board_meta = parse_fpga(fpga_arch)
     else:
         board_meta = parse_cgra(cgra_arch, fold_reg=fold_reg)
-
+    print(fold_reg)
     # Common routine
     board_name, board_meta = board_meta.popitem()
     print("INFO: Placing for", board_name)
@@ -337,6 +335,7 @@ def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
 
     board_info = board_meta[-1]
     clb_type = board_info["clb_type"]
+    print(fold_reg)
     gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
                                 new_layout, clb_type, fold_reg)
 
@@ -379,6 +378,8 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
                                fixed_blk_pos, netlists,
                                fold_reg, seed, board_info,
                                aws_config=""):
+    from six.moves import queue
+    import boto3
     board_pos = fixed_blk_pos.copy()
     map_args = []
 

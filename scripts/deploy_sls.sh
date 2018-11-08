@@ -24,7 +24,15 @@ fi
 
 # first install python packages over
 # some pip may need --system, some may not
+# Keyi: AWS Lambda doesn't like -march=native
+# remove it when building packages for lambda
+temp_cmake=$(mktemp)
+thunder_cmake="thunder/CMakeLists.txt"
+cp ${thunder_cmake} ${temp_cmake}
+echo "CMakeList.txt backup: ${temp_cmake}"
+sed -i -e 's/-march=native//g' ${thunder_cmake}
 pip install thunder/ -t ${DST_DIR}
+cp ${temp_cmake} ${thunder_cmake}
 
 # then copy files that will be used for detailed placement
 cp -r ${ROOTDIR}/arch ${DST_DIR}/

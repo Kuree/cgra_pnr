@@ -14,7 +14,7 @@ public:
     virtual double init_energy() { return 0; }
     virtual double energy() { return 0; }
     virtual void anneal();
-    void refine(int num_iter, double threshold);
+    void refine(int num_iter, double threshold, bool print_improvement=false);
     double estimate(uint32_t steps=10000);
 
     // attributes
