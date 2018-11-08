@@ -46,6 +46,8 @@ public:
     std::map<std::string, std::map<char, std::set<std::pair<int, int>>>>
     realize();
 
+    double anneal_param_factor = 1.0;
+
 protected:
     void move() override;
     void commit_changes() override;
