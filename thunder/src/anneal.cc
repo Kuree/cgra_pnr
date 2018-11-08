@@ -43,8 +43,11 @@ void SimAnneal::refine(int num_iter, double threshold) {
                 this->curr_energy = new_energy;
             }
         }
-        if ((old_energy - this->curr_energy) / old_energy < threshold)
+        double improvement = (old_energy - this->curr_energy) / old_energy;
+        if (improvement < threshold)
             break;
+        printf("old energy: %f new energy: %f improvement: %f\n",
+                old_energy, this->curr_energy, improvement);
     }
     bar.finish();
 }
