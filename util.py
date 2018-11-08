@@ -143,15 +143,15 @@ def choose_resource(estimated_time, config_file):
     max_mem = sizes[-1]
     max_time = estimated_time[max_index]
 
-    result = {max_index: mem_sizes[max_mem]}
+    result = {max_index: (max_mem, mem_sizes[max_mem])}
     index_list.remove(max_index)
     for index in index_list:
         # best match search
         resource = estimated_time[index] / max_time * max_mem
         diff = [mem - resource for mem in sizes]
         diff.sort(key=lambda x: abs(x))
-        best_mem = diff[0] + resource
-        result[index] = mem_sizes[best_mem]
+        best_mem = int(diff[0] + resource)
+        result[index] = (best_mem, mem_sizes[best_mem])
     return result
 
 
