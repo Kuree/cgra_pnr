@@ -428,13 +428,14 @@ void GlobalPlacer::solve() {
     printf("Using HPWL: %f\n", hpwl);
 
     legalize_box();
-    this->curr_energy = init_energy();
 
     this->anneal_param_ = std::pow((this->netlists_.size() /
                                     (double)clusters_.size())
                                    * 1.4 , 2) * hpwl_param_ *
                           anneal_param_factor;
     printf("Use anneal param: %f\n", anneal_param_);
+
+    this->curr_energy = init_energy();
 }
 
 double GlobalPlacer::eval_f(double overlap_param) const {
