@@ -477,7 +477,8 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
     else:
         # user need to specify a region in the environment
         import botocore.config
-        cfg = botocore.config.Config(retries={'max_attempts': 0})
+        cfg = botocore.config.Config(retries={'max_attempts': 0},
+                                     connect_timeout=300, read_timeout=300)
         client = boto3.client("lambda", config=cfg)
         import time
         threads = []
