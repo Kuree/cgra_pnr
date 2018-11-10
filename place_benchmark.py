@@ -511,7 +511,8 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
         aws_usage = {}
         while job_count < len(map_args):
             if not que.empty():
-                i, res = json.loads(que.get())
+                i, data = que.get()
+                res = json.loads(data)
                 end_time = time.time()
                 spent = int(ceil((end_time - threads_time[i]) * 10))
                 mem = lambda_arns[i][0]
