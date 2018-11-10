@@ -440,6 +440,7 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
                                aws_config=""):
     from six.moves import queue
     import boto3
+    from math import ceil
     board_pos = fixed_blk_pos.copy()
     map_args = []
 
@@ -483,14 +484,14 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
         lambda_res = {}
         start = time.time()
         for i in range(len(map_args)):
-            t = threading.Thread(target=lambda q, arg, arn:
-            q.put(client.invoke(
+            t = threading.Thread(target=lambda q, arg, arn, index:
+            q.put((index, client.invoke(
                 **{"FunctionName": arn,
                    "InvocationType": "RequestResponse",
                    "Payload":
                        bytes(json.dumps(arg, cls=SetEncoder))})
-                  ["Payload"].read()),
-                                 args=(que, map_args[i], lambda_arns[i][1]))
+                  ["Payload"].read())),
+                                 args=(que, map_args[i], lambda_arns[i][1], i))
             threads.append(t)
             lambda_res[i] = lambda_arns[i][0]
         # sort the threads so that the ones needs most resources runs first
@@ -498,21 +499,32 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
         index_list = list(range(len(map_args)))
         index_list.sort(key=lambda x: lambda_res[x], reverse=True)
         # start
+        threads_time = {}
         for i in index_list:
             t = threads[i]
+            threads_time[i] = time.time()
             t.start()
         # skip join, use blocking while loop to aggressively waiting threads
         # to finish
         job_count = 0
         # merge
+        aws_usage = {}
         while job_count < len(map_args):
             if not que.empty():
-                res = json.loads(que.get())
+                i, res = json.loads(que.get())
+                end_time = time.time()
+                spent = int(ceil((end_time - threads_time[i]) * 10))
+                mem = lambda_arns[i][0]
+                if mem not in aws_usage:
+                    aws_usage[mem] = 0
+                aws_usage[mem] += spent
                 r = res["body"]
                 board_pos.update(r)
                 job_count += 1
         end = time.time()
         print("Lambda takes", end - start, "seconds")
+        for mem in aws_usage:
+            print(mem, aws_usage[mem])
         return board_pos
 
 
