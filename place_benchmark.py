@@ -476,7 +476,9 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
         return detailed_placement_thunder_wrapper(map_args)
     else:
         # user need to specify a region in the environment
-        client = boto3.client("lambda")
+        import botocore.config
+        cfg = botocore.config.Config(retries={'max_attempts': 0})
+        client = boto3.client("lambda", config=cfg)
         import time
         threads = []
         lambda_arns = get_lambda_arn(map_args, aws_config)
