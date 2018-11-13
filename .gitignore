@@ -155,3 +155,7 @@ ntu_dataset
 #aws stuff
 aws-access
 sls
+
+# image stuff
+*.dot
+*.svg

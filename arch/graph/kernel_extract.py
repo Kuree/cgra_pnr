@@ -208,21 +208,25 @@ def sorted_traverse_clustering(connections, raw_names):
                 has_found = True
                 break
         if not has_found:
-            raise Exception("Cannot find name " + name)
+            clusters[0].add(name)
+        #    raise Exception("Cannot find name " + name)
     return clusters
 
 
 def visualize_raw_graph(graph, clusters, filename="kernel_partition.png"):
-    from visualize import color_palette
+    #from visualize import color_palette
 
     def to_hex(color):
         return "#{0:02X}{1:02X}{2:02X}".format(color[0], color[1], color[2])
-    for cluster_id in clusters:
-        for node in clusters[cluster_id]:
-            color = color_palette[cluster_id % len(color_palette)]
-            graph.nodes[node]["fillcolor"] = to_hex(color)
-            graph.nodes[node]["color"] = to_hex(color)
-            graph.nodes[node]["style"] = "filled"
+    # for node in graph.nodes:
+    #     graph.nodes[node]["label"] = " "
+    #for cluster_id in clusters:
+        #for node in clusters[cluster_id]:
+            # color = color_palette[cluster_id % len(color_palette)]
+            # graph.nodes[node]["fillcolor"] = to_hex(color)
+            # graph.nodes[node]["color"] = to_hex(color)
+            # graph.nodes[node]["style"] = "box"
+            # graph.nodes[node]["label"] = " "
 
     A = nx.nx_agraph.to_agraph(graph)
     A.layout(prog='dot')
@@ -359,7 +363,7 @@ def main():
     connections, raw_names = parse_connections(filename)
     #lb_clustering(connections, raw_names)
     #traverse_clustering(connections, raw_names)
-    clusters = sorted_traverse_clustering(connections, raw_names)
+    clusters = {} #sorted_traverse_clustering(connections, raw_names)
 
     raw_connections = get_raw_connections(filename)
     raw_graph = build_raw_graph(raw_connections)

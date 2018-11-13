@@ -25,7 +25,7 @@ def detailed_placement_thunder(args, context=None):
                                       fixed_pos, clb_type,
                                       fold_reg)
     placer.anneal()
-    placer.refine(1000, 0.01, False)
+    placer.refine(1000, 0.001, False)
     placement = placer.realize()
     keys_to_remove = set()
     for blk_id in placement:
