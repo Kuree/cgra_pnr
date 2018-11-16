@@ -14,6 +14,7 @@ add_library(thunder src/anneal.cc src/anneal.hh src/util.cc
             src/util.hh src/detailed.cc src/detailed.hh
             src/multi_place.cc src/multi_place.hh
             src/global.cc src/global.hh
+            src/vpr.cc src/vpr.hh
             ${HEADER_LIBRARY})
 
 add_subdirectory(python/pybind11)

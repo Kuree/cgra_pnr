@@ -30,13 +30,11 @@ public:
                    double step_ratio = 1);
     double energy() override;
     std::map<std::string, std::pair<int, int>> realize();
-    void vpr_anneal();
 
 protected:
     void move() override;
     void commit_changes() override;
 
-private:
     std::vector<Instance> instances_;
     std::vector<Net> netlist_;
     std::vector<int> instance_ids_;
@@ -48,9 +46,11 @@ private:
     randutils::random_generator<std::mt19937> detail_rand_;
 
     double init_energy() override;
+    bool is_reg_net(const Instance &ins, const Point &next_pos);
 
     std::map<int, std::set<int>> reg_no_pos_;
 
+private:
     void init_place_regular(const std::vector<std::string> &cluster_blocks,
                             std::map<std::string, int> &blk_id_dict,
                             std::map<char,
@@ -67,8 +67,6 @@ private:
                             std::map<std::string,
                                      std::vector<std::string>> &nets,
                             std::map<std::string, int> &blk_id_dict);
-
-    bool is_reg_net(const Instance &ins, const Point &next_pos);
 
     void legalize_reg();
 
