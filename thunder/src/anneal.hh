@@ -28,7 +28,6 @@ protected:
     virtual void commit_changes() {}
     double curr_energy = 0;
     int current_step = 0;
-private:
     randutils::random_generator<std::mt19937> rand_;
 };
 

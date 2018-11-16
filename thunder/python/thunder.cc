@@ -47,6 +47,7 @@ void init_pythunder(py::module &m) {
                     bool,
                     double>())
             .def("anneal", &SimAnneal::anneal)
+            .def("vpr_anneal", &DetailedPlacer::vpr_anneal)
             .def("realize", &DetailedPlacer::realize)
             .def("refine", &SimAnneal::refine)
             .def("estimate", &SimAnneal::estimate)

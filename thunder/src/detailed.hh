@@ -30,6 +30,7 @@ public:
                    double step_ratio = 1);
     double energy() override;
     std::map<std::string, std::pair<int, int>> realize();
+    void vpr_anneal();
 
 protected:
     void move() override;
