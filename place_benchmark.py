@@ -136,6 +136,10 @@ def main():
                         "visualization result for placement",
                         action="store_true",
                         required=False, dest="no_vis", default=False)
+    parser.add_argument("--vpr", help="If set, use VPR based annealing for" +
+                                      "the entire chip",
+                        action="store_true",
+                        required=False, dest="use_vpr", default=False)
     parser.add_argument("-s", "--seed", help="Seed for placement. " +
                         "default is 0", type=int, default=0,
                         required=False, action="store", dest="seed")
@@ -160,11 +164,12 @@ def main():
     mock_size = args.mock_size
     netlist_embedding = args.netlist_embedding
     cluster_file = args.cluster_file
+    use_vpr = args.use_vpr
 
     if len(cgra_arch) == 0 ^ len(fpga_arch) == 0 and mock_size == 0:
         parser.error("Must provide either --fpga or --cgra")
 
-    if len(cluster_file) == 0 ^ len(netlist_embedding) == 0:
+    if (len(cluster_file) == 0 ^ len(netlist_embedding) == 0) and not use_vpr:
         parser.error("Must provide either --embedding or --cluster")
 
     packed_filename = args.packed_filename
@@ -234,28 +239,32 @@ def main():
                              id_to_name,
                              place_on_board,
                              board_meta)
-
-    if len(netlist_embedding) > 0:
-        centroids, cluster_cells, clusters = \
-            perform_global_placement_emb(netlist_embedding, fixed_blk_pos,
-                                         netlists, board_meta,
-                                         fold_reg=fold_reg,
-                                         num_clusters=num_of_kernels,
-                                         seed=seed, fpga_place=fpga_place,
-                                         vis=vis_opt)
+    if use_vpr:
+        board_pos = perform_vpr_placement(id_to_name.keys(), fixed_blk_pos,
+                                          netlists, board_meta, fold_reg)
     else:
-        centroids, cluster_cells, clusters = \
-            perform_global_placement_cluster(cluster_file, fixed_blk_pos,
-                                             netlists, id_to_name, board_meta,
-                                             fold_reg, seed, vis=vis_opt)
+        if len(netlist_embedding) > 0:
+            centroids, cluster_cells, clusters = \
+                perform_global_placement_emb(netlist_embedding, fixed_blk_pos,
+                                             netlists, board_meta,
+                                             fold_reg=fold_reg,
+                                             num_clusters=num_of_kernels,
+                                             seed=seed, fpga_place=fpga_place,
+                                             vis=vis_opt)
+        else:
+            centroids, cluster_cells, clusters = \
+                perform_global_placement_cluster(cluster_file, fixed_blk_pos,
+                                                 netlists, id_to_name,
+                                                 board_meta, fold_reg, seed,
+                                                 vis=vis_opt)
 
-    # placer with each cluster
-    board_pos = perform_detailed_placement(centroids,
-                                           cluster_cells, clusters,
-                                           fixed_blk_pos, netlists,
-                                           fold_reg, seed,
-                                           board_info,
-                                           aws_config)
+        # placer with each cluster
+        board_pos = perform_detailed_placement(centroids,
+                                               cluster_cells, clusters,
+                                               fixed_blk_pos, netlists,
+                                               fold_reg, seed,
+                                               board_info,
+                                               aws_config)
 
     board_pos = refine_global_thunder(board_meta, board_pos, netlists,
                                       fixed_blk_pos, fold_reg)
@@ -432,6 +441,45 @@ def detailed_placement_thunder_wrapper(args):
     return pythunder.detailed_placement(clusters, cells, netlists, fixed_blocks,
                                         clb_type,
                                         fold_reg)
+
+
+def perform_vpr_placement(blocks, fixed_blk_pos, netlists,
+                          board_meta, fold_reg):
+    # compute available cell_pos
+    board_layout = board_meta[0]
+    board_info = board_meta[-1]
+    clb_type = board_info["clb_type"]
+    available_pos = {}
+    working_pos = {}
+    for y in range(len(board_layout)):
+        for x in range(len(board_layout[y])):
+            if board_layout[y][x] is None:
+                continue
+            blk_type = board_layout[y][x]
+            if blk_type not in available_pos:
+                available_pos[blk_type] = []
+                working_pos[blk_type] = []
+            available_pos[blk_type].append((x, y))
+            working_pos[blk_type].append((x, y))
+    # random assign locations
+    init_pos = {}
+    rand = random.Random(0)
+    for block in blocks:
+        if block in fixed_blk_pos:
+            continue
+        blk_type = block[0]
+        pos = rand.choice(working_pos[blk_type])
+        init_pos[block] = pos
+        working_pos[blk_type].remove(pos)
+
+    vpr_placer = pythunder.DetailedPlacer(init_pos,
+                                          netlists,
+                                          available_pos,
+                                          fixed_blk_pos,
+                                          clb_type,
+                                          fold_reg)
+    vpr_placer.vpr_anneal()
+    return vpr_placer.realize()
 
 
 def perform_detailed_placement(centroids, cluster_cells, clusters,

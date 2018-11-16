@@ -588,8 +588,10 @@ void DetailedPlacer::vpr_anneal() {
     for (auto const e: diff_e)
         diff_sum += (e - mean) * (e - mean);
     double temp = sqrt(diff_sum / num_blocks) * 20;
-    const double num_swap = 10 * pow(num_blocks, 1.33);
+    const double num_swap = (uint32_t)(10 * pow(num_blocks, 1.33));
     curr_energy = init_energy();
+    printf("Current HPWL: %f num. of swap: %f max temp: %f\n", curr_energy,
+           num_swap, temp);
     // anneal loop
     // Keyi:
     // D_limit is not yet implemented
@@ -617,9 +619,8 @@ void DetailedPlacer::vpr_anneal() {
             alpha = 0.95;
         else
             alpha = 0.8;
-        std::cerr << "Wirelength: " << curr_energy << " T: " << temp
-                  << " r_accept: " << r_accept << " alpha: " << alpha
-                  << std::endl;
+        printf("Wirelength: %f T: %f r_accept: %f alpha: %f\n", curr_energy, temp,
+               r_accept, alpha);
         temp *= alpha;
     }
 }
