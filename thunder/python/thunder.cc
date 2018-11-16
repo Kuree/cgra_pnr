@@ -3,6 +3,7 @@
 #include <vector>
 #include <algorithm>
 #include "../src/detailed.hh"
+#include "../src/vpr.hh"
 #include "../src/global.hh"
 #include "../src/multi_place.hh"
 
@@ -47,13 +48,22 @@ void init_pythunder(py::module &m) {
                     bool,
                     double>())
             .def("anneal", &SimAnneal::anneal)
-            .def("vpr_anneal", &DetailedPlacer::vpr_anneal)
             .def("realize", &DetailedPlacer::realize)
             .def("refine", &SimAnneal::refine)
             .def("estimate", &SimAnneal::estimate)
             .def_readwrite("steps", &DetailedPlacer::steps)
             .def_readwrite("tmax", &DetailedPlacer::tmax)
             .def_readwrite("tmin", &DetailedPlacer::tmin);
+
+    py::class_<VPRPlacer>(m, "VPRPlacer")
+            .def(py::init<std::map<std::string, std::pair<int, int>>,
+                    std::map<std::string, std::vector<std::string>>,
+                    std::map<char, std::vector<std::pair<int, int>>>,
+                    std::map<std::string, std::pair<int, int>>,
+                    char,
+                    bool>())
+            .def("anneal", &VPRPlacer::anneal)
+            .def("realize", &VPRPlacer::realize);
 
     py::class_<GlobalPlacer>(m, "GlobalPlacer")
             .def(py::init<std::map<std::string, std::set<std::string>>,
