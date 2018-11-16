@@ -567,3 +567,59 @@ double DetailedPlacer::init_energy() {
     }
     return result;
 }
+
+void DetailedPlacer::vpr_anneal() {
+    // assume we have obtained the random placement
+    // 1. obtained the initial temperature
+    uint64_t num_blocks = this->instance_ids_.size();
+    auto diff_e = ::vector<double>(this->instance_ids_.size());
+    for (uint32_t i = 0; i < num_blocks; i++) {
+        this->moves_.clear();
+        this->move();
+        auto new_e = energy();
+        diff_e[i] = new_e;
+    }
+    // calculate the std dev
+    double mean = 0;
+    for (auto const e : diff_e)
+        mean += e;
+    mean /= num_blocks;
+    double diff_sum = 0;
+    for (auto const e: diff_e)
+        diff_sum += (e - mean) * (e - mean);
+    double temp = sqrt(diff_sum / num_blocks) * 20;
+    const double num_swap = 10 * pow(num_blocks, 1.33);
+    curr_energy = init_energy();
+    // anneal loop
+    // Keyi:
+    // D_limit is not yet implemented
+    while (temp >= 0.005 * curr_energy / netlist_.size()) {
+        uint32_t accept = 0;
+        for (uint32_t i = 0; i < num_swap; i++) {
+            move();
+            double new_energy = energy();
+            double de = new_energy - this->curr_energy;
+            if (de > 0.0 && exp(-de / temp) < rand_.uniform<double>(0.0, 1.0)) {
+                continue;
+            } else {
+                commit_changes();
+                curr_energy = new_energy;
+                accept++;
+            }
+        }
+        double r_accept = (double)accept / num_swap;
+        double alpha = 0;
+        if (r_accept > 0.96)
+            alpha = 0.5;
+        else if (r_accept > 0.8)
+            alpha = 0.9;
+        else if (r_accept > 0.15)
+            alpha = 0.95;
+        else
+            alpha = 0.8;
+        std::cerr << "Wirelength: " << curr_energy << " T: " << temp
+                  << " r_accept: " << r_accept << " alpha: " << alpha
+                  << std::endl;
+        temp *= alpha;
+    }
+}
