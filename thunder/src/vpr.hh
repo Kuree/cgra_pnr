@@ -20,9 +20,10 @@ protected:
     void commit_changes() override;
 
 private:
-    std::map<std::pair<int, int>, int> loc_instances_;
+    std::map<char, std::map<std::pair<int, int>, int>> loc_instances_;
     double d_limit = 0;
     int max_dim_ = 0;
+    uint32_t num_blocks_ = 0;
 };
 
 
