@@ -266,8 +266,8 @@ def main():
                                                board_info,
                                                aws_config)
 
-    board_pos = refine_global_thunder(board_meta, board_pos, netlists,
-                                      fixed_blk_pos, fold_reg)
+        board_pos = refine_global_thunder(board_meta, board_pos, netlists,
+                                          fixed_blk_pos, fold_reg)
 
     for blk_id in board_pos:
         pos = board_pos[blk_id]
@@ -471,14 +471,13 @@ def perform_vpr_placement(blocks, fixed_blk_pos, netlists,
         pos = rand.choice(working_pos[blk_type])
         init_pos[block] = pos
         working_pos[blk_type].remove(pos)
-
-    vpr_placer = pythunder.DetailedPlacer(init_pos,
-                                          netlists,
-                                          available_pos,
-                                          fixed_blk_pos,
-                                          clb_type,
-                                          fold_reg)
-    vpr_placer.vpr_anneal()
+    vpr_placer = pythunder.VPRPlacer(init_pos,
+                                     netlists,
+                                     available_pos,
+                                     fixed_blk_pos,
+                                     clb_type,
+                                     fold_reg)
+    vpr_placer.anneal()
     return vpr_placer.realize()
 
 
