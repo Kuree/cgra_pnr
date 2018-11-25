@@ -60,7 +60,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name='pythunder',
-    version='0.0.2',
+    version='0.0.3',
     author='Keyi Zhang',
     author_email='keyi@stanford.edu',
     description='Fast CGRA Placement',
