@@ -9,12 +9,12 @@ SimAnneal::SimAnneal() {
 }
 
 void SimAnneal::anneal() {
-    float t_factor = -log(tmax / tmin);
+    auto t_factor = -log(tmax / tmin);
     // random setup
     tqdm bar;
     for (current_step = 0; current_step < steps; current_step++) {
         bar.progress(current_step, steps);
-        float t = tmax * exp(t_factor * current_step / steps);
+        auto t = tmax * exp(t_factor * current_step / steps);
         // make changes
         move();
         double new_energy = energy();

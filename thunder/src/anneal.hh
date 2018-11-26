@@ -14,14 +14,15 @@ public:
     virtual double init_energy() { return 0; }
     virtual double energy() { return 0; }
     virtual void anneal();
-    void refine(int num_iter, double threshold, bool print_improvement=false);
-    double estimate(uint32_t steps=10000);
+    virtual void refine(int num_iter, double threshold, bool print_improvement);
+    double estimate(uint32_t steps);
+    virtual double estimate() { return estimate(10000); }
 
     // attributes
     // default values
     int steps = 50000;
-    float tmax = 25000;
-    float tmin = 3;
+    double tmax = 25000;
+    double tmin = 3;
 
 protected:
     virtual void move() {}

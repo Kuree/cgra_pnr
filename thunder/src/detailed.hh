@@ -18,18 +18,20 @@ public:
                             std::vector<std::pair<int, int>>> available_pos,
                    std::map<std::string, std::pair<int, int>> fixed_pos,
                    char clb_type,
-                   bool fold_reg,
-                   double step_ratio = 30);
+                   bool fold_reg);
     DetailedPlacer(std::map<std::string, std::pair<int, int>> init_placement,
                    std::map<std::string, std::vector<std::string>> netlist,
                    std::map<char,
                             std::vector<std::pair<int, int>>> available_pos,
                    std::map<std::string, std::pair<int, int>> fixed_pos,
                    char clb_type,
-                   bool fold_reg,
-                   double step_ratio = 1);
+                   bool fold_reg);
     double energy() override;
     std::map<std::string, std::pair<int, int>> realize();
+    void anneal() override;
+    double estimate() override;
+    void refine(int num_iter, double threshold,
+                bool print_improvement) override;
 
 protected:
     void move() override;
@@ -51,6 +53,12 @@ protected:
     std::map<int, std::set<int>> reg_no_pos_;
 
 private:
+    std::map<char, std::map<std::pair<int, int>, int>> loc_instances_;
+    double d_limit_ = 0;
+    int max_dim_ = 0;
+    uint32_t num_blocks_ = 0;
+    uint32_t num_swap_ = 0;
+
     void init_place_regular(const std::vector<std::string> &cluster_blocks,
                             std::map<std::string, int> &blk_id_dict,
                             std::map<char,
@@ -90,6 +98,17 @@ private:
             std::map<char, std::vector<std::pair<int, int>>> &available_pos,
             const std::vector<std::string> &cluster_blocks,
             std::map<std::string, int> &blk_id_dict);
+
+    void set_bounds(
+            const std::map<char,
+                           std::vector<std::pair<int, int>>> &available_pos,
+            const std::map<std::string,
+                           std::pair<int, int>> &fixed_pos);
+
+    void sa_setup();
+    void index_loc() ;
+
+    uint32_t estimate_num_swaps() const;
 };
 
 

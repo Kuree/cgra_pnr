@@ -27,30 +27,16 @@ void init_pythunder(py::module &m) {
                  ::map<::string, ::pair<int, int>>,
                  char,
                  bool>())
-            .def(py::init<::vector<::string>,
-                    ::map<::string, ::vector<std::string>>,
-                    ::map<char, ::vector<::pair<int, int>>>,
-                    ::map<::string, ::pair<int, int>>,
-                    char,
-                    bool,
-                    double>())
             .def(py::init<::map<::string, ::pair<int, int>>,
                     ::map<::string, ::vector<std::string>>,
                     ::map<char, ::vector<::pair<int, int>>>,
                     ::map<::string, ::pair<int, int>>,
                     char,
                     bool>())
-            .def(py::init<::map<::string, ::pair<int, int>>,
-                    ::map<::string, ::vector<std::string>>,
-                    ::map<char, ::vector<::pair<int, int>>>,
-                    ::map<::string, ::pair<int, int>>,
-                    char,
-                    bool,
-                    double>())
             .def("anneal", &SimAnneal::anneal)
             .def("realize", &DetailedPlacer::realize)
             .def("refine", &SimAnneal::refine)
-            .def("estimate", &SimAnneal::estimate)
+            .def("estimate", &DetailedPlacer::estimate)
             .def_readwrite("steps", &DetailedPlacer::steps)
             .def_readwrite("tmax", &DetailedPlacer::tmax)
             .def_readwrite("tmin", &DetailedPlacer::tmin);

@@ -4,7 +4,10 @@
 #include <string>
 #include <cmath>
 #include "detailed.hh"
+#include "include/tqdm.h"
 
+#define CLAMP(x, low, high)  (((x) > (high)) ? (high) : \
+                             (((x) < (low)) ? (low) : (x)))
 #define DEBUG 0
 
 using std::string;
@@ -27,8 +30,7 @@ DetailedPlacer
                  ::map<char, ::vector<::pair<int, int>>> available_pos,
                  ::map<::string, ::pair<int, int>> fixed_pos,
                  char clb_type,
-                 bool fold_reg,
-                 double step_ratio) :
+                 bool fold_reg) :
                  SimAnneal(),
                  instances_(),
                  netlist_(),
@@ -37,7 +39,8 @@ DetailedPlacer
                  instance_type_index_(),
                  clb_type_(clb_type),
                  fold_reg_(fold_reg),
-                 reg_no_pos_() {
+                 reg_no_pos_(),
+                 loc_instances_() {
     // intelligently set the fold reg option
     set_fold_reg(cluster_blocks, fold_reg);
 
@@ -63,9 +66,38 @@ DetailedPlacer
     detail_rand_.seed(0);
 
     this->curr_energy = this->init_energy();
+    set_bounds(available_pos, fixed_pos);
 
-    // annealing setup
-    steps = (int)(cluster_blocks.size() * cluster_blocks.size() * step_ratio);
+    index_loc();
+}
+
+void DetailedPlacer::index_loc() {
+    // index to loc
+    for (const auto &instance : instances_) {
+        auto pos = instance.pos;
+        const char blk_type = instance.name[0];
+        if (loc_instances_.find(blk_type) == loc_instances_.end())
+            loc_instances_[blk_type] = {};
+        loc_instances_[blk_type].insert({{pos.x, pos.y}, instance.id});
+    }
+}
+
+void DetailedPlacer::set_bounds(
+        const map<char, vector<pair<int, int>>> &available_pos,
+        const map<string, pair<int, int>> &fixed_pos) {
+    // determine the d_limit by looping through the available pos
+    int xmax = 0, ymax = 0;
+    for (const auto &iter : available_pos) {
+        for (const auto &p : iter.second) {
+            if (p.first > xmax)
+                xmax = p.first;
+            if (p.second > ymax)
+                ymax = p.second;
+        }
+    }
+    max_dim_ = xmax > ymax ? xmax : ymax;
+    d_limit_ = static_cast<uint32_t>(max_dim_);
+    num_blocks_ = (uint32_t)(instance_ids_.size() - fixed_pos.size());
 }
 
 
@@ -75,8 +107,7 @@ DetailedPlacer
                  ::map<char, ::vector<::pair<int, int>>> available_pos,
                  ::map<::string, ::pair<int, int>> fixed_pos,
                  char clb_type,
-                 bool fold_reg,
-                 double step_ratio) :
+                 bool fold_reg) :
                  SimAnneal(),
                  instances_(),
                  netlist_(),
@@ -85,7 +116,8 @@ DetailedPlacer
                  instance_type_index_(),
                  clb_type_(clb_type),
                  fold_reg_(fold_reg),
-                 reg_no_pos_() {
+                 reg_no_pos_(),
+                 loc_instances_() {
     // re-make cluster blocks
     ::vector<::string> cluster_blocks;
     cluster_blocks.reserve(init_placement.size());
@@ -116,10 +148,9 @@ DetailedPlacer
 
     this->curr_energy = this->init_energy();
 
-    // annealing setup. low temperature global refinement
-    steps = (int)(cluster_blocks.size() * cluster_blocks.size() * step_ratio);
-    tmin = 1;
-    tmax = (float)std::max(tmin + 0.1, 0.001 * netlist.size());
+    set_bounds(available_pos, fixed_pos);
+
+    index_loc();
 }
 
 void DetailedPlacer
@@ -478,6 +509,15 @@ void DetailedPlacer::move() {
                               std::to_string(this->current_step));
     }
 
+    // check loc instance
+    for (const auto &id : instance_ids_) {
+        const auto &instance = instances_[id];
+        const auto blk_type = instance.name[0];
+        auto pos = std::make_pair(instance.pos.x, instance.pos.y);
+        if (loc_instances_[blk_type][pos] != id)
+            throw ::runtime_error("loc checking is wrong");
+    }
+
 #endif
     this->moves_.clear();
     auto curr_ins_id =
@@ -486,9 +526,30 @@ void DetailedPlacer::move() {
     auto curr_ins = instances_[curr_ins_id];
     // only swap with the same type
     char blk_type = curr_ins.name[0];
-    auto [start_index, end_index] = instance_type_index_[blk_type];
-    auto next_ins = instances_[detail_rand_.uniform<uint64_t>(start_index,
-                                                              end_index)];
+    // search for x, y that is within the d_limit
+    const auto curr_pos = curr_ins.pos;
+    Instance next_ins;
+    if (d_limit_ >= max_dim_) {
+        auto[start_index, end_index] = instance_type_index_[blk_type];
+        next_ins = instances_[detail_rand_.uniform<uint64_t>(start_index,
+                                                                  end_index)];
+    } else {
+        int r = (int)(d_limit_ / 2);
+        r = r > 0 ? r : 1;
+        const int x_start = CLAMP(curr_pos.x - r, 0, max_dim_);
+        const int x_end = CLAMP(curr_pos.x + r, 0, max_dim_);
+        const int y_start = CLAMP(curr_pos.y - r, 0, max_dim_);
+        const int y_end = CLAMP(curr_pos.y + r, 0, max_dim_);
+        const int next_x = detail_rand_.uniform(x_start, x_end);
+        const int next_y = detail_rand_.uniform(y_start, y_end);
+        const auto pos = std::make_pair(next_x, next_y);
+        if (loc_instances_[blk_type].find(pos)
+            == loc_instances_[blk_type].end())
+            return;
+
+        const int id = loc_instances_[blk_type][pos];
+        next_ins = instances_[id];
+    }
 
     if (curr_ins.name[0] != next_ins.name[0])
         throw ::runtime_error("unexpected move selection error");
@@ -509,6 +570,117 @@ void DetailedPlacer::move() {
     this->moves_.insert(DetailedMove{.blk_id = next_ins.id,
                                      .new_pos = curr_ins.pos});
 }
+
+void DetailedPlacer::anneal() {
+    // the anneal schedule is different from VPR's because we want to
+    // estimate the overall iterations
+    sa_setup();
+    tqdm bar;
+    uint32_t total_swaps = estimate_num_swaps() * num_swap_;
+    double temp = tmax;
+    uint32_t current_swap = 0;
+    while (temp >= tmin) {
+        uint32_t accept = 0;
+        for (uint32_t i = 0; i < num_swap_; i++) {
+            move();
+            double new_energy = energy();
+            double de = new_energy - this->curr_energy;
+            if (de == 0)
+                continue;
+            if (de > 0.0 && exp(-de / temp) < rand_.uniform<double>(0.0, 1.0)) {
+                continue;
+            } else {
+                commit_changes();
+                curr_energy = new_energy;
+                accept++;
+            }
+        }
+
+        // same schedule as estimation
+        // 0.5
+        if (temp == tmax) {
+            temp /= 2;
+        }
+        // 0.9
+        else if (temp >= tmax * 0.1) {
+            temp *= 0.9;
+        }
+        // 0.95
+        else if (temp >= tmax * 0.0004) {
+            temp *= 0.95;
+        }
+        // 0.8
+        else if (temp >= tmin) {
+            temp *= 0.8;
+        }
+
+        bar.progress(current_swap++, total_swaps);
+
+        double r_accept = (double)accept / num_swap_;
+        d_limit_ = d_limit_ * (1 - 0.44 + r_accept);
+        d_limit_ = CLAMP(d_limit_, 1, max_dim_);
+    }
+    bar.finish();
+}
+
+void DetailedPlacer::sa_setup() {
+    if (num_swap_ != 0)
+        return;
+    // assume we have obtained the random placement
+    // obtained the initial temperature
+    auto diff_e = vector<double>(num_blocks_);
+    for (uint32_t i = 0; i < num_blocks_; i++) {
+        moves_.clear();
+        move();
+        auto new_e = energy();
+        diff_e[i] = new_e;
+    }
+    // calculate the std dev
+    double mean = 0;
+    for (auto const e : diff_e)
+        mean += e;
+    mean /= num_blocks_;
+    double diff_sum = 0;
+    for (auto const e: diff_e)
+        diff_sum += (e - mean) * (e - mean);
+    tmax = sqrt(diff_sum / (num_blocks_ + 1)) * 20;
+    num_swap_ = static_cast<uint32_t>(10 * pow(num_blocks_, 1.33));
+    tmin = 0.005 * curr_energy / netlist_.size();
+}
+
+double DetailedPlacer::estimate() {
+    sa_setup();
+
+    double swap_time = SimAnneal::estimate(num_swap_);
+    uint32_t num_swaps = estimate_num_swaps();
+
+    return swap_time * num_swaps;
+}
+
+uint32_t DetailedPlacer::estimate_num_swaps() const {
+    uint32_t num_swaps = 0;
+    auto temp = tmax;
+    // 0.5
+    temp /= 2;
+    num_swaps++;
+    // 0.9
+    while (temp >= tmax * 0.1) {
+        temp *= 0.9;
+        num_swaps++;
+    }
+    // 0.95
+    while (temp >= tmax * 0.0004) {
+        temp *= 0.95;
+        num_swaps++;
+    }
+    // 0.8
+    while (temp >= tmin) {
+        temp *= 0.8;
+        num_swaps++;
+    }
+    return num_swaps;
+}
+
 
 double DetailedPlacer::energy() {
     if (!this->moves_.empty()) {
@@ -549,7 +721,11 @@ double DetailedPlacer::energy() {
 }
 
 void DetailedPlacer::commit_changes() {
-    for (const auto &move : this->moves_) {
+    for (const auto &move : moves_) {
+        auto new_pos = std::make_pair(move.new_pos.x, move.new_pos.y);
+        const char blk_type = instances_[move.blk_id].name[0];
+        loc_instances_[blk_type][new_pos] = move.blk_id;
+
         int blk_id = move.blk_id;
         instances_[blk_id].pos = Point(move.new_pos);
     }
@@ -566,4 +742,10 @@ double DetailedPlacer::init_energy() {
             result[ins.name] = {ins.pos.x, ins.pos.y};
     }
     return result;
+}
+
+void DetailedPlacer::refine(int num_iter, double threshold,
+                          bool print_improvement) {
+    d_limit_ = sqrt(max_dim_) * 2;
+    SimAnneal::refine(num_iter, threshold, print_improvement);
 }

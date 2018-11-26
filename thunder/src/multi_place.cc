@@ -81,7 +81,7 @@ using std::set;
                 bool fold) {
             DetailedPlacer placer(blks, n, p, f, c, fold);
             placer.anneal();
-            placer.refine(1000, 0.001);
+            placer.refine(1000, 0.001, true);
             return placer.realize();
         }, cluster, netlist, available_pos, fixed_pos, clb_type, fold_reg);
         thread_tasks.emplace_back(std::move(task));
