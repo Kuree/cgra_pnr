@@ -101,9 +101,7 @@ private:
 
     void set_bounds(
             const std::map<char,
-                           std::vector<std::pair<int, int>>> &available_pos,
-            const std::map<std::string,
-                           std::pair<int, int>> &fixed_pos);
+                           std::vector<std::pair<int, int>>> &available_pos);
 
     void sa_setup();
     void index_loc() ;

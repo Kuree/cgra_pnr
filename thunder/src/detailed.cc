@@ -66,9 +66,11 @@ DetailedPlacer
     detail_rand_.seed(0);
 
     this->curr_energy = this->init_energy();
-    set_bounds(available_pos, fixed_pos);
 
     index_loc();
+
+    // set bounds
+    set_bounds(available_pos);
 }
 
 void DetailedPlacer::index_loc() {
@@ -82,9 +84,9 @@ void DetailedPlacer::index_loc() {
     }
 }
 
-void DetailedPlacer::set_bounds(
-        const map<char, vector<pair<int, int>>> &available_pos,
-        const map<string, pair<int, int>> &fixed_pos) {
+void
+DetailedPlacer::set_bounds(const ::map<char, ::vector<pair<int, int>>>
+                           &available_pos) {
     // determine the d_limit by looping through the available pos
     int xmax = 0, ymax = 0;
     for (const auto &iter : available_pos) {
@@ -97,7 +99,7 @@ void DetailedPlacer::set_bounds(
     }
     max_dim_ = xmax > ymax ? xmax : ymax;
     d_limit_ = static_cast<uint32_t>(max_dim_);
-    num_blocks_ = (uint32_t)(instance_ids_.size() - fixed_pos.size());
+    num_blocks_ = static_cast<uint32_t>(instance_ids_.size());
 }
 
 
@@ -148,9 +150,10 @@ DetailedPlacer
 
     this->curr_energy = this->init_energy();
 
-    set_bounds(available_pos, fixed_pos);
-
     index_loc();
+
+    // set bounds
+    set_bounds(available_pos);
 }
 
 void DetailedPlacer
@@ -646,6 +649,12 @@ void DetailedPlacer::sa_setup() {
     tmax = sqrt(diff_sum / (num_blocks_ + 1)) * 20;
     num_swap_ = static_cast<uint32_t>(10 * pow(num_blocks_, 1.33));
     tmin = 0.005 * curr_energy / netlist_.size();
+
+    // very very rare cases
+    if (tmax <= tmin) {
+        cerr << "Unable to determine tmax. Use default temperature\n";
+        tmax = 3000;
+    }
 }
 
 double DetailedPlacer::estimate() {
