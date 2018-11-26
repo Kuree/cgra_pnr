@@ -609,7 +609,7 @@ void DetailedPlacer::anneal() {
             temp *= 0.9;
         }
         // 0.95
-        else if (temp >= tmax * 0.0004) {
+        else if (temp >= tmax * 0.0001) {
             temp *= 0.95;
         }
         // 0.8
@@ -678,7 +678,7 @@ uint32_t DetailedPlacer::estimate_num_swaps() const {
         num_swaps++;
     }
     // 0.95
-    while (temp >= tmax * 0.0004) {
+    while (temp >= tmax * 0.0002) {
         temp *= 0.95;
         num_swaps++;
     }
