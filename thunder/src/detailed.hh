@@ -52,13 +52,13 @@ protected:
 
     std::map<int, std::set<int>> reg_no_pos_;
 
-private:
     std::map<char, std::map<std::pair<int, int>, int>> loc_instances_;
     double d_limit_ = 0;
     int max_dim_ = 0;
     uint32_t num_blocks_ = 0;
     uint32_t num_swap_ = 0;
 
+private:
     void init_place_regular(const std::vector<std::string> &cluster_blocks,
                             std::map<std::string, int> &blk_id_dict,
                             std::map<char,
