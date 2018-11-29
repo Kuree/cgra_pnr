@@ -1,3 +1,6 @@
 [submodule "thunder/python/pybind11"]
 	path = thunder/python/pybind11
 	url = https://github.com/pybind/pybind11
+[submodule "cyclone/python/pybind11"]
+	path = cyclone/python/pybind11
+	url = https://github.com/pybind/pybind11
