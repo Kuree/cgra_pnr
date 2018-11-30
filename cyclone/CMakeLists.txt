@@ -6,7 +6,9 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread \
     -funroll-all-loops -O3 -march=native")
 
 add_library(cyclone src/graph.hh
-                    src/graph.cc)
+                    src/graph.cc
+                    src/route.hh
+                    src/route.cc src/net.cc src/net.hh)
 
 add_subdirectory(python/pybind11)
 add_subdirectory(python)

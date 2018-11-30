@@ -1,6 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "../src/graph.hh"
+#include "../src/route.hh"
 
 namespace py = pybind11;
 using std::to_string;
@@ -20,6 +21,7 @@ void init_graph(py::module &m) {
         .def_readwrite("track", &Node::track)
         .def_readwrite("x", &Node::x)
         .def_readwrite("y", &Node::y)
+        .def_readwrite("width", &Node::width)
         .def_readonly("neighbors", &Node::neighbors)
         .def("__repr__", [](const Node &node) -> std::string {
             switch(node.type) {
@@ -42,8 +44,15 @@ void init_graph(py::module &m) {
         .def("get_nodes", &RoutingGraph::get_nodes);
 }
 
+void init_router(py::module &m) {
+    py::class_<Router>(m, "Router")
+        .def(py::init<>())
+        .def("add_net", &Router::add_net)
+        .def("add_edge", &Router::add_edge);
+}
 
 PYBIND11_MODULE(pycyclone, m) {
     m.doc() = "pycyclone";
     init_graph(m);
+    init_router(m);
 }

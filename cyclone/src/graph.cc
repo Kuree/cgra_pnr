@@ -83,6 +83,8 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2) {
 
     auto [n1, n2] = ptr_list;
     // notice that this is directional, that is, add n2 to n1's neighbor
+    if (n1->width != n2->width)
+        throw ::runtime_error("n2 width does not equal to n1");
     n1->neighbors.insert(n2);
 }
 
@@ -107,4 +109,16 @@ RoutingGraph::get_nodes(const uint32_t &x, const uint32_t &y) {
         return {};
     else
         return grid_[pos];
+}
+
+uint32_t RoutingGraph::overflow(const uint32_t &x, const uint32_t &y) {
+    uint32_t count = 0;
+    auto nodes = get_nodes(x, y);
+    for (const auto &node : nodes) {
+        if (node->type == NodeType::SwitchBox) {
+            if (node->overflow())
+                count++;
+        }
+    }
+    return count;
 }

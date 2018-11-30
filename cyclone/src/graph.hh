@@ -24,8 +24,9 @@ public:
 
     // only valid for ports
     std::string name;
-    // only valid for
+    // only valid for switch box and connection box
     uint32_t track;
+    uint32_t width = 0;
 
     uint32_t x;
     uint32_t y;
@@ -34,6 +35,7 @@ public:
 
     void assign_net(const int net_id) { nets.insert(net_id); }
     void rip_up(const int net_id) { nets.erase(net_id); }
+    bool overflow() const { return nets.size() > 1; }
 };
 
 // operators
@@ -52,6 +54,7 @@ public:
 
     const std::set<std::shared_ptr<Node>> get_nodes(const uint32_t &x,
                                                     const uint32_t &y);
+    uint32_t overflow(const uint32_t &x, const uint32_t &y);
 
 private:
     // grid is for fast locating the nodes. no longer used for routing
