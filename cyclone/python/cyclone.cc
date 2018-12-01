@@ -22,7 +22,11 @@ void init_graph(py::module &m) {
         .def_readwrite("x", &Node::x)
         .def_readwrite("y", &Node::y)
         .def_readwrite("width", &Node::width)
-        .def_readonly("neighbors", &Node::neighbors)
+        .def("add_edge", py::overload_cast<const std::shared_ptr<Node> &,
+                                           uint32_t>(&Node::add_edge))
+        .def("add_edge",
+             py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
+        .def("get_cost", &Node::get_cost)
         .def("__repr__", [](const Node &node) -> std::string {
             switch(node.type) {
                 case NodeType::SwitchBox:
@@ -40,8 +44,14 @@ void init_graph(py::module &m) {
         });
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())
-        .def("add_edge", &RoutingGraph::add_edge)
-        .def("get_nodes", &RoutingGraph::get_nodes);
+        .def("add_edge",
+             py::overload_cast<const Node &,
+                               const Node &>(&RoutingGraph::add_edge))
+        .def("add_edge",
+             py::overload_cast<const Node &,
+                               const Node &, uint32_t>(&RoutingGraph::add_edge))
+        .def("get_nodes", &RoutingGraph::get_nodes)
+        .def("overflow", &RoutingGraph::overflow);
 }
 
 void init_router(py::module &m) {

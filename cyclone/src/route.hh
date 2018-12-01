@@ -19,6 +19,11 @@ public:
 protected:
     RoutingGraph graph_;
     std::vector<Net> netlist_;
+
+    // u indicates it doesn't care about congestion or routing resources
+    std::vector<std::shared_ptr<Node>>
+    u_route_dijkstra(const std::shared_ptr<Node> &start,
+                     const std::shared_ptr<Node> &end);
 };
 
 #endif //CYCLONE_ROUTE_HH

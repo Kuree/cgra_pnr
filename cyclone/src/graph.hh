@@ -31,11 +31,21 @@ public:
     uint32_t x;
     uint32_t y;
 
-    std::set<std::shared_ptr<Node>> neighbors;
-
     void assign_net(const int net_id) { nets.insert(net_id); }
     void rip_up(const int net_id) { nets.erase(net_id); }
     bool overflow() const { return nets.size() > 1; }
+    void add_edge(const std::shared_ptr<Node> &node, uint32_t cost);
+    void add_edge(const std::shared_ptr<Node> &node) { add_edge(node, 1); }
+    uint32_t get_cost(const std::shared_ptr<Node> &node);
+
+    // helper function to allow iteration
+    std::set<std::shared_ptr<Node>>::iterator begin()
+    { return neighbors_.begin(); }
+    std::set<std::shared_ptr<Node>>::iterator end() { return neighbors_.end(); }
+
+protected:
+    std::set<std::shared_ptr<Node>> neighbors_;
+    std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
 };
 
 // operators
@@ -49,6 +59,7 @@ public:
 
     // used to construct the routing graph
     void add_edge(const Node &node1, const Node &node2);
+    void add_edge(const Node &node1, const Node &node2, uint32_t cost);
     std::shared_ptr<Node> get_port_node(const uint32_t &x, const uint32_t &y,
                                         const std::string &name);
 

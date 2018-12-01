@@ -10,7 +10,7 @@ using std::runtime_error;
 
 Node::Node(NodeType type, uint32_t track, uint32_t x, uint32_t y)
            : type(type), nets(), name(), track(track), x(x), y(y),
-             neighbors() { }
+             neighbors_() { }
 
 Node::Node(NodeType type, uint32_t x, uint32_t y) : Node(type, 0, x, y) { }
 
@@ -26,7 +26,20 @@ Node::Node(const Node &node) {
     track = node.track;
     x = node.x;
     y = node.y;
-    neighbors = node.neighbors;
+    neighbors_ = node.neighbors_;
+    edge_cost_ = node.edge_cost_;
+}
+
+void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t cost) {
+    neighbors_.insert(node);
+    edge_cost_[node] = cost;
+}
+
+uint32_t Node::get_cost(const std::shared_ptr<Node> &node) {
+    if (neighbors_.find(node) == neighbors_.end())
+        return 0xFFFFFF;
+    else
+        return edge_cost_[node];
 }
 
 bool operator==(const Node &node1, const Node &node2) {
@@ -39,11 +52,9 @@ bool operator==(const std::shared_ptr<Node> &ptr, const Node &node) {
     return (*ptr) == node;
 }
 
-///
-/// Add \param node2 to \param node1's neighbors
-/// \param node1
-/// \param node2
-void RoutingGraph::add_edge(const Node &node1, const Node &node2) {
+
+void RoutingGraph::add_edge(const Node &node1, const Node &node2,
+                            uint32_t cost) {
     // add node2 to
     // we don't use the nodes passed in, instead, we manage our own node
     // internally
@@ -85,7 +96,11 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2) {
     // notice that this is directional, that is, add n2 to n1's neighbor
     if (n1->width != n2->width)
         throw ::runtime_error("n2 width does not equal to n1");
-    n1->neighbors.insert(n2);
+    n1->add_edge(n2, cost);
+}
+
+void RoutingGraph::add_edge(const Node &node1, const Node &node2) {
+    add_edge(node1, node2, 1);
 }
 
 std::shared_ptr<Node> RoutingGraph::get_port_node(const uint32_t &x,
