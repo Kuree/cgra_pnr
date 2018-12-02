@@ -58,7 +58,8 @@ void init_router(py::module &m) {
     py::class_<Router>(m, "Router")
         .def(py::init<>())
         .def("add_net", &Router::add_net)
-        .def("add_edge", &Router::add_edge);
+        .def("add_edge", &Router::add_edge)
+        .def("add_placement", &Router::add_placement);
 }
 
 PYBIND11_MODULE(pycyclone, m) {

@@ -22,7 +22,7 @@ public:
     NodeType type;
     std::set<int> nets;
 
-    // only valid for ports
+    // only valid for ports. if a reg is placed on it, the name will be blk_id
     std::string name;
     // only valid for switch box and connection box
     uint32_t track;
