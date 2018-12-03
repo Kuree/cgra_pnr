@@ -8,32 +8,25 @@
 
 enum NodeType {
     SwitchBox,
-    ConnectionBox,
-    Port
+    Port,
+    Register
 };
 
 class Node {
 public:
-    Node(NodeType type, uint32_t x, uint32_t y);
-    Node(NodeType type, uint32_t track, uint32_t x, uint32_t y);
-    Node(const std::string &name, uint32_t x, uint32_t y);
+    Node() = default;
     Node(const Node &node);
 
-    NodeType type;
-    std::set<int> nets;
+public:
+    NodeType type = NodeType::Port;
 
-    // only valid for ports. if a reg is placed on it, the name will be blk_id
+    // can be either port name or
     std::string name;
-    // only valid for switch box and connection box
-    uint32_t track;
-    uint32_t width = 0;
+    uint32_t width = 1;
 
-    uint32_t x;
-    uint32_t y;
+    uint32_t x = 0;
+    uint32_t y = 0;
 
-    void assign_net(const int net_id) { nets.insert(net_id); }
-    void rip_up(const int net_id) { nets.erase(net_id); }
-    bool overflow() const { return nets.size() > 1; }
     void add_edge(const std::shared_ptr<Node> &node, uint32_t cost);
     void add_edge(const std::shared_ptr<Node> &node) { add_edge(node, 1); }
     uint32_t get_cost(const std::shared_ptr<Node> &node);
@@ -44,8 +37,47 @@ public:
     std::set<std::shared_ptr<Node>>::iterator end() { return neighbors_.end(); }
 
 protected:
+    Node(NodeType type, const std::string &name, uint32_t x, uint32_t y);
+    Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
+         uint32_t width);
     std::set<std::shared_ptr<Node>> neighbors_;
     std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
+};
+
+class PortNode : public Node {
+public:
+    PortNode(const std::string &name, uint32_t x, uint32_t y,
+             uint32_t width) : Node(NodeType::Port, name, x, y, width) {}
+    PortNode(const std::string &name, uint32_t x, uint32_t y)
+        : Node(NodeType::Port, name, x, y) {}
+};
+
+class RegisterNode : public Node {
+private:
+    const static int IO = 2;
+public:
+    RegisterNode(const std::string &name, uint32_t x, uint32_t y,
+                 uint32_t width)
+                 : Node(NodeType::Register, name, x, y, width) { }
+    RegisterNode(const std::string &name, uint32_t x, uint32_t y)
+                : Node(NodeType::Register, name, x, y) { }
+
+    // in and out
+    std::shared_ptr<Node> channels[IO];
+};
+
+class SwitchBoxNode : public Node {
+private:
+    const static int SIDES = 4;
+    const static int IO = 2;
+public:
+    SwitchBoxNode(const std::string &name, uint32_t x, uint32_t y,
+                  uint32_t width);
+
+    SwitchBoxNode(const std::string &name, uint32_t x, uint32_t y)
+                  : SwitchBoxNode(name, x, y, 1) { }
+
+    std::vector<std::set<std::shared_ptr<Node>>> channels[SIDES][IO];
 };
 
 // operators
@@ -65,13 +97,12 @@ public:
 
     const std::set<std::shared_ptr<Node>> get_nodes(const uint32_t &x,
                                                     const uint32_t &y);
-    uint32_t overflow(const uint32_t &x, const uint32_t &y);
+    std::shared_ptr<SwitchBoxNode> get_sb(const uint32_t &x, const uint32_t &y);
 
 private:
     // grid is for fast locating the nodes. no longer used for routing
     std::map<std::pair<uint32_t, uint32_t>,
             std::set<std::shared_ptr<Node>>> grid_;
 };
-
 
 #endif //CYCLONE_GRAPH_H

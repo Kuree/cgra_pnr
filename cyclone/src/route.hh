@@ -24,6 +24,7 @@ protected:
     RoutingGraph graph_;
     std::vector<Net> netlist_;
     std::map<std::string, std::pair<uint32_t, uint32_t>> placement_;
+    std::map<int, std::set<int>> reg_nets_;
 
     // u indicates it doesn't care about congestion or routing resources
     std::vector<std::shared_ptr<Node>>
@@ -32,17 +33,37 @@ protected:
     std::vector<std::shared_ptr<Node>>
     u_route_a_star(const std::shared_ptr<Node> &start,
                    const std::shared_ptr<Node> &end);
-
-    // this is the actual routing engine shared by Dijkstra and A*
     std::vector<std::shared_ptr<Node>>
     u_route_a_star(const std::shared_ptr<Node> &start,
-                   const std::shared_ptr<Node> &end,
+                   const std::pair<uint32_t, uint32_t> &end);
+
+    // tries it's best to route an L shape based on a_star routing
+    // it's theoretically a little bit slower than directly wiring a L shape
+    // directly
+    std::vector<std::shared_ptr<Node>>
+    u_route_l(const std::shared_ptr<Node> &start,
+              const std::shared_ptr<Node> &end,
+              const std::pair<uint32_t, uint32_t> steiner_p);
+
+    // this is the actual routing engine shared by Dijkstra and A*
+    // it's designed to be flexible
+    std::vector<std::shared_ptr<Node>>
+    u_route_a_star(const std::shared_ptr<Node> &start,
+                   std::function<bool(const std::shared_ptr<Node> &)> end_f,
                    std::function<uint32_t(const std::shared_ptr<Node> &,
                                           const std::shared_ptr<Node>)> h_f);
 
     std::shared_ptr<Node> get_node(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);
+
+    // group the nets by registers since they need to be routed on the same
+    // track. the idea is during the global routing phase, if connected nets
+    // couldn't route, the main net will change the register's location.
+    void group_reg_nets();
+private:
+    static constexpr char REG_IN[] = "RIN";
+    static constexpr char REG_OUT[] = "ROUT";
 };
 
 #endif //CYCLONE_ROUTE_HH

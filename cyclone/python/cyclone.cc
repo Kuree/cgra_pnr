@@ -6,42 +6,47 @@
 namespace py = pybind11;
 using std::to_string;
 
+// just to be lazy
+template<class T>
+void init_node_class(py::module &m, const std::string &name) {
+    py::class_<T>(m, name.c_str())
+        .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t>())
+        .def(py::init<const std::string &, uint32_t, uint32_t>())
+        .def_readwrite("type", &T::type)
+        .def_readwrite("name", &T::name)
+        .def_readwrite("x", &T::x)
+        .def_readwrite("y", &T::y)
+        .def_readwrite("width", &T::width)
+        .def("add_edge", py::overload_cast<const std::shared_ptr<Node> &,
+                                         uint32_t>(&Node::add_edge))
+        .def("add_edge",
+           py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
+        .def("get_cost", &T::get_cost)
+        .def("__repr__", [](const T &node) -> std::string {
+          switch(node.type) {
+              case NodeType::SwitchBox:
+                  return "SB (" + ::to_string(node.x) + ", "
+                         + ::to_string(node.y) + ")";
+              case NodeType::Port:
+              case NodeType::Register:
+                  return node.name + " (" + ::to_string(node.x) + ", "
+                         + ::to_string(node.y) + ")";
+              default:
+                  return "Node";
+          }
+        });
+}
+
 
 void init_graph(py::module &m) {
     py::enum_<NodeType>(m, "NodeType")
         .value("SwitchBox", NodeType::SwitchBox)
-        .value("ConnectionBox", NodeType::ConnectionBox)
         .value("Port", NodeType::Port);
-    py::class_<Node>(m, "Node")
-        .def(py::init<NodeType, uint32_t, uint32_t>())
-        .def(py::init<NodeType, uint32_t, uint32_t, uint32_t>())
-        .def(py::init<const std::string &, uint32_t, uint32_t>())
-        .def_readwrite("type", &Node::type)
-        .def_readwrite("name", &Node::name)
-        .def_readwrite("track", &Node::track)
-        .def_readwrite("x", &Node::x)
-        .def_readwrite("y", &Node::y)
-        .def_readwrite("width", &Node::width)
-        .def("add_edge", py::overload_cast<const std::shared_ptr<Node> &,
-                                           uint32_t>(&Node::add_edge))
-        .def("add_edge",
-             py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
-        .def("get_cost", &Node::get_cost)
-        .def("__repr__", [](const Node &node) -> std::string {
-            switch(node.type) {
-                case NodeType::SwitchBox:
-                    return "SB (" + ::to_string(node.x) + ", "
-                            + ::to_string(node.y) + ")";
-                case NodeType::ConnectionBox:
-                    return "CB (" + ::to_string(node.x) + ", "
-                           + ::to_string(node.y) + ")";
-                case NodeType::Port:
-                    return node.name + " (" + ::to_string(node.x) + ", "
-                           + ::to_string(node.y) + ")";
-                default:
-                    return "Node";
-            }
-        });
+
+    init_node_class<PortNode>(m, "PortNode");
+    init_node_class<RegisterNode>(m, "RegisterNode");
+    init_node_class<SwitchBoxNode>(m, "SwitchBoxNode");
+
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())
         .def("add_edge",
@@ -51,7 +56,7 @@ void init_graph(py::module &m) {
              py::overload_cast<const Node &,
                                const Node &, uint32_t>(&RoutingGraph::add_edge))
         .def("get_nodes", &RoutingGraph::get_nodes)
-        .def("overflow", &RoutingGraph::overflow);
+        .def("get_sb", &RoutingGraph::get_sb);
 }
 
 void init_router(py::module &m) {
