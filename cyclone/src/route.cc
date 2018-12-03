@@ -29,7 +29,7 @@ Router::add_net(const std::vector<std::pair<::string, ::string>> &net) {
     // point the pin to the actual node in the graph
     // notice that we will also assign registers at this stage
     for (auto &pin : n) {
-        auto node = get_node(pin.x, pin.y, pin.port);
+        auto node = get_port(pin.x, pin.y, pin.port);
         if (node == nullptr)
             throw ::runtime_error("unable to find node with given pin");
         pin.node = node;
@@ -144,21 +144,9 @@ std::vector<std::shared_ptr<Node>> Router::u_route_a_star(
     return routed_path;
 }
 
-std::shared_ptr<Node> Router::get_node(const uint32_t &x, const uint32_t &y,
-                                       const ::string &port) {
-    auto nodes = graph_.get_nodes(x, y);
-    if (nodes.empty())
-        return nullptr;
-    for (const auto &node : nodes) {
-        if (port == REG_IN || port == REG_OUT) {
-            // FIXME:
-            // assume one register per tile
-            return node;
-        } else if (node->name == port) {
-            return node;
-        }
-    }
-    return nullptr;
+std::shared_ptr<Node> Router::get_port(const uint32_t &x, const uint32_t &y,
+                                       const string &port) {
+    return graph_.get_port(x, y, port);
 }
 
 void Router::group_reg_nets() {

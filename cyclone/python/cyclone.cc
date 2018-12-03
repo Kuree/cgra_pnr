@@ -6,12 +6,10 @@
 namespace py = pybind11;
 using std::to_string;
 
-// just to be lazy
+// just to be lazy with meta programming
 template<class T>
-void init_node_class(py::module &m, const std::string &name) {
-    py::class_<T>(m, name.c_str())
-        .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t>())
-        .def(py::init<const std::string &, uint32_t, uint32_t>())
+void init_node_class(py::class_<T> &class_) {
+    class_
         .def_readwrite("type", &T::type)
         .def_readwrite("name", &T::name)
         .def_readwrite("x", &T::x)
@@ -43,9 +41,24 @@ void init_graph(py::module &m) {
         .value("SwitchBox", NodeType::SwitchBox)
         .value("Port", NodeType::Port);
 
-    init_node_class<PortNode>(m, "PortNode");
-    init_node_class<RegisterNode>(m, "RegisterNode");
-    init_node_class<SwitchBoxNode>(m, "SwitchBoxNode");
+    py::class_<PortNode> p_node(m, "PortNode");
+    init_node_class<PortNode>(p_node);
+    p_node
+        .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t>())
+        .def(py::init<const std::string &, uint32_t, uint32_t>());
+
+    py::class_<RegisterNode> r_node(m, "RegisterNode");
+    init_node_class<RegisterNode>(r_node);
+    r_node
+        .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t>())
+        .def(py::init<const std::string &, uint32_t, uint32_t>());
+
+    py::class_<SwitchBoxNode> sb_node(m, "SwitchBoxNode");
+    init_node_class<SwitchBoxNode>(sb_node);
+    sb_node
+        .def(py::init<uint32_t, uint32_t, uint32_t>())
+        .def(py::init<uint32_t, uint32_t>());
+
 
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())
@@ -55,8 +68,8 @@ void init_graph(py::module &m) {
         .def("add_edge",
              py::overload_cast<const Node &,
                                const Node &, uint32_t>(&RoutingGraph::add_edge))
-        .def("get_nodes", &RoutingGraph::get_nodes)
-        .def("get_sb", &RoutingGraph::get_sb);
+        .def("get_sb", &RoutingGraph::get_sb)
+        .def("get_port", &RoutingGraph::get_port);
 }
 
 void init_router(py::module &m) {

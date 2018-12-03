@@ -37,7 +37,7 @@ protected:
     u_route_a_star(const std::shared_ptr<Node> &start,
                    const std::pair<uint32_t, uint32_t> &end);
 
-    // tries it's best to route an L shape based on a_star routing
+    // tries its best to route an L shape based on a_star routing
     // it's theoretically a little bit slower than directly wiring a L shape
     // directly
     std::vector<std::shared_ptr<Node>>
@@ -53,7 +53,7 @@ protected:
                    std::function<uint32_t(const std::shared_ptr<Node> &,
                                           const std::shared_ptr<Node>)> h_f);
 
-    std::shared_ptr<Node> get_node(const uint32_t &x,
+    std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);
 
