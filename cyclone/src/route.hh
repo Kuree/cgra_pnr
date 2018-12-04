@@ -31,11 +31,26 @@ protected:
     u_route_dijkstra(const std::shared_ptr<Node> &start,
                      const std::shared_ptr<Node> &end);
     std::vector<std::shared_ptr<Node>>
+    u_route_dijkstra(const std::shared_ptr<Node> &start,
+                     const std::shared_ptr<Node> &end,
+                     std::function<uint32_t(const std::shared_ptr<Node> &)>
+                                            cost_f);
+    std::vector<std::shared_ptr<Node>>
     u_route_a_star(const std::shared_ptr<Node> &start,
                    const std::shared_ptr<Node> &end);
     std::vector<std::shared_ptr<Node>>
     u_route_a_star(const std::shared_ptr<Node> &start,
+                   const std::shared_ptr<Node> &end,
+                   std::function<uint32_t(const std::shared_ptr<Node> &)>
+                                          cost_f);
+    std::vector<std::shared_ptr<Node>>
+    u_route_a_star(const std::shared_ptr<Node> &start,
                    const std::pair<uint32_t, uint32_t> &end);
+    std::vector<std::shared_ptr<Node>>
+    u_route_a_star(const std::shared_ptr<Node> &start,
+                   const std::pair<uint32_t, uint32_t> &end,
+                   std::function<uint32_t(const std::shared_ptr<Node> &)>
+                                          cost_f);
 
     // tries its best to route an L shape based on a_star routing
     // it's theoretically a little bit slower than directly wiring a L shape
@@ -50,6 +65,8 @@ protected:
     std::vector<std::shared_ptr<Node>>
     u_route_a_star(const std::shared_ptr<Node> &start,
                    std::function<bool(const std::shared_ptr<Node> &)> end_f,
+                   std::function<uint32_t(const std::shared_ptr<Node> &)>
+                                          cost_f,
                    std::function<uint32_t(const std::shared_ptr<Node> &,
                                           const std::shared_ptr<Node>)> h_f);
 
@@ -57,13 +74,12 @@ protected:
                                    const uint32_t &y,
                                    const std::string &port);
 
-    // group the nets by registers since they need to be routed on the same
-    // track. the idea is during the global routing phase, if connected nets
-    // couldn't route, the main net will change the register's location.
+    // group the nets to determine the relative net placement order
+    // this is bacause we assign register locations on the fly
     void group_reg_nets();
 private:
-    static constexpr char REG_IN[] = "RIN";
-    static constexpr char REG_OUT[] = "ROUT";
+    static constexpr char REG_IN[] = "in";
+    static constexpr char REG_OUT[] = "out";
 };
 
 #endif //CYCLONE_ROUTE_HH

@@ -15,6 +15,8 @@ void init_node_class(py::class_<T> &class_) {
         .def_readwrite("x", &T::x)
         .def_readwrite("y", &T::y)
         .def_readwrite("width", &T::width)
+        .def_readwrite("delay", &T::delay)
+        .def_readwrite("track", &T::track)
         .def("add_edge", py::overload_cast<const std::shared_ptr<Node> &,
                                          uint32_t>(&Node::add_edge))
         .def("add_edge",
@@ -68,6 +70,8 @@ void init_graph(py::module &m) {
 
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())
+        .def(py::init<uint32_t, uint32_t, const SwitchBoxNode &>())
+        .def("add_tile", &RoutingGraph::add_tile)
         .def("add_edge",
              py::overload_cast<const Node &,
                                const Node &>(&RoutingGraph::add_edge))

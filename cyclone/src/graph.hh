@@ -24,9 +24,13 @@ public:
     // can be either port name or
     std::string name;
     uint32_t width = 1;
+    uint32_t track = 0;
 
     uint32_t x = 0;
     uint32_t y = 0;
+
+    // used for delay calculation routing
+    uint32_t delay = 1;
 
     void add_edge(const std::shared_ptr<Node> &node, uint32_t cost);
     void add_edge(const std::shared_ptr<Node> &node) { add_edge(node, 1); }
@@ -36,6 +40,8 @@ public:
     std::set<std::shared_ptr<Node>>::iterator begin()
     { return neighbors_.begin(); }
     std::set<std::shared_ptr<Node>>::iterator end() { return neighbors_.end(); }
+    std::set<std::shared_ptr<Node>>::iterator
+    find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
 
 protected:
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y);
@@ -104,8 +110,7 @@ class RoutingGraph {
 public:
     RoutingGraph() : grid_() {}
     // helper class to create the grid efficiently
-    RoutingGraph(uint32_t width, uint32_t height, const SwitchBoxNode &sb,
-                 uint32_t num_register_tile);
+    RoutingGraph(uint32_t width, uint32_t height, const SwitchBoxNode &sb);
     // manually add tiles
     void add_tile(const Tile &tile) { grid_.insert({{tile.x, tile.y}, tile}); }
 

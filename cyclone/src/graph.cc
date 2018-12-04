@@ -78,12 +78,11 @@ std::ostream& operator<<(std::ostream &out, const Tile &tile) {
 }
 
 RoutingGraph::RoutingGraph(uint32_t width, uint32_t height,
-                           const SwitchBoxNode &sb,
-                           uint32_t num_register_tile) {
+                           const SwitchBoxNode &sb) {
     // pre allocate tiles
     for (uint32_t x = 0; x < width; x++) {
         for (uint32_t y = 0; y < height; y++) {
-            grid_[{x, y}] = Tile(x, y, num_register_tile);
+            grid_[{x, y}] = Tile(x, y);
             grid_[{x, y}].sb = ::make_shared<SwitchBoxNode>(sb);
         }
     }

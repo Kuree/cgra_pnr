@@ -12,6 +12,8 @@ using std::pair;
 using std::runtime_error;
 using std::priority_queue;
 using std::string;
+using std::function;
+using std::move;
 
 
 void
@@ -19,23 +21,34 @@ Router::add_net(const std::vector<std::pair<::string, ::string>> &net) {
     int net_id = static_cast<int>(netlist_.size());
     Net n;
     n.id = net_id;
+    ::set<uint64_t> reg_index;
     for (auto const &entry : net) {
         auto const &[blk_id, port] = entry;
         if (placement_.find(blk_id) == placement_.end())
             throw ::runtime_error("unable to find placement for " + blk_id);
         auto const &[x, y] = placement_[blk_id];
+        // FIXME
+        // right now uses 'r' as a way to indicate register inputs
+        if (blk_id[0] == 'r')
+            reg_index.insert(n.size());
         n.add_pin({x, y, blk_id, port});
     }
     // point the pin to the actual node in the graph
     // notice that we will also assign registers at this stage
-    for (auto &pin : n) {
-        auto node = get_port(pin.x, pin.y, pin.port);
-        if (node == nullptr)
-            throw ::runtime_error("unable to find node with given pin");
-        pin.node = node;
-        // assign register names so that we can identify them
-        if (node->type == NodeType::Register)
-            node->name = pin.name;
+    for (uint64_t i = 0; i < n.size(); i++) {
+        Pin &pin = n[i];
+        if (reg_index.find(i) != reg_index.end()) {
+            // keyi:
+            // this is a design choice
+            // assignment happens during the global routing stage while
+            // performing the routing negotiation
+            pin.node = nullptr;
+        } else {
+            auto node = get_port(pin.x, pin.y, pin.port);
+            if (node == nullptr)
+                throw ::runtime_error("unable to find node with given pin");
+            pin.node = node;
+        }
     }
     netlist_.emplace_back(n);
 }
@@ -48,6 +61,17 @@ void Router::add_placement(const uint32_t &x, const uint32_t &y,
 ::vector<::shared_ptr<Node>>
 Router::u_route_dijkstra(const ::shared_ptr<Node> &start,
                          const ::shared_ptr<Node> &end) {
+    auto cost_f = [&](const ::shared_ptr<Node> &) -> uint32_t {
+        return 0;
+    };
+    return u_route_dijkstra(start, end, cost_f);
+}
+
+std::vector<std::shared_ptr<Node>>
+Router::u_route_dijkstra(const std::shared_ptr<Node> &start,
+                         const std::shared_ptr<Node> &end,
+                         ::function<uint32_t(const ::shared_ptr<Node> &)>
+                         cost_f) {
     auto zero_estimate = [](const ::shared_ptr<Node>,
                             const::shared_ptr<Node>) -> uint32_t {
         return 0;
@@ -55,30 +79,52 @@ Router::u_route_dijkstra(const ::shared_ptr<Node> &start,
     auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
         return node == end;
     };
-    return u_route_a_star(start, end_f, zero_estimate);
+    return u_route_a_star(start, end_f, ::move(cost_f), zero_estimate);
 }
 
 std::vector<std::shared_ptr<Node>>
 Router::u_route_a_star(const std::shared_ptr<Node> &start,
                        const std::shared_ptr<Node> &end) {
+    auto cost_f = [&](const ::shared_ptr<Node> &) -> uint32_t {
+        return 0;
+    };
+    return u_route_a_star(start, end, cost_f);
+}
+
+std::vector<std::shared_ptr<Node>>
+Router::u_route_a_star(const std::shared_ptr<Node> &start,
+                       const std::shared_ptr<Node> &end,
+                       ::function<uint32_t(const ::shared_ptr<Node> &)>
+                       cost_f) {
     auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
         return node == end;
     };
-    return u_route_a_star(start, end_f, manhattan_distance);
+    return u_route_a_star(start, end_f, ::move(cost_f), manhattan_distance);
 }
 
 std::vector<std::shared_ptr<Node>>
 Router::u_route_a_star(const std::shared_ptr<Node> &start,
                        const std::pair<uint32_t, uint32_t> &end) {
+    auto cost_f = [&](const ::shared_ptr<Node> &) -> uint32_t {
+        return 0;
+    };
+    return u_route_a_star(start, end, cost_f);
+}
+
+std::vector<std::shared_ptr<Node>>
+Router::u_route_a_star(const std::shared_ptr<Node> &start,
+                       const std::pair<uint32_t, uint32_t> &end,
+                       ::function<uint32_t(const ::shared_ptr<Node> &)> cost_f) {
     auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
         return node->x == end.first && node->y == end.second;
     };
-    return u_route_a_star(start, end_f, manhattan_distance);
+    return u_route_a_star(start, end_f, ::move(cost_f), manhattan_distance);
 }
 
 std::vector<std::shared_ptr<Node>> Router::u_route_a_star(
         const std::shared_ptr<Node> &start,
         std::function<bool(const std::shared_ptr<Node> &)> end_f,
+        std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
         std::function<uint32_t(const ::shared_ptr<Node> &,
                                const ::shared_ptr<Node>)> h_f) {
     ::set<::shared_ptr<Node>> visited;
@@ -108,7 +154,7 @@ std::vector<std::shared_ptr<Node>> Router::u_route_a_star(
 
         uint32_t current_cost = cost[head];
         for (auto const &node : *head) {
-            uint32_t edge_cost = head->get_cost(node);
+            uint32_t edge_cost = head->get_cost(node) + cost_f(node);
             uint32_t real_cost = edge_cost + current_cost;
             if (cost.find(node) == cost.end()) {
                 cost[node] = real_cost;
@@ -154,7 +200,7 @@ void Router::group_reg_nets() {
     // first pass to determine where the reg nets originates.
     for (auto &net : netlist_) {
         for (const auto &pin : net) {
-            if (pin.port == REG_IN) {
+            if (pin.port == REG_IN and pin.name[0] == 'r') {
                 // we assume it's already packed
                 main_nets[pin.name] = net.id;
                 reg_nets_[net.id] = {};
@@ -166,7 +212,7 @@ void Router::group_reg_nets() {
     // second pass the group the reg nets
     for (auto &net : netlist_) {
         for (const auto &pin : net) {
-            if (pin.port == REG_OUT) {
+            if (pin.port == REG_OUT and pin.name[0] == 'r') {
                 // it has to be included in the main_nets;
                 if (main_nets.find(pin.name) == main_nets.end())
                     throw ::runtime_error("unable to find " + pin.name);

@@ -29,7 +29,8 @@ public:
     std::vector<Pin>::iterator end() { return pins_.end(); }
 
     inline void add_pin(const Pin &pin) { pins_.emplace_back(pin); }
-
+    inline uint64_t size() { return pins_.size(); }
+    inline Pin& operator[](const uint64_t &index) { return pins_[index]; }
 private:
     std::vector<Pin> pins_;
 };
