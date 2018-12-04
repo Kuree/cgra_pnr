@@ -59,19 +59,19 @@ void Router::add_placement(const uint32_t &x, const uint32_t &y,
 }
 
 ::vector<::shared_ptr<Node>>
-Router::u_route_dijkstra(const ::shared_ptr<Node> &start,
-                         const ::shared_ptr<Node> &end) {
+Router::route_dijkstra(const ::shared_ptr<Node> &start,
+                       const ::shared_ptr<Node> &end) {
     auto cost_f = [&](const ::shared_ptr<Node> &) -> uint32_t {
         return 0;
     };
-    return u_route_dijkstra(start, end, cost_f);
+    return route_dijkstra(start, end, cost_f);
 }
 
 std::vector<std::shared_ptr<Node>>
-Router::u_route_dijkstra(const std::shared_ptr<Node> &start,
-                         const std::shared_ptr<Node> &end,
-                         ::function<uint32_t(const ::shared_ptr<Node> &)>
-                         cost_f) {
+Router::route_dijkstra(const std::shared_ptr<Node> &start,
+                       const std::shared_ptr<Node> &end,
+                       ::function<uint32_t(const ::shared_ptr<Node> &)>
+                       cost_f) {
     auto zero_estimate = [](const ::shared_ptr<Node>,
                             const::shared_ptr<Node>) -> uint32_t {
         return 0;
@@ -79,49 +79,71 @@ Router::u_route_dijkstra(const std::shared_ptr<Node> &start,
     auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
         return node == end;
     };
-    return u_route_a_star(start, end_f, ::move(cost_f), zero_estimate);
+    return route_a_star(start, end_f, ::move(cost_f), zero_estimate);
 }
 
 std::vector<std::shared_ptr<Node>>
-Router::u_route_a_star(const std::shared_ptr<Node> &start,
-                       const std::shared_ptr<Node> &end) {
+Router::route_a_star(const std::shared_ptr<Node> &start,
+                     const std::shared_ptr<Node> &end) {
     auto cost_f = [&](const ::shared_ptr<Node> &) -> uint32_t {
         return 0;
     };
-    return u_route_a_star(start, end, cost_f);
+    return route_a_star(start, end, cost_f);
 }
 
 std::vector<std::shared_ptr<Node>>
-Router::u_route_a_star(const std::shared_ptr<Node> &start,
-                       const std::shared_ptr<Node> &end,
-                       ::function<uint32_t(const ::shared_ptr<Node> &)>
-                       cost_f) {
+Router::route_a_star(const std::shared_ptr<Node> &start,
+                     const std::shared_ptr<Node> &end,
+                     ::function<uint32_t(const ::shared_ptr<Node> &)>
+                     cost_f) {
     auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
         return node == end;
     };
-    return u_route_a_star(start, end_f, ::move(cost_f), manhattan_distance);
+    return route_a_star(start, end_f, ::move(cost_f), manhattan_distance);
 }
 
 std::vector<std::shared_ptr<Node>>
-Router::u_route_a_star(const std::shared_ptr<Node> &start,
-                       const std::pair<uint32_t, uint32_t> &end) {
+Router::route_a_star(const std::shared_ptr<Node> &start,
+                     const std::pair<uint32_t, uint32_t> &end) {
     auto cost_f = [&](const ::shared_ptr<Node> &) -> uint32_t {
         return 0;
     };
-    return u_route_a_star(start, end, cost_f);
+    return route_a_star(start, end, cost_f);
 }
 
 std::vector<std::shared_ptr<Node>>
-Router::u_route_a_star(const std::shared_ptr<Node> &start,
-                       const std::pair<uint32_t, uint32_t> &end,
-                       ::function<uint32_t(const ::shared_ptr<Node> &)> cost_f) {
+Router::route_a_star(const std::shared_ptr<Node> &start,
+                     const std::pair<uint32_t, uint32_t> &end,
+                     ::function<uint32_t(const ::shared_ptr<Node> &)> cost_f) {
+    return route_a_star(start, end, ::move(cost_f), manhattan_distance);
+}
+
+std::vector<std::shared_ptr<Node>>
+Router::route_a_star(const std::shared_ptr<Node> &start,
+                     const std::pair<uint32_t, uint32_t> &end,
+                     ::function<uint32_t(const ::shared_ptr<Node> &)> cost_f,
+                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                                         const ::shared_ptr<Node>)> h_f) {
     auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
         return node->x == end.first && node->y == end.second;
     };
-    return u_route_a_star(start, end_f, ::move(cost_f), manhattan_distance);
+    return route_a_star(start, end_f, ::move(cost_f), ::move(h_f));
 }
 
-std::vector<std::shared_ptr<Node>> Router::u_route_a_star(
+std::vector<std::shared_ptr<Node>>
+Router::route_a_star(const std::shared_ptr<Node> &start,
+                     const std::shared_ptr<Node> &end,
+                     ::function<uint32_t(const ::shared_ptr<Node> &)> cost_f,
+                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                                         const ::shared_ptr<Node>)> h_f) {
+    auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
+        return node == end;
+    };
+    return route_a_star(start, end_f, ::move(cost_f), ::move(h_f));
+}
+
+
+std::vector<std::shared_ptr<Node>> Router::route_a_star(
         const std::shared_ptr<Node> &start,
         std::function<bool(const std::shared_ptr<Node> &)> end_f,
         std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
@@ -188,6 +210,27 @@ std::vector<std::shared_ptr<Node>> Router::u_route_a_star(
 
     std::reverse(routed_path.begin(), routed_path.end());
     return routed_path;
+}
+
+std::vector<std::shared_ptr<Node>>
+Router::route_l(const std::shared_ptr<Node> &start,
+                const std::shared_ptr<Node> &end,
+                const std::pair<uint32_t, uint32_t> &steiner_p,
+                std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+                std::function<uint32_t(const std::shared_ptr<Node> &,
+                                       const std::shared_ptr<Node>)> h_f) {
+    // it has two steps, first, route to that steiner point,
+    // then route from that steiner point to the end
+    auto first_segment = route_a_star(start, steiner_p, cost_f, h_f);
+    auto &last_node = first_segment.back();
+    // it has to be a switch box
+    if (last_node->type != NodeType::SwitchBox)
+        throw ::runtime_error("steiner point is not a switchbox");
+    auto second_segment = route_a_star(last_node, end, cost_f, h_f);
+    // merge these two and return
+    first_segment.insert(first_segment.end(), second_segment.begin() + 1,
+                         second_segment.end());
+    return first_segment;
 }
 
 std::shared_ptr<Node> Router::get_port(const uint32_t &x, const uint32_t &y,

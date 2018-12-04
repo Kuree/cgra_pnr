@@ -26,56 +26,74 @@ protected:
     std::map<std::string, std::pair<uint32_t, uint32_t>> placement_;
     std::map<int, std::set<int>> reg_nets_;
 
-    // u indicates it doesn't care about congestion or routing resources
     std::vector<std::shared_ptr<Node>>
-    u_route_dijkstra(const std::shared_ptr<Node> &start,
-                     const std::shared_ptr<Node> &end);
-    std::vector<std::shared_ptr<Node>>
-    u_route_dijkstra(const std::shared_ptr<Node> &start,
-                     const std::shared_ptr<Node> &end,
-                     std::function<uint32_t(const std::shared_ptr<Node> &)>
-                                            cost_f);
-    std::vector<std::shared_ptr<Node>>
-    u_route_a_star(const std::shared_ptr<Node> &start,
+    route_dijkstra(const std::shared_ptr<Node> &start,
                    const std::shared_ptr<Node> &end);
+
     std::vector<std::shared_ptr<Node>>
-    u_route_a_star(const std::shared_ptr<Node> &start,
+    route_dijkstra(const std::shared_ptr<Node> &start,
                    const std::shared_ptr<Node> &end,
                    std::function<uint32_t(const std::shared_ptr<Node> &)>
-                                          cost_f);
+                   cost_f);
+
     std::vector<std::shared_ptr<Node>>
-    u_route_a_star(const std::shared_ptr<Node> &start,
-                   const std::pair<uint32_t, uint32_t> &end);
+    route_a_star(const std::shared_ptr<Node> &start,
+                 const std::shared_ptr<Node> &end);
+
     std::vector<std::shared_ptr<Node>>
-    u_route_a_star(const std::shared_ptr<Node> &start,
-                   const std::pair<uint32_t, uint32_t> &end,
-                   std::function<uint32_t(const std::shared_ptr<Node> &)>
-                                          cost_f);
+    route_a_star(const std::shared_ptr<Node> &start,
+                 const std::shared_ptr<Node> &end,
+                 std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f);
+
+    std::vector<std::shared_ptr<Node>>
+    route_a_star(const std::shared_ptr<Node> &start,
+                 const std::pair<uint32_t, uint32_t> &end);
+
+    std::vector<std::shared_ptr<Node>>
+    route_a_star(const std::shared_ptr<Node> &start,
+                 const std::pair<uint32_t, uint32_t> &end,
+                 std::function<uint32_t(const std::shared_ptr<Node> &)>
+                 cost_f);
+
+    std::vector<std::shared_ptr<Node>>
+    route_a_star(const std::shared_ptr<Node> &start,
+                 const std::pair<uint32_t, uint32_t> &end,
+                 std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+                 std::function<uint32_t(const std::shared_ptr<Node> &,
+                                        const std::shared_ptr<Node>)> h_f);
+
+    std::vector<std::shared_ptr<Node>>
+    route_a_star(const std::shared_ptr<Node> &start,
+                 const std::shared_ptr<Node> &end,
+                 std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+                 std::function<uint32_t(const std::shared_ptr<Node> &,
+                                        const std::shared_ptr<Node>)> h_f);
 
     // tries its best to route an L shape based on a_star routing
     // it's theoretically a little bit slower than directly wiring a L shape
-    // directly
     std::vector<std::shared_ptr<Node>>
-    u_route_l(const std::shared_ptr<Node> &start,
-              const std::shared_ptr<Node> &end,
-              const std::pair<uint32_t, uint32_t> steiner_p);
+    route_l(const std::shared_ptr<Node> &start,
+            const std::shared_ptr<Node> &end,
+            const std::pair<uint32_t, uint32_t> &steiner_p,
+            std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+            std::function<uint32_t(const std::shared_ptr<Node> &,
+                                   const std::shared_ptr<Node>)> h_f);
 
     // this is the actual routing engine shared by Dijkstra and A*
     // it's designed to be flexible
     std::vector<std::shared_ptr<Node>>
-    u_route_a_star(const std::shared_ptr<Node> &start,
-                   std::function<bool(const std::shared_ptr<Node> &)> end_f,
-                   std::function<uint32_t(const std::shared_ptr<Node> &)>
-                                          cost_f,
-                   std::function<uint32_t(const std::shared_ptr<Node> &,
-                                          const std::shared_ptr<Node>)> h_f);
+    route_a_star(const std::shared_ptr<Node> &start,
+                 std::function<bool(const std::shared_ptr<Node> &)> end_f,
+                 std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+                 std::function<uint32_t(const std::shared_ptr<Node> &,
+                                        const std::shared_ptr<Node>)> h_f);
 
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);
 
     // group the nets to determine the relative net placement order
-    // this is bacause we assign register locations on the fly
+    // this is because we assign register locations on the fly
     void group_reg_nets();
 private:
     static constexpr char REG_IN[] = "in";
