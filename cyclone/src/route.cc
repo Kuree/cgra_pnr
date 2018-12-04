@@ -266,3 +266,13 @@ void Router::group_reg_nets() {
         }
     }
 }
+
+bool Router::overflow() {
+    // looking through every switch box to see if there is any overflow
+    for (const auto &iter : graph_) {
+        const auto &sb = iter.second.sb;
+        if (sb->overflow())
+            return true;
+    }
+    return false;
+}

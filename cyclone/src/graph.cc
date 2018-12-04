@@ -68,6 +68,18 @@ SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node) : Node(node) {
     }
 }
 
+bool SwitchBoxNode::overflow() const {
+    for (const auto &side : channels) {
+        for (const auto &io : side) {
+            for (auto const &chan : io) {
+                if (chan.size() > 1)
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
 Tile::Tile(uint32_t x, uint32_t y, uint32_t height)
         : x(x), y(y), height(height) {
 }

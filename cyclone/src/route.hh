@@ -19,6 +19,7 @@ public:
                        const std::string &blk_id);
     void add_edge(const Node &node1, const Node &node2)
     { graph_.add_edge(node1, node2); }
+    bool overflow();
 
 protected:
     RoutingGraph graph_;

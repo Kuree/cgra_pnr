@@ -80,6 +80,8 @@ public:
     SwitchBoxNode(const SwitchBoxNode &node);
 
     std::vector<std::set<std::shared_ptr<Node>>> channels[SIDES][IO];
+
+    bool overflow() const;
 };
 
 // operators
@@ -123,6 +125,10 @@ public:
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);
+    std::map<std::pair<uint32_t, uint32_t>, Tile>::iterator
+    begin() { return grid_.begin(); }
+    std::map<std::pair<uint32_t, uint32_t>, Tile>::iterator
+    end() { return grid_.end(); }
 
 private:
     // grid is for fast locating the nodes. no longer used for routing
