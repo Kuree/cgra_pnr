@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 #include "../src/graph.hh"
 #include "../src/route.hh"
+#include "../src/global.hh"
 
 namespace py = pybind11;
 using std::to_string;
@@ -37,6 +38,15 @@ void init_node_class(py::class_<T> &class_) {
         });
 }
 
+template<class T>
+void init_router_class(py::class_<T> &class_) {
+    class_
+        .def("add_net", &Router::add_net)
+        .def("add_edge", &Router::add_edge)
+        .def("add_placement", &Router::add_placement)
+        .def("overflow", &Router::overflow);
+}
+
 
 void init_graph(py::module &m) {
     py::enum_<NodeType>(m, "NodeType")
@@ -58,14 +68,16 @@ void init_graph(py::module &m) {
     py::class_<SwitchBoxNode> sb_node(m, "SwitchBoxNode");
     init_node_class<SwitchBoxNode>(sb_node);
     sb_node
-        .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>());
+        .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
+        .def("clear", &SwitchBoxNode::clear);
 
     py::class_<Tile>(m, "Tile")
         .def(py::init<uint32_t, uint32_t, uint32_t>())
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
         .def_readwrite("x", &Tile::x)
         .def_readwrite("y", &Tile::y)
-        .def_readwrite("height", &Tile::height);
+        .def_readwrite("height", &Tile::height)
+        .def("num_tracks", &Tile::num_tracks);
 
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())
@@ -82,11 +94,13 @@ void init_graph(py::module &m) {
 }
 
 void init_router(py::module &m) {
-    py::class_<Router>(m, "Router")
-        .def(py::init<>())
-        .def("add_net", &Router::add_net)
-        .def("add_edge", &Router::add_edge)
-        .def("add_placement", &Router::add_placement);
+    py::class_<Router> router(m, "Router");
+    router.def(py::init<>());
+    init_router_class<Router>(router);
+
+    py::class_<GlobalRouter> gr(m, "GlobalRouter");
+    gr.def(py::init<uint32_t>());
+    init_router_class<GlobalRouter>(gr);
 }
 
 PYBIND11_MODULE(pycyclone, m) {

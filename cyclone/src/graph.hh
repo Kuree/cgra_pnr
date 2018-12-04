@@ -18,7 +18,6 @@ public:
     Node() = default;
     Node(const Node &node);
 
-public:
     NodeType type = NodeType::Port;
 
     // can be either port name or
@@ -51,6 +50,8 @@ protected:
          uint32_t width, uint32_t track);
     std::set<std::shared_ptr<Node>> neighbors_;
     std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
+
+    const static int IO = 2;
 };
 
 class PortNode : public Node {
@@ -59,6 +60,8 @@ public:
              uint32_t width) : Node(NodeType::Port, name, x, y, width) {}
     PortNode(const std::string &name, uint32_t x, uint32_t y)
         : Node(NodeType::Port, name, x, y) {}
+
+    std::set<std::shared_ptr<Node>> connections[IO];
 };
 
 class RegisterNode : public Node {
@@ -66,20 +69,23 @@ public:
     RegisterNode(const std::string &name, uint32_t x, uint32_t y,
                  uint32_t width, uint32_t track)
         : Node(NodeType::Register, name, x, y, width, track) { }
+
+    std::set<std::shared_ptr<Node>> connections[IO];
 };
 
 class SwitchBoxNode : public Node {
 private:
     const static int SIDES = 4;
-    const static int IO = 2;
 public:
     SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width, uint32_t track);
 
     SwitchBoxNode(const SwitchBoxNode &node);
 
     std::set<std::shared_ptr<Node>> channels[SIDES][IO];
+    double channel_cost[SIDES][IO] = {};
 
     bool overflow() const;
+    void clear();
 };
 
 // operators
@@ -90,7 +96,7 @@ struct Tile {
     // helper struct to holds the graph nodes
     uint32_t x = 0;
     uint32_t y = 0;
-    uint32_t height = 0;
+    uint32_t height = 1;
 
     // Note:
     // node name has to be unique within a tile otherwise it can't be located
@@ -98,6 +104,8 @@ struct Tile {
     std::vector<std::shared_ptr<SwitchBoxNode>> sbs;
     std::map<std::string, std::shared_ptr<PortNode>> ports;
     std::map<std::string, std::shared_ptr<RegisterNode>> registers;
+
+    uint32_t num_tracks() { return static_cast<uint32_t>(sbs.size()); }
 
     Tile() = default;
     Tile(uint32_t x, uint32_t y, uint32_t num_tracks)

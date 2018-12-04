@@ -85,6 +85,14 @@ bool SwitchBoxNode::overflow() const {
     return false;
 }
 
+void SwitchBoxNode::clear() {
+    for (auto &side : channels) {
+        for (auto &io : side) {
+            io.clear();
+        }
+    }
+}
+
 Tile::Tile(uint32_t x, uint32_t y, uint32_t height, uint32_t num_tracks)
         : x(x), y(y), height(height), sbs(num_tracks) {
 

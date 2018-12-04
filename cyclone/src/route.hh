@@ -21,6 +21,8 @@ public:
     { graph_.add_edge(node1, node2); }
     bool overflow();
 
+    virtual void route() { };
+
 protected:
     RoutingGraph graph_;
     std::vector<Net> netlist_;
@@ -96,6 +98,7 @@ protected:
     // group the nets to determine the relative net placement order
     // this is because we assign register locations on the fly
     void group_reg_nets();
+    void reorder_reg_nets();
 private:
     static constexpr char REG_IN[] = "in";
     static constexpr char REG_OUT[] = "out";

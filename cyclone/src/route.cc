@@ -248,6 +248,15 @@ void Router::group_reg_nets() {
     }
 }
 
+void Router::reorder_reg_nets() {
+    std::sort(netlist_.begin(), netlist_.end(),
+              [&](const Net &net1, const Net &net2) -> bool {
+        int net1_value = reg_nets_.find(net1.id) == reg_nets_.end()? 1 : 0;
+        int net2_value = reg_nets_.find(net2.id) == reg_nets_.end()? 1 : 0;
+        return net1_value < net2_value;
+    });
+}
+
 bool Router::overflow() {
     // looking through every switch box to see if there is any overflow
     for (const auto &iter : graph_) {
