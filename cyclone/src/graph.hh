@@ -47,6 +47,8 @@ protected:
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y);
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
          uint32_t width);
+    Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
+         uint32_t width, uint32_t track);
     std::set<std::shared_ptr<Node>> neighbors_;
     std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
 };
@@ -62,10 +64,8 @@ public:
 class RegisterNode : public Node {
 public:
     RegisterNode(const std::string &name, uint32_t x, uint32_t y,
-                 uint32_t width)
-        : Node(NodeType::Register, name, x, y, width) { }
-    RegisterNode(const std::string &name, uint32_t x, uint32_t y)
-        : Node(NodeType::Register, name, x, y) { }
+                 uint32_t width, uint32_t track)
+        : Node(NodeType::Register, name, x, y, width, track) { }
 };
 
 class SwitchBoxNode : public Node {
@@ -73,13 +73,11 @@ private:
     const static int SIDES = 4;
     const static int IO = 2;
 public:
-    SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width);
+    SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width, uint32_t track);
 
-    SwitchBoxNode(uint32_t x, uint32_t y)
-                  : SwitchBoxNode(x, y, 1) { }
     SwitchBoxNode(const SwitchBoxNode &node);
 
-    std::vector<std::set<std::shared_ptr<Node>>> channels[SIDES][IO];
+    std::set<std::shared_ptr<Node>> channels[SIDES][IO];
 
     bool overflow() const;
 };
@@ -97,13 +95,14 @@ struct Tile {
     // Note:
     // node name has to be unique within a tile otherwise it can't be located
     // through the tiles
-    std::shared_ptr<SwitchBoxNode> sb;
+    std::vector<std::shared_ptr<SwitchBoxNode>> sbs;
     std::map<std::string, std::shared_ptr<PortNode>> ports;
     std::map<std::string, std::shared_ptr<RegisterNode>> registers;
 
     Tile() = default;
-    Tile(uint32_t x, uint32_t y) : Tile(x, y, 1) { };
-    Tile(uint32_t x, uint32_t y, uint32_t height);
+    Tile(uint32_t x, uint32_t y, uint32_t num_tracks)
+        : Tile(x, y, 1, num_tracks) { };
+    Tile(uint32_t x, uint32_t y, uint32_t height, uint32_t num_tracks);
 };
 
 std::ostream& operator<<(std::ostream &out, const Tile &tile);
@@ -112,7 +111,8 @@ class RoutingGraph {
 public:
     RoutingGraph() : grid_() {}
     // helper class to create the grid efficiently
-    RoutingGraph(uint32_t width, uint32_t height, const SwitchBoxNode &sb);
+    RoutingGraph(uint32_t width, uint32_t height, uint32_t num_tracks,
+                 const SwitchBoxNode &sb);
     // manually add tiles
     void add_tile(const Tile &tile) { grid_.insert({{tile.x, tile.y}, tile}); }
 
@@ -121,7 +121,8 @@ public:
     void add_edge(const Node &node1, const Node &node2);
     void add_edge(const Node &node1, const Node &node2, uint32_t cost);
 
-    std::shared_ptr<SwitchBoxNode> get_sb(const uint32_t &x, const uint32_t &y);
+    std::shared_ptr<SwitchBoxNode> get_sb(const uint32_t &x, const uint32_t &y,
+                                          const uint32_t &track);
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);

@@ -18,11 +18,16 @@ Node::Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
            uint32_t width)
         : type(type), name(name), width(width), x(x), y(y) { }
 
+Node::Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
+           uint32_t width, uint32_t track)
+        : type(type), name(name), width(width), track(track), x(x), y(y) { }
+
 Node::Node(const Node &node) {
     type = node.type;
     name = node.name;
     x = node.x;
     y = node.y;
+    track = node.track;
     neighbors_ = node.neighbors_;
     edge_cost_ = node.edge_cost_;
 }
@@ -49,12 +54,14 @@ bool operator==(const std::shared_ptr<Node> &ptr, const Node &node) {
     return (*ptr) == node;
 }
 
-SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width)
-                             : Node(NodeType::SwitchBox, "", x, y) {
+SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
+                             uint32_t track)
+                             : Node(NodeType::SwitchBox, "", x, y,
+                                    width, track) {
     // initialize the routing channels
     for (auto &channel : channels) {
         for (auto &route : channel) {
-            route = ::vector<::set<shared_ptr<Node>>>(width);
+            route = ::set<shared_ptr<Node>>();
         }
     }
 }
@@ -71,17 +78,16 @@ SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node) : Node(node) {
 bool SwitchBoxNode::overflow() const {
     for (const auto &side : channels) {
         for (const auto &io : side) {
-            for (auto const &chan : io) {
-                if (chan.size() > 1)
-                    return true;
-            }
+            if (io.size() > 1)
+                return true;
         }
     }
     return false;
 }
 
-Tile::Tile(uint32_t x, uint32_t y, uint32_t height)
-        : x(x), y(y), height(height) {
+Tile::Tile(uint32_t x, uint32_t y, uint32_t height, uint32_t num_tracks)
+        : x(x), y(y), height(height), sbs(num_tracks) {
+
 }
 
 std::ostream& operator<<(std::ostream &out, const Tile &tile) {
@@ -90,12 +96,16 @@ std::ostream& operator<<(std::ostream &out, const Tile &tile) {
 }
 
 RoutingGraph::RoutingGraph(uint32_t width, uint32_t height,
-                           const SwitchBoxNode &sb) {
+                           uint32_t num_tracks, const SwitchBoxNode &sb) {
     // pre allocate tiles
     for (uint32_t x = 0; x < width; x++) {
         for (uint32_t y = 0; y < height; y++) {
-            grid_[{x, y}] = Tile(x, y);
-            grid_[{x, y}].sb = ::make_shared<SwitchBoxNode>(sb);
+            grid_[{x, y}] = Tile(x, y, num_tracks);
+            for (uint32_t i = 0; i < num_tracks; i++) {
+                auto const & sb_instance = ::make_shared<SwitchBoxNode>(sb);
+                sb_instance->track = i;
+                grid_[{x, y}].sbs[i] = sb_instance;
+            }
         }
     }
 }
@@ -128,7 +138,8 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
                                 ::make_shared<RegisterNode>(node.name,
                                                             node.x,
                                                             node.y,
-                                                            node.width);
+                                                            node.width,
+                                                            node.track);
                     ptr_list[i] = tile.ports[node.name];
                     break;
                 case NodeType::Port:
@@ -139,13 +150,17 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
                     ptr_list[i] = tile.ports[node.name];
                     break;
                 case NodeType::SwitchBox:
-                    if (tile.sb == nullptr) {
-                        tile.sb = ::make_shared<SwitchBoxNode>(node.x, node.y);
+                    auto const &track = node.track;
+                    if (tile.sbs[track] == nullptr) {
+                        tile.sbs[track] =
+                                ::make_shared<SwitchBoxNode>(node.x, node.y,
+                                                             node.width,
+                                                             node.track);
                     }
-                    ptr_list[i] = tile.sb;
+                    ptr_list[i] = tile.sbs[track];
                     break;
-                default:
-                    throw ::runtime_error("unknown node type");
+                // default:
+                //    throw ::runtime_error("unknown node type");
             }
         }
         if (ptr_list[i] == nullptr) {
@@ -174,17 +189,18 @@ std::shared_ptr<Node> RoutingGraph::get_port(const uint32_t &x,
 }
 
 std::shared_ptr<SwitchBoxNode> RoutingGraph::get_sb(const uint32_t &x,
-                                                    const uint32_t &y) {
+                                                    const uint32_t &y,
+                                                    const uint32_t &track) {
     auto pos = make_pair(x, y);
     if (grid_.find(pos) == grid_.end()) {
         throw ::runtime_error("unable to find tile");
     } else {
         const auto &tile = grid_[pos];
-        if (tile.sb == nullptr) {
+        if (tile.sbs[track] == nullptr) {
             ostringstream stream;
             stream << tile << " does not have a switchbox";
             throw ::runtime_error("tile ");
         }
+        return tile.sbs[track];
     }
-    return nullptr;
 }

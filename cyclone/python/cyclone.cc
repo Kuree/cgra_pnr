@@ -52,25 +52,24 @@ void init_graph(py::module &m) {
     py::class_<RegisterNode> r_node(m, "RegisterNode");
     init_node_class<RegisterNode>(r_node);
     r_node
-        .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t>())
-        .def(py::init<const std::string &, uint32_t, uint32_t>());
+        .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t,
+                      uint32_t>());
 
     py::class_<SwitchBoxNode> sb_node(m, "SwitchBoxNode");
     init_node_class<SwitchBoxNode>(sb_node);
     sb_node
-        .def(py::init<uint32_t, uint32_t, uint32_t>())
-        .def(py::init<uint32_t, uint32_t>());
+        .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>());
 
     py::class_<Tile>(m, "Tile")
-        .def(py::init<uint32_t, uint32_t>())
         .def(py::init<uint32_t, uint32_t, uint32_t>())
+        .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
         .def_readwrite("x", &Tile::x)
         .def_readwrite("y", &Tile::y)
         .def_readwrite("height", &Tile::height);
 
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())
-        .def(py::init<uint32_t, uint32_t, const SwitchBoxNode &>())
+        .def(py::init<uint32_t, uint32_t, uint32_t, const SwitchBoxNode &>())
         .def("add_tile", &RoutingGraph::add_tile)
         .def("add_edge",
              py::overload_cast<const Node &,
