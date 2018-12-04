@@ -54,20 +54,12 @@ public:
 };
 
 class RegisterNode : public Node {
-private:
-    const static int IO = 2;
 public:
     RegisterNode(const std::string &name, uint32_t x, uint32_t y,
                  uint32_t width)
         : Node(NodeType::Register, name, x, y, width) { }
     RegisterNode(const std::string &name, uint32_t x, uint32_t y)
         : Node(NodeType::Register, name, x, y) { }
-    // used internally in the system to pre-allocate register nodes
-    RegisterNode(uint32_t x, uint32_t y)
-        : Node(NodeType::Register, "", x, y) { }
-
-    // in and out
-    std::shared_ptr<Node> channels[IO];
 };
 
 class SwitchBoxNode : public Node {
@@ -92,17 +84,18 @@ struct Tile {
     // helper struct to holds the graph nodes
     uint32_t x = 0;
     uint32_t y = 0;
+    uint32_t height = 0;
 
+    // Note:
+    // node name has to be unique within a tile otherwise it can't be located
+    // through the tiles
     std::shared_ptr<SwitchBoxNode> sb;
     std::map<std::string, std::shared_ptr<PortNode>> ports;
-    // Keyi:
-    // this is a design choice to put registers in tile rather than
-    // switch boxes for these reasons:
-    // 1. registers have to be assigned to switchbox during routing time
-    // 2. registers may stay in the tiles, rather than in the switchboxes
-    std::vector<std::shared_ptr<RegisterNode>> registers;
+    std::map<std::string, std::shared_ptr<RegisterNode>> registers;
+
     Tile() = default;
-    Tile(uint32_t x, uint32_t y, uint32_t num_registers);
+    Tile(uint32_t x, uint32_t y) : Tile(x, y, 1) { };
+    Tile(uint32_t x, uint32_t y, uint32_t height);
 };
 
 std::ostream& operator<<(std::ostream &out, const Tile &tile);
@@ -114,7 +107,7 @@ public:
     RoutingGraph(uint32_t width, uint32_t height, const SwitchBoxNode &sb,
                  uint32_t num_register_tile);
     // manually add tiles
-    void add_tile(const Tile &tile) { grid_[{tile.x, tile.y}] = tile; }
+    void add_tile(const Tile &tile) { grid_.insert({{tile.x, tile.y}, tile}); }
 
     // used to construct the routing graph.
     // called after tiles have been constructed.

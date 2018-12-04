@@ -59,6 +59,12 @@ void init_graph(py::module &m) {
         .def(py::init<uint32_t, uint32_t, uint32_t>())
         .def(py::init<uint32_t, uint32_t>());
 
+    py::class_<Tile>(m, "Tile")
+        .def(py::init<uint32_t, uint32_t>())
+        .def(py::init<uint32_t, uint32_t, uint32_t>())
+        .def_readwrite("x", &Tile::x)
+        .def_readwrite("y", &Tile::y)
+        .def_readwrite("height", &Tile::height);
 
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())

@@ -68,11 +68,8 @@ SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node) : Node(node) {
     }
 }
 
-Tile::Tile(uint32_t x, uint32_t y, uint32_t num_registers)
-        : x(x), y(y), registers(num_registers) {
-    for (uint32_t i = 0; i < num_registers; i++) {
-        registers[i] = ::make_shared<RegisterNode>(x, y);
-    }
+Tile::Tile(uint32_t x, uint32_t y, uint32_t height)
+        : x(x), y(y), height(height) {
 }
 
 std::ostream& operator<<(std::ostream &out, const Tile &tile) {
@@ -115,24 +112,13 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
             auto &tile = grid_[{x, y}];
             switch (node.type) {
                 case NodeType::Register:
-                    {
-                        // need to find out if the register node has been
-                        // allocated or not
-                        // allocate in order
-                        uint32_t index;
-                        for (index = 0; index < tile.registers.size();
-                             index++) {
-                            if (tile.registers[index]->name == node.name ||
-                                tile.registers[index]->name.empty())
-                                break;
-                        }
-                        if (index >= tile.registers.size())
-                            throw ::runtime_error("switchbox is full of regs");
-                        tile.registers[index]->name = node.name;
-                        tile.registers[index]->width = node.width;
-
-                        ptr_list[i] = tile.registers[index];
-                    }
+                    if (tile.registers.find(node.name) == tile.registers.end())
+                        tile.registers[node.name] =
+                                ::make_shared<RegisterNode>(node.name,
+                                                            node.x,
+                                                            node.y,
+                                                            node.width);
+                    ptr_list[i] = tile.ports[node.name];
                     break;
                 case NodeType::Port:
                     if (tile.ports.find(node.name) == tile.ports.end())
