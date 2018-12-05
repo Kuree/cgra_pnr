@@ -15,22 +15,16 @@ protected:
     virtual void compute_slack_ratio(std::map<std::pair<std::shared_ptr<Node>,
             std::shared_ptr<Node>>,
             double> &ratio, uint32_t current_iter);
-    virtual std::function<uint32_t(const std::shared_ptr<Node> &)>
-    create_cost_function();
+    virtual std::function<uint32_t(const std::shared_ptr<Node> &,
+                                   const std::shared_ptr<Node> &)>
+    create_cost_function(std::map<std::pair<std::shared_ptr<Node>,
+                                            std::shared_ptr<Node>>,
+                                  double> slack_ratio);
 
 private:
     uint32_t num_iteration_ = 40;
-    // a list of routing segments indexed by net id
-    std::map<int,
-             std::map<std::shared_ptr<Node>,
-                      std::vector<std::shared_ptr<Node>>>> current_routes;
     uint32_t fail_count_ = 0;
-    std::vector<std::vector<std::shared_ptr<Node>>> node_history_cost_;
 
-    void update_cost_table();
-    void assign_routes();
-    void index_node_history_table();
-    void update_node_history_table();
 };
 
 

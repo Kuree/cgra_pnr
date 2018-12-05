@@ -55,7 +55,7 @@ Router::add_net(const std::vector<std::pair<::string, ::string>> &net) {
 
 void Router::add_placement(const uint32_t &x, const uint32_t &y,
                            const ::string &blk_id) {
-    placement_[blk_id] = {x, y};
+    placement_.insert({blk_id, {x, y}});
 }
 
 ::vector<::shared_ptr<Node>>
@@ -272,4 +272,16 @@ bool Router::overflow() {
         }
     }
     return false;
+}
+
+void Router::assign_nets() {
+    // using the current nets to assign routes
+    for (Net &net : netlist_) {
+        for (uint32_t i = 0; i < net.size() - 1; i++) {
+            auto &node1 = net[i].node;
+            auto &node2 = net[i + 1].node;
+            node1->assign_connection(node2, OUT);
+            node2->assign_connection(node1, IN);
+        }
+    }
 }

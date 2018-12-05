@@ -46,11 +46,12 @@ public:
     find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
 
     /* ---- functions related to routing algorithm ---- */
-    virtual void assign_connection(std::shared_ptr<Node> &, uint32_t) = 0;
+    virtual void assign_connection(const std::shared_ptr<Node> &, uint32_t) = 0;
     // how many times it's been used that way
-    virtual uint32_t get_history_cost(std::shared_ptr<Node> &) = 0;
+    virtual uint32_t get_history_cost(const std::shared_ptr<Node> &) = 0;
     virtual void clear() = 0;
-    virtual uint32_t get_presence_cost(std::shared_ptr<Node> &, uint32_t) = 0;
+    virtual uint32_t get_presence_cost(const std::shared_ptr<Node> &,
+                                       uint32_t) = 0;
 
 protected:
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y);
@@ -75,10 +76,11 @@ public:
     std::set<std::shared_ptr<Node>> connections[IO];
 
     void clear() override;
-    void assign_connection(std::shared_ptr<Node> & node, uint32_t io) override;
-    uint32_t get_history_cost(std::shared_ptr<Node> & node) override;
+    void assign_connection(const std::shared_ptr<Node> & node,
+                           uint32_t io) override;
+    uint32_t get_history_cost(const std::shared_ptr<Node> & node) override;
     uint32_t
-    get_presence_cost(std::shared_ptr<Node> &node, uint32_t io) override;
+    get_presence_cost(const std::shared_ptr<Node> &node, uint32_t io) override;
 
 private:
     uint32_t history_count_ = 0;
@@ -94,10 +96,11 @@ public:
     std::set<std::shared_ptr<Node>> connections[IO];
 
     void clear() override;
-    void assign_connection(std::shared_ptr<Node> & node, uint32_t io) override;
-    uint32_t get_history_cost(std::shared_ptr<Node> &node) override;
+    void assign_connection(const std::shared_ptr<Node> & node,
+                           uint32_t io) override;
+    uint32_t get_history_cost(const std::shared_ptr<Node> &node) override;
     uint32_t
-    get_presence_cost(std::shared_ptr<Node> & node, uint32_t io) override;
+    get_presence_cost(const std::shared_ptr<Node> & node, uint32_t io) override;
 
 private:
     uint32_t history_count_ = 0;
@@ -138,10 +141,11 @@ public:
 
     // the actual one
     void add_edge(const std::shared_ptr<Node> &node, uint32_t side);
-    void assign_connection(std::shared_ptr<Node> & node, uint32_t io) override;
-    uint32_t get_history_cost(std::shared_ptr<Node> &node) override;
+    void assign_connection(const std::shared_ptr<Node> & node,
+                           uint32_t io) override;
+    uint32_t get_history_cost(const std::shared_ptr<Node> &node) override;
     uint32_t
-    get_presence_cost(std::shared_ptr<Node> & node, uint32_t io) override;
+    get_presence_cost(const std::shared_ptr<Node> & node, uint32_t io) override;
 };
 
 // operators
@@ -193,6 +197,10 @@ public:
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);
+
+    void clear_connections();
+
+    // helper functions to iterate through the entire graph
     std::map<std::pair<uint32_t, uint32_t>, Tile>::iterator
     begin() { return grid_.begin(); }
     std::map<std::pair<uint32_t, uint32_t>, Tile>::iterator

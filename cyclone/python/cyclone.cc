@@ -88,7 +88,8 @@ void init_graph(py::module &m) {
              py::overload_cast<const Node &,
                                const Node &, uint32_t>(&RoutingGraph::add_edge))
         .def("get_sb", &RoutingGraph::get_sb)
-        .def("get_port", &RoutingGraph::get_port);
+        .def("get_port", &RoutingGraph::get_port)
+        .def("clear_connections", &RoutingGraph::clear_connections);
 }
 
 void init_router(py::module &m) {

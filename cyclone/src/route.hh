@@ -22,12 +22,22 @@ public:
     bool overflow();
 
     virtual void route() { };
+    // assign nets
+    void assign_nets();
+    void clear_connections() { graph_.clear_connections(); }
 
 protected:
     RoutingGraph graph_;
     std::vector<Net> netlist_;
     std::map<std::string, std::pair<uint32_t, uint32_t>> placement_;
     std::map<int, std::set<int>> reg_nets_;
+    // a list of routing segments indexed by net id
+    std::map<int,
+            std::map<std::shared_ptr<Node>,
+                    std::vector<std::shared_ptr<Node>>>> current_routes;
+
+    const static uint32_t IN = 0;
+    const static uint32_t OUT = 1;
 
     std::vector<std::shared_ptr<Node>>
     route_dijkstra(const std::shared_ptr<Node> &start,
@@ -105,6 +115,7 @@ protected:
     // this is because we assign register locations on the fly
     void group_reg_nets();
     void reorder_reg_nets();
+
 private:
     static constexpr char REG_IN[] = "in";
     static constexpr char REG_OUT[] = "out";

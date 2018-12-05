@@ -15,7 +15,6 @@ GlobalRouter::GlobalRouter(uint32_t num_iteration)
     : Router(), num_iteration_(num_iteration) { }
 
 void GlobalRouter::route() {
-    index_node_history_table();
     // the actual routing part
     // algorithm based on PathFinder with modification for CGRA architecture
     // TODO:
@@ -38,14 +37,20 @@ void GlobalRouter::route() {
         fail_count_ = 0;
         // update the slack ratio table
         compute_slack_ratio(slack_ratio, it);
+        // clear the routing resources, i.e. rip up all the nets
+        clear_connections();
+
         for (auto &net : netlist_) {
             route_net(net, it);
         }
+
+        // assign to the routing resource
+        assign_nets();
+
         if (!overflow()) {
             return;
         }
-        // update the history table
-        update_node_history_table();
+
     }
     if (overflow())
         throw ::runtime_error("unable to route. sorry!");
@@ -131,23 +136,18 @@ void GlobalRouter::route_net(Net &net, uint32_t it) {
     }
 }
 
-void GlobalRouter::update_cost_table() {
-
-}
-
-void GlobalRouter::assign_routes() {
-
-}
-
-std::function<uint32_t(const std::shared_ptr<Node> &)>
-GlobalRouter::create_cost_function() {
-    return [](const std::shared_ptr<Node> &) -> uint32_t { return 0; };
-}
-
-void GlobalRouter::index_node_history_table() {
-
-}
-
-void GlobalRouter::update_node_history_table() {
-
+::function<uint32_t(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
+GlobalRouter::create_cost_function(::map<::pair<::shared_ptr<Node>,
+                                                ::shared_ptr<Node>>,
+                                         double> slack_ratio) {
+    return [&](const ::shared_ptr<Node> &node1,
+               const ::shared_ptr<Node> &node2) -> uint32_t {
+        // based of the PathFinder paper
+        auto pn = node1->get_presence_cost(node2, OUT);
+        pn += node2->get_presence_cost(node1, IN);
+        auto dn = node1->get_edge_cost(node2);
+        auto hn = node1->get_history_cost(node2);
+        auto an = static_cast<uint32_t>(slack_ratio[{node1, node2}]);
+        return an * dn + (1 - an) * (dn + hn) * pn;
+    };
 }
