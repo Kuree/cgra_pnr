@@ -2,9 +2,11 @@
 #include <string>
 #include "net.hh"
 
-Net::Net(std::vector<std::pair<std::pair<uint32_t,
+Net::Net(const std::string &name,
+         std::vector<std::pair<std::pair<uint32_t,
                                          uint32_t>,
-                               std::pair<std::string, std::string>>> net) {
+                               std::pair<std::string, std::string>>> net)
+                               : name(name) {
     for (const auto &pin : net) {
         pins_.emplace_back(Pin(pin.first.first, pin.first.second,
                                pin.second.first, pin.second.second));

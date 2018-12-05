@@ -18,6 +18,9 @@ uint32_t zero_estimate(const std::shared_ptr<Node> &,
 std::function<bool(const std::shared_ptr<Node> &)>
 same_loc(const std::pair<uint32_t, uint32_t> &p);
 
+
+bool end_reg_f(const std::shared_ptr<Node> &node);
+
 std::function<bool(const std::shared_ptr<Node> &)>
 same_node(const std::shared_ptr<Node> &node1);
 

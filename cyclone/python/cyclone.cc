@@ -39,10 +39,11 @@ void init_node_class(py::class_<T> &class_) {
 template<class T>
 void init_router_class(py::class_<T> &class_) {
     class_
-        .def("add_net", &Router::add_net)
-        .def("add_edge", &Router::add_edge)
-        .def("add_placement", &Router::add_placement)
-        .def("overflow", &Router::overflow);
+        .def("add_net", &T::add_net)
+        .def("add_edge", &T::add_edge)
+        .def("add_placement", &T::add_placement)
+        .def("overflow", &T::overflow)
+        .def("route", &T::route);
 }
 
 

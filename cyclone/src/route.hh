@@ -14,7 +14,8 @@ public:
 
     // add_net has to be used after constructing all the routing graph
     // otherwise it will throw errors
-    void add_net(const std::vector<std::pair<std::string, std::string>> &net);
+    void add_net(const std::string &name,
+                 const std::vector<std::pair<std::string, std::string>> &net);
     void add_placement(const uint32_t &x, const uint32_t &y,
                        const std::string &blk_id);
     void add_edge(const Node &node1, const Node &node2)

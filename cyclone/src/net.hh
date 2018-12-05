@@ -20,9 +20,11 @@ public:
 struct Net {
 public:
     int id = -1;
+    std::string name;
     bool fixed = false;
     Net() = default;
-    explicit Net(std::vector<std::pair<std::pair<uint32_t, uint32_t>,
+    explicit Net(const std::string &name,
+                 std::vector<std::pair<std::pair<uint32_t, uint32_t>,
                                        std::pair<std::string,
                                                  std::string>>> net);
 

@@ -1,5 +1,6 @@
 #include <limits>
 #include "global.hh"
+#include "util.hh"
 
 using std::map;
 using std::shared_ptr;
@@ -32,6 +33,7 @@ void GlobalRouter::route() {
     reorder_reg_nets();
 
     ::map<::pair<::shared_ptr<Node>, ::shared_ptr<Node>>, double> slack_ratio;
+    auto cost_f = create_cost_function(slack_ratio);
 
     for (uint32_t it = 0; it < num_iteration_; it++) {
         fail_count_ = 0;
@@ -41,7 +43,7 @@ void GlobalRouter::route() {
         clear_connections();
 
         for (auto &net : netlist_) {
-            route_net(net, it);
+            route_net(net, it, cost_f);
         }
 
         // assign to the routing resource
@@ -110,7 +112,11 @@ void GlobalRouter::compute_slack_ratio(::map<::pair<::shared_ptr<Node>,
     }
 }
 
-void GlobalRouter::route_net(Net &net, uint32_t it) {
+void
+GlobalRouter::route_net(Net &net, uint32_t it,
+                        const ::function<uint32_t(const ::shared_ptr<Node> &,
+                                                  const ::shared_ptr<Node> &)>
+                                                   &cost_f) {
     const auto &src = net[0].node;
     if (src == nullptr)
         throw ::runtime_error("unable to find src when route net");
@@ -123,23 +129,42 @@ void GlobalRouter::route_net(Net &net, uint32_t it) {
                 // previous attempts have failed;
                 // don't clear the previous routing table so that it will
                 // increase the cost function to re-use the same route.
+                // FIXME: remove failed count
                 fail_count_++;
                 continue;
             }
-            (void)end;
-
+            auto segment = route_a_star(src, end, cost_f);
+            ::shared_ptr<Node> end_node = segment.back();
+            // then route for nearest
+            auto reg_segment = route_a_star(end_node, end_reg_f, cost_f,
+                                            zero_estimate);
+            auto reg_node = reg_segment.back();
+            // make sure it's an reg node
+            if (reg_node == nullptr || reg_node->type != NodeType::Register)
+                throw ::runtime_error("unable to route for net id " + net.name);
+            // assign register locations across all grouped nets
+            net[i].node = reg_node;
+            for (auto &net_id: reg_nets_.at(net.id)) {
+                netlist_[net_id][0].node = reg_node;
+            }
         } else {
             if (sink_node.node == nullptr)
                 throw ::runtime_error("unable to find node for block"
                                       " " + sink_node.name);
+            auto segment = route_a_star(src, sink_node.node, cost_f);
+            if (segment.back() != sink_node.node) {
+                fail_count_++;
+                continue;
+            }
+            current_routes[net.id][sink_node.node] = segment;
         }
     }
 }
 
 ::function<uint32_t(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
-GlobalRouter::create_cost_function(::map<::pair<::shared_ptr<Node>,
-                                                ::shared_ptr<Node>>,
-                                         double> slack_ratio) {
+GlobalRouter::create_cost_function(const ::map<::pair<::shared_ptr<Node>,
+                                                      ::shared_ptr<Node>>,
+                                               double> &slack_ratio) {
     return [&](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> uint32_t {
         // based of the PathFinder paper
@@ -147,7 +172,7 @@ GlobalRouter::create_cost_function(::map<::pair<::shared_ptr<Node>,
         pn += node2->get_presence_cost(node1, IN);
         auto dn = node1->get_edge_cost(node2);
         auto hn = node1->get_history_cost(node2);
-        auto an = static_cast<uint32_t>(slack_ratio[{node1, node2}]);
+        auto an = static_cast<uint32_t>(slack_ratio.at({node1, node2}));
         return an * dn + (1 - an) * (dn + hn) * pn;
     };
 }

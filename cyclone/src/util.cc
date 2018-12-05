@@ -30,3 +30,7 @@ same_node(const std::shared_ptr<Node> &node1) {
         return node1 == node2;
     };;
 }
+
+bool end_reg_f(const std::shared_ptr<Node> &node) {
+    return node->type == NodeType::Register;
+}

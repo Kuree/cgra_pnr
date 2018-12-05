@@ -17,10 +17,12 @@ using std::move;
 
 
 void
-Router::add_net(const std::vector<std::pair<::string, ::string>> &net) {
+Router::add_net(const ::string &name,
+                const ::vector<::pair<::string, ::string>> &net) {
     int net_id = static_cast<int>(netlist_.size());
     Net n;
     n.id = net_id;
+    n.name = name;
     ::set<uint64_t> reg_index;
     for (auto const &entry : net) {
         auto const &[blk_id, port] = entry;
