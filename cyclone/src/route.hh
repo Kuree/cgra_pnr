@@ -36,8 +36,9 @@ protected:
     std::vector<std::shared_ptr<Node>>
     route_dijkstra(const std::shared_ptr<Node> &start,
                    const std::shared_ptr<Node> &end,
-                   std::function<uint32_t(const std::shared_ptr<Node> &)>
-                   cost_f);
+                   std::function<uint32_t(const std::shared_ptr<Node> &,
+                                          const std::shared_ptr<Node> &)>
+                                          cost_f);
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
@@ -46,7 +47,8 @@ protected:
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::shared_ptr<Node> &end,
-                 std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f);
+                 std::function<uint32_t(const std::shared_ptr<Node> &,
+                                        const std::shared_ptr<Node> &)> cost_f);
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
@@ -55,20 +57,22 @@ protected:
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::pair<uint32_t, uint32_t> &end,
-                 std::function<uint32_t(const std::shared_ptr<Node> &)>
-                 cost_f);
+                 std::function<uint32_t(const std::shared_ptr<Node> &,
+                                        const std::shared_ptr<Node> &)> cost_f);
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::pair<uint32_t, uint32_t> &end,
-                 std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+                 std::function<uint32_t(const std::shared_ptr<Node> &,
+                                        const std::shared_ptr<Node> &)> cost_f,
                  std::function<uint32_t(const std::shared_ptr<Node> &,
                                         const std::shared_ptr<Node>)> h_f);
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::shared_ptr<Node> &end,
-                 std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+                 std::function<uint32_t(const std::shared_ptr<Node> &,
+                                        const std::shared_ptr<Node> &)> cost_f,
                  std::function<uint32_t(const std::shared_ptr<Node> &,
                                         const std::shared_ptr<Node>)> h_f);
 
@@ -78,7 +82,8 @@ protected:
     route_l(const std::shared_ptr<Node> &start,
             const std::shared_ptr<Node> &end,
             const std::pair<uint32_t, uint32_t> &steiner_p,
-            std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+            std::function<uint32_t(const std::shared_ptr<Node> &,
+                                   const std::shared_ptr<Node> &)> cost_f,
             std::function<uint32_t(const std::shared_ptr<Node> &,
                                    const std::shared_ptr<Node>)> h_f);
 
@@ -87,7 +92,8 @@ protected:
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  std::function<bool(const std::shared_ptr<Node> &)> end_f,
-                 std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+                 std::function<uint32_t(const std::shared_ptr<Node> &,
+                                        const std::shared_ptr<Node> &)> cost_f,
                  std::function<uint32_t(const std::shared_ptr<Node> &,
                                         const std::shared_ptr<Node>)> h_f);
 

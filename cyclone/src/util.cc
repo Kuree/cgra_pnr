@@ -11,7 +11,8 @@ uint32_t manhattan_distance(const std::shared_ptr<Node> &node1,
     return static_cast<uint32_t>(abs(dx) + abs(dy));
 }
 
-uint32_t zero_cost(const std::shared_ptr<Node> &) { return 0; }
+uint32_t zero_cost(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)
+{ return 0; }
 
 uint32_t zero_estimate(const std::shared_ptr<Node> &,
                        const std::shared_ptr<Node> &) { return 0; }

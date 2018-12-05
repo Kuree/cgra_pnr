@@ -59,10 +59,50 @@ void PortNode::clear() {
     }
 }
 
+void PortNode::assign_connection(std::shared_ptr<Node> &node, uint32_t io) {
+    connections[io].insert(node);
+    // add to history count
+    history_count_++;
+}
+
+uint32_t PortNode::get_history_cost(std::shared_ptr<Node> &) {
+    // really don't care about who's connected to since it doesn't have
+    // side capacity
+    return history_count_;
+}
+
+uint32_t PortNode::get_presence_cost(std::shared_ptr<Node> &node, uint32_t io) {
+    if (connections[io].find(node) == connections[io].end())
+        return static_cast<uint32_t>(connections[io].size());
+    else
+        return static_cast<uint32_t>(connections[io].size() - 1);
+}
+
 void RegisterNode::clear() {
     for (auto &connection : connections) {
         connection.clear();
     }
+}
+
+void RegisterNode::assign_connection(std::shared_ptr<Node> &node,
+                                     uint32_t io) {
+    connections[io].insert(node);
+    // add to history count
+    history_count_++;
+}
+
+uint32_t RegisterNode::get_history_cost(std::shared_ptr<Node> &) {
+    // really don't care about who's connected to since it doesn't have
+    // side capacity
+    return history_count_;
+}
+
+uint32_t RegisterNode::get_presence_cost(std::shared_ptr<Node> &node,
+                                         uint32_t io) {
+    if (connections[io].find(node) == connections[io].end())
+        return static_cast<uint32_t>(connections[io].size());
+    else
+        return static_cast<uint32_t>(connections[io].size() - 1);
 }
 
 SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
@@ -93,6 +133,13 @@ void SwitchBoxNode::add_edge(const std::shared_ptr<Node> &node,
     edge_to_side_.insert({node, side});
 }
 
+uint32_t SwitchBoxNode::get_side(const ::shared_ptr<Node> &node) {
+    if (edge_to_side_.find(node) == edge_to_side_.end())
+        throw ::runtime_error("unable to find node when assigning"
+                              "connections");
+    return edge_to_side_.at(node);
+}
+
 bool SwitchBoxNode::overflow() const {
     for (const auto &side : channels) {
         for (const auto &io : side) {
@@ -109,6 +156,30 @@ void SwitchBoxNode::clear() {
             io.clear();
         }
     }
+}
+
+void SwitchBoxNode::assign_connection(std::shared_ptr<Node> &node,
+                                      uint32_t io) {
+    auto side = get_side(node);
+    channels[side][io].insert(node);
+    side_history_count_[side][io]++;
+}
+
+uint32_t SwitchBoxNode::get_history_cost(std::shared_ptr<Node> & node) {
+    auto side = get_side(node);
+    uint32_t result = 0;
+    for (uint32_t i = 0; i < IO; i++)
+        result += side_history_count_[side][i];
+    return result;
+}
+
+uint32_t SwitchBoxNode::get_presence_cost(std::shared_ptr<Node> &node,
+                                          uint32_t io) {
+    auto side = get_side(node);
+    if (channels[side][io].find(node) == channels[side][io].end())
+        return static_cast<uint32_t>(channels[side][io].size());
+    else
+        return static_cast<uint32_t>(channels[side][io].size() - 1);
 }
 
 Tile::Tile(uint32_t x, uint32_t y, uint32_t height, uint32_t num_tracks)

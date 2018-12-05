@@ -67,7 +67,8 @@ Router::route_dijkstra(const ::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>>
 Router::route_dijkstra(const std::shared_ptr<Node> &start,
                        const std::shared_ptr<Node> &end,
-                       ::function<uint32_t(const ::shared_ptr<Node> &)>
+                       ::function<uint32_t(const ::shared_ptr<Node> &,
+                                           const ::shared_ptr<Node> &)>
                        cost_f) {
     auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
         return node == end;
@@ -84,8 +85,8 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::shared_ptr<Node> &end,
-                     ::function<uint32_t(const ::shared_ptr<Node> &)>
-                     cost_f) {
+                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                                         const ::shared_ptr<Node> &)> cost_f) {
     auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
         return node == end;
     };
@@ -101,14 +102,16 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::pair<uint32_t, uint32_t> &end,
-                     ::function<uint32_t(const ::shared_ptr<Node> &)> cost_f) {
+                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                                         const ::shared_ptr<Node> &)> cost_f) {
     return route_a_star(start, end, ::move(cost_f), manhattan_distance);
 }
 
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::pair<uint32_t, uint32_t> &end,
-                     ::function<uint32_t(const ::shared_ptr<Node> &)> cost_f,
+                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                                         const ::shared_ptr<Node> &)> cost_f,
                      ::function<uint32_t(const ::shared_ptr<Node> &,
                                          const ::shared_ptr<Node>)> h_f) {
     return route_a_star(start, same_loc(end), ::move(cost_f), ::move(h_f));
@@ -117,7 +120,8 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::shared_ptr<Node> &end,
-                     ::function<uint32_t(const ::shared_ptr<Node> &)> cost_f,
+                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                                         const ::shared_ptr<Node> &)> cost_f,
                      ::function<uint32_t(const ::shared_ptr<Node> &,
                                          const ::shared_ptr<Node>)> h_f) {
     return route_a_star(start, same_node(end), ::move(cost_f), ::move(h_f));
@@ -127,7 +131,8 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>> Router::route_a_star(
         const std::shared_ptr<Node> &start,
         std::function<bool(const std::shared_ptr<Node> &)> end_f,
-        std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+        std::function<uint32_t(const std::shared_ptr<Node> &,
+                               const std::shared_ptr<Node> &)> cost_f,
         std::function<uint32_t(const ::shared_ptr<Node> &,
                                const ::shared_ptr<Node>)> h_f) {
     ::set<::shared_ptr<Node>> visited;
@@ -157,7 +162,7 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
 
         uint32_t current_cost = cost[head];
         for (auto const &node : *head) {
-            uint32_t edge_cost = head->get_edge_cost(node) + cost_f(node);
+            uint32_t edge_cost = head->get_edge_cost(node) + cost_f(head, node);
             uint32_t real_cost = edge_cost + current_cost;
             if (cost.find(node) == cost.end()) {
                 cost[node] = real_cost;
@@ -197,7 +202,8 @@ std::vector<std::shared_ptr<Node>>
 Router::route_l(const std::shared_ptr<Node> &start,
                 const std::shared_ptr<Node> &end,
                 const std::pair<uint32_t, uint32_t> &steiner_p,
-                std::function<uint32_t(const std::shared_ptr<Node> &)> cost_f,
+                std::function<uint32_t(const std::shared_ptr<Node> &,
+                                       const std::shared_ptr<Node> &)> cost_f,
                 std::function<uint32_t(const std::shared_ptr<Node> &,
                                        const std::shared_ptr<Node>)> h_f) {
     // it has two steps, first, route to that steiner point,
