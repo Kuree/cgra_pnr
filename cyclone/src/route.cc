@@ -157,7 +157,7 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
 
         uint32_t current_cost = cost[head];
         for (auto const &node : *head) {
-            uint32_t edge_cost = head->get_cost(node) + cost_f(node);
+            uint32_t edge_cost = head->get_edge_cost(node) + cost_f(node);
             uint32_t real_cost = edge_cost + current_cost;
             if (cost.find(node) == cost.end()) {
                 cost[node] = real_cost;

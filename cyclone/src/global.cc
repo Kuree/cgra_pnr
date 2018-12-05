@@ -15,6 +15,7 @@ GlobalRouter::GlobalRouter(uint32_t num_iteration)
     : Router(), num_iteration_(num_iteration) { }
 
 void GlobalRouter::route() {
+    index_node_history_table();
     // the actual routing part
     // algorithm based on PathFinder with modification for CGRA architecture
     // TODO:
@@ -43,6 +44,8 @@ void GlobalRouter::route() {
         if (!overflow()) {
             return;
         }
+        // update the history table
+        update_node_history_table();
     }
     if (overflow())
         throw ::runtime_error("unable to route. sorry!");
@@ -139,4 +142,12 @@ void GlobalRouter::assign_routes() {
 std::function<uint32_t(const std::shared_ptr<Node> &)>
 GlobalRouter::create_cost_function() {
     return [](const std::shared_ptr<Node> &) -> uint32_t { return 0; };
+}
+
+void GlobalRouter::index_node_history_table() {
+
+}
+
+void GlobalRouter::update_node_history_table() {
+
 }

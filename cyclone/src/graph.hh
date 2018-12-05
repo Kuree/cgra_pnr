@@ -16,6 +16,9 @@ enum NodeType {
 class Node {
 public:
     Node() = default;
+    // Note
+    // copy constructor does not copy neighbors and edge_cost
+    // due to the python interface
     Node(const Node &node);
 
     NodeType type = NodeType::Port;
@@ -31,9 +34,9 @@ public:
     // used for delay calculation routing
     uint32_t delay = 1;
 
-    void add_edge(const std::shared_ptr<Node> &node, uint32_t cost);
-    void add_edge(const std::shared_ptr<Node> &node) { add_edge(node, 1); }
-    uint32_t get_cost(const std::shared_ptr<Node> &node);
+    virtual void add_edge(const std::shared_ptr<Node> &node);
+
+    uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
 
     // helper function to allow iteration
     std::set<std::shared_ptr<Node>>::iterator begin()
@@ -41,6 +44,12 @@ public:
     std::set<std::shared_ptr<Node>>::iterator end() { return neighbors_.end(); }
     std::set<std::shared_ptr<Node>>::iterator
     find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
+
+    // functions to deal with the actual routing assignments
+    virtual void assign_connection(std::shared_ptr<Node> &) = 0;
+    // how many times it's been used that way
+    virtual uint32_t get_history_cost(std::shared_ptr<Node> &) = 0;
+    virtual void clear() = 0;
 
 protected:
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y);
@@ -62,6 +71,8 @@ public:
         : Node(NodeType::Port, name, x, y) {}
 
     std::set<std::shared_ptr<Node>> connections[IO];
+
+    void clear() override;
 };
 
 class RegisterNode : public Node {
@@ -71,11 +82,22 @@ public:
         : Node(NodeType::Register, name, x, y, width, track) { }
 
     std::set<std::shared_ptr<Node>> connections[IO];
+
+    void clear() override;
+    void assign_connection(std::shared_ptr<Node> &) override;
 };
 
+// side illustration
+//      3
+//    -----
+//  2 |   | 0
+//    |   |
+//    -----
+//      1
 class SwitchBoxNode : public Node {
 private:
     const static int SIDES = 4;
+    std::map<std::shared_ptr<Node>, uint32_t> edge_to_side_;
 public:
     SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width, uint32_t track);
 
@@ -85,7 +107,18 @@ public:
     double channel_cost[SIDES][IO] = {};
 
     bool overflow() const;
-    void clear();
+    void clear() override;
+
+    // Note:
+    // because we need to indicate the side of switchbox,
+    // we need to disable the parent method
+    // throw an exception whenever they are called
+    void add_edge(const std::shared_ptr<Node> &) override {
+        static_assert("use add_edge with side instead");
+    }
+
+    // the actual one
+    void add_edge(const std::shared_ptr<Node> &node, uint32_t side);
 };
 
 // operators
@@ -126,8 +159,11 @@ public:
 
     // used to construct the routing graph.
     // called after tiles have been constructed.
+    // concepts copied from networkx as it will create nodes along the way
     void add_edge(const Node &node1, const Node &node2);
-    void add_edge(const Node &node1, const Node &node2, uint32_t cost);
+    // side is relative to node1 if it is a switch box
+    // otherwise it's relative to node2
+    void add_edge(const Node &node1, const Node &node2, uint32_t side);
 
     std::shared_ptr<SwitchBoxNode> get_sb(const uint32_t &x, const uint32_t &y,
                                           const uint32_t &track);
@@ -142,6 +178,8 @@ public:
 private:
     // grid is for fast locating the nodes. no longer used for routing
     std::map<std::pair<uint32_t, uint32_t>, Tile> grid_;
+
+    std::shared_ptr<Node> search_create_node(const Node &node);
 };
 
 #endif //CYCLONE_GRAPH_H

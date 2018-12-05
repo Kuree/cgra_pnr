@@ -18,11 +18,9 @@ void init_node_class(py::class_<T> &class_) {
         .def_readwrite("width", &T::width)
         .def_readwrite("delay", &T::delay)
         .def_readwrite("track", &T::track)
-        .def("add_edge", py::overload_cast<const std::shared_ptr<Node> &,
-                                         uint32_t>(&Node::add_edge))
         .def("add_edge",
            py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
-        .def("get_cost", &T::get_cost)
+        .def("get_edge_cost", &T::get_edge_cost)
         .def("__repr__", [](const T &node) -> std::string {
           switch(node.type) {
               case NodeType::SwitchBox:

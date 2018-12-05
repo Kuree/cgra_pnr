@@ -28,16 +28,14 @@ Node::Node(const Node &node) {
     x = node.x;
     y = node.y;
     track = node.track;
-    neighbors_ = node.neighbors_;
-    edge_cost_ = node.edge_cost_;
 }
 
-void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t cost) {
+void Node::add_edge(const std::shared_ptr<Node> &node) {
     neighbors_.insert(node);
-    edge_cost_[node] = cost;
+    edge_cost_[node] = node->delay;
 }
 
-uint32_t Node::get_cost(const std::shared_ptr<Node> &node) {
+uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
     if (neighbors_.find(node) == neighbors_.end())
         return 0xFFFFFF;
     else
@@ -52,6 +50,19 @@ bool operator==(const Node &node1, const Node &node2) {
 
 bool operator==(const std::shared_ptr<Node> &ptr, const Node &node) {
     return (*ptr) == node;
+}
+
+
+void PortNode::clear() {
+    for (auto &connection : connections) {
+        connection.clear();
+    }
+}
+
+void RegisterNode::clear() {
+    for (auto &connection : connections) {
+        connection.clear();
+    }
 }
 
 SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
@@ -73,6 +84,13 @@ SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node) : Node(node) {
             channels[i][j] = node.channels[i][j];
         }
     }
+}
+
+void SwitchBoxNode::add_edge(const std::shared_ptr<Node> &node,
+                             uint32_t side) {
+    add_edge(node);
+    // add to side index table
+    edge_to_side_.insert({node, side});
 }
 
 bool SwitchBoxNode::overflow() const {
@@ -118,73 +136,88 @@ RoutingGraph::RoutingGraph(uint32_t width, uint32_t height,
     }
 }
 
-void RoutingGraph::add_edge(const Node &node1, const Node &node2,
-                            uint32_t cost) {
-    // add node2 to
+void RoutingGraph::add_edge(const Node &node1, const Node &node2) {
+    if (node1.type == NodeType::SwitchBox || node2.type == NodeType::SwitchBox)
+        throw ::runtime_error("switch box uses add_edge(node, node, side)");
     // we don't use the nodes passed in, instead, we manage our own node
     // internally
-    const Node node_list[2] = {node1, node2};
-    ::shared_ptr<Node> ptr_list[2] = {nullptr, nullptr};
-    for (int i = 0; i < 2; i++) {
-        const auto node = node_list[i];
-        uint32_t x = node.x;
-        uint32_t y = node.y;
+    auto n1 = search_create_node(node1);
+    auto n2 = search_create_node(node2);
+    if (n1 == nullptr)
+        throw ::runtime_error("cannot find node1");
+    if (n2 == nullptr)
+        throw ::runtime_error("cannot find node2");
 
-        if (grid_.find({x, y}) == grid_.end()) {
-            // a new tile. creating on the fly not supported any more
-            ostringstream stream;
-            stream << "unable to find tile at (" << x << ", " << y << ")";
-            throw ::runtime_error(stream.str());
-        } else {
-            // depends on which type the nodes is. we need to
-            // treat differently
-            auto &tile = grid_[{x, y}];
-            switch (node.type) {
-                case NodeType::Register:
-                    if (tile.registers.find(node.name) == tile.registers.end())
-                        tile.registers[node.name] =
-                                ::make_shared<RegisterNode>(node.name,
-                                                            node.x,
-                                                            node.y,
-                                                            node.width,
-                                                            node.track);
-                    ptr_list[i] = tile.ports[node.name];
-                    break;
-                case NodeType::Port:
-                    if (tile.ports.find(node.name) == tile.ports.end())
-                        tile.ports[node.name] =
-                                ::make_shared<PortNode>(node.name, node.x,
-                                                        node.y, node.width);
-                    ptr_list[i] = tile.ports[node.name];
-                    break;
-                case NodeType::SwitchBox:
-                    auto const &track = node.track;
-                    if (tile.sbs[track] == nullptr) {
-                        tile.sbs[track] =
-                                ::make_shared<SwitchBoxNode>(node.x, node.y,
-                                                             node.width,
-                                                             node.track);
-                    }
-                    ptr_list[i] = tile.sbs[track];
-                    break;
-                // default:
-                //    throw ::runtime_error("unknown node type");
-            }
-        }
-        if (ptr_list[i] == nullptr) {
-            throw ::runtime_error("pointer list null");
-        }
-    }
-
-    auto [n1, n2] = ptr_list;
     // notice that this is directional, that is, add n2 to n1's neighbor
     if (n1->width != n2->width)
-        throw ::runtime_error("n2 width does not equal to n1");
-    n1->add_edge(n2, cost);
+        throw ::runtime_error("node2 width does not equal to node1");
+    n1->add_edge(n2);
 }
 
-void RoutingGraph::add_edge(const Node &node1, const Node &node2) {
-    add_edge(node1, node2, 1);
+void RoutingGraph::add_edge(const Node &node1, const Node &node2,
+                            uint32_t side) {
+    if (node1.type != NodeType::SwitchBox && node2.type != NodeType::SwitchBox)
+        throw ::runtime_error("only switch box uses "
+                              "add_edge(node, node, side)");
+    auto n1 = search_create_node(node1);
+    auto n2 = search_create_node(node2);
+    if (n1 == nullptr)
+        throw ::runtime_error("cannot find node1");
+    if (n2 == nullptr)
+        throw ::runtime_error("cannot find node2");
+
+    if (node1.type == NodeType::SwitchBox) {
+        auto sb1 = std::reinterpret_pointer_cast<SwitchBoxNode>(n1);
+        sb1->add_edge(n2, side);
+    } else {
+        auto sb2 = std::reinterpret_pointer_cast<SwitchBoxNode>(n2);
+        sb2->add_edge(n1, side);
+    }
+}
+
+std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {
+    uint32_t x = node.x;
+    uint32_t y = node.y;
+
+    if (grid_.find({x, y}) == grid_.end()) {
+        // a new tile. creating on the fly not supported any more
+        ostringstream stream;
+        stream << "unable to find tile at (" << x << ", " << y << ")";
+        throw ::runtime_error(stream.str());
+    } else {
+        // depends on which type the nodes is. we need to
+        // treat differently
+        auto &tile = grid_[{x, y}];
+        switch (node.type) {
+            case NodeType::Register:
+                if (tile.registers.find(node.name) == tile.registers.end())
+                    tile.registers[node.name] =
+                            ::make_shared<RegisterNode>(node.name,
+                                                        node.x,
+                                                        node.y,
+                                                        node.width,
+                                                        node.track);
+                return tile.ports[node.name];
+            case NodeType::Port:
+                if (tile.ports.find(node.name) == tile.ports.end())
+                    tile.ports[node.name] =
+                            ::make_shared<PortNode>(node.name, node.x,
+                                                    node.y, node.width);
+                return tile.ports[node.name];
+            case NodeType::SwitchBox:
+                auto const &track = node.track;
+                if (tile.sbs[track] == nullptr) {
+                    tile.sbs[track] =
+                            ::make_shared<SwitchBoxNode>(node.x, node.y,
+                                                         node.width,
+                                                         node.track);
+                }
+                return tile.sbs[track];
+                // default:
+                //    throw ::runtime_error("unknown node type");
+        }
+    }
+    return nullptr;
 }
 
 std::shared_ptr<Node> RoutingGraph::get_port(const uint32_t &x,

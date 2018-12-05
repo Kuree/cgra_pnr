@@ -20,15 +20,17 @@ protected:
 
 private:
     uint32_t num_iteration_ = 40;
-
     // a list of routing segments indexed by net id
     std::map<int,
              std::map<std::shared_ptr<Node>,
                       std::vector<std::shared_ptr<Node>>>> current_routes;
+    uint32_t fail_count_ = 0;
+    std::vector<std::vector<std::shared_ptr<Node>>> node_history_cost_;
+
     void update_cost_table();
     void assign_routes();
-
-    uint32_t fail_count_ = 0;
+    void index_node_history_table();
+    void update_node_history_table();
 };
 
 
