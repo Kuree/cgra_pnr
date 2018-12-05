@@ -10,14 +10,25 @@ public:
     void route() override;
 
 protected:
-    virtual uint32_t approximate_delay(const std::shared_ptr<Node> &node1,
-                                       const std::shared_ptr<Node> &node2);
-    void approximate_slack_ratio(std::map<std::pair<std::shared_ptr<Node>,
+    virtual void route_net(Net &net, uint32_t it);
+
+    virtual void compute_slack_ratio(std::map<std::pair<std::shared_ptr<Node>,
             std::shared_ptr<Node>>,
-            double> &ratio);
-    virtual void route_net(const Net &net);
+            double> &ratio, uint32_t current_iter);
+    virtual std::function<uint32_t(const std::shared_ptr<Node> &)>
+    create_cost_function();
+
 private:
-    uint32_t num_iteration = 40;
+    uint32_t num_iteration_ = 40;
+
+    // a list of routing segments indexed by net id
+    std::map<int,
+             std::map<std::shared_ptr<Node>,
+                      std::vector<std::shared_ptr<Node>>>> current_routes;
+    void update_cost_table();
+    void assign_routes();
+
+    uint32_t fail_count_ = 0;
 };
 
 
