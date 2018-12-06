@@ -164,6 +164,8 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
 
         uint32_t current_cost = cost[head];
         for (auto const &node : *head) {
+            if (visited.find(node) != visited.end())
+                continue;
             uint32_t edge_cost = head->get_edge_cost(node) + cost_f(head, node);
             uint32_t real_cost = edge_cost + current_cost;
             if (cost.find(node) == cost.end()) {
@@ -286,4 +288,18 @@ void Router::assign_nets() {
             node2->assign_connection(node1, IN);
         }
     }
+}
+
+::map<::string, ::vector<::vector<::shared_ptr<Node>>>>
+Router::realize() {
+    ::map<::string, ::vector<::vector<::shared_ptr<Node>>>>
+    result;
+    for (const auto &iter : current_routes) {
+        const auto &name = netlist_[iter.first].name;
+        ::vector<::vector<shared_ptr<Node>>> segments;
+        for (const auto &seg_iter : iter.second)
+            segments.emplace_back(seg_iter.second);
+        result.insert({name, segments});
+    }
+    return result;
 }

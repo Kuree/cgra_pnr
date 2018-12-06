@@ -43,6 +43,23 @@ uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
         return edge_cost_[node];
 }
 
+std::string Node::to_string() const {
+    std::string node_type;
+    switch (type) {
+        case NodeType::SwitchBox:
+            node_type = "SB";
+            break;
+        case NodeType::Register:
+            node_type = "Reg";
+            break;
+        case NodeType::Port:
+            node_type = "Port-" + name;
+            break;
+    }
+    return node_type + " (" + std::to_string(track) + ", " +
+           std::to_string(x) + ", " + std::to_string(y) + ")";
+}
+
 bool operator==(const Node &node1, const Node &node2) {
     return node1.x == node2.x && node1.y == node2.y &&
            node1.name == node2.name &&

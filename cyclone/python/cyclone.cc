@@ -1,5 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <sstream>
 #include "../src/graph.hh"
 #include "../src/route.hh"
 #include "../src/global.hh"
@@ -22,17 +23,9 @@ void init_node_class(py::class_<T> &class_) {
            py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
         .def("get_edge_cost", &T::get_edge_cost)
         .def("__repr__", [](const T &node) -> std::string {
-          switch(node.type) {
-              case NodeType::SwitchBox:
-                  return "SB (" + ::to_string(node.x) + ", "
-                         + ::to_string(node.y) + ")";
-              case NodeType::Port:
-              case NodeType::Register:
-                  return node.name + " (" + ::to_string(node.x) + ", "
-                         + ::to_string(node.y) + ")";
-              default:
-                  return "Node";
-          }
+            std::ostringstream os;
+            os << node;
+            return os.str();
         });
 }
 
@@ -43,7 +36,8 @@ void init_router_class(py::class_<T> &class_) {
         .def("add_edge", &T::add_edge)
         .def("add_placement", &T::add_placement)
         .def("overflow", &T::overflow)
-        .def("route", &T::route);
+        .def("route", &T::route)
+        .def("realize", &T::realize);
 }
 
 void init_graph(py::module &m) {

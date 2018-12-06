@@ -53,6 +53,11 @@ public:
     virtual uint32_t get_presence_cost(const std::shared_ptr<Node> &,
                                        uint32_t) = 0;
 
+    virtual std::string to_string() const;
+    friend std::ostream& operator<<(std::ostream &s, const Node &node) {
+        return s << node.to_string();
+    }
+
 protected:
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y);
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
@@ -149,6 +154,7 @@ public:
     uint32_t get_history_cost(const std::shared_ptr<Node> &node) override;
     uint32_t
     get_presence_cost(const std::shared_ptr<Node> & node, uint32_t io) override;
+
 };
 
 // operators

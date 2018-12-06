@@ -10,6 +10,8 @@ using std::map;
 using std::pair;
 using std::string;
 using std::vector;
+using std::cout;
+using std::endl;
 
 int main(int, char **) {
     // just some example on how to use it
@@ -92,6 +94,18 @@ int main(int, char **) {
 
     // route!
     r.route();
+
+    auto result = r.realize();
+    for (auto const &iter: result) {
+        cout << "Net: " << iter.first << endl;
+        for (auto const &seg : iter.second) {
+            for (auto const &node : seg) {
+                cout << *node << " -> ";
+            }
+            cout << endl;
+        }
+        cout << endl;
+    }
 
     return 0;
 }

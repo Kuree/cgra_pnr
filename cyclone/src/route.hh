@@ -11,7 +11,7 @@
 class Router {
 public:
     Router() = default;
-    Router(const RoutingGraph &g) : graph_(std::move(g)) { }
+    explicit Router(const RoutingGraph &g) : graph_(std::move(g)) { }
 
     // add_net has to be used after constructing all the routing graph
     // otherwise it will throw errors
@@ -28,6 +28,9 @@ public:
     // assign nets
     void assign_nets();
     void clear_connections() { graph_.clear_connections(); }
+    std::map<std::string, std::vector<std::vector<std::shared_ptr<Node>>>>
+    realize();
+
 
 protected:
     RoutingGraph graph_;
