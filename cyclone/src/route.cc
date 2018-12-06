@@ -281,11 +281,15 @@ bool Router::overflow() {
 void Router::assign_nets() {
     // using the current nets to assign routes
     for (Net &net : netlist_) {
-        for (uint32_t i = 0; i < net.size() - 1; i++) {
-            auto &node1 = net[i].node;
-            auto &node2 = net[i + 1].node;
-            node1->assign_connection(node2, OUT);
-            node2->assign_connection(node1, IN);
+        auto segments = current_routes[net.id];
+        for (const auto &seg_it : segments) {
+            const auto &segment = seg_it.second;
+            for (uint32_t i = 0; i < segment.size() - 1; i++) {
+                auto &node1 = segment[i];
+                auto &node2 = segment[i + 1];
+                node1->assign_connection(node2, OUT);
+                node2->assign_connection(node1, IN);
+            }
         }
     }
 }
