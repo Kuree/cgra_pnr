@@ -139,6 +139,9 @@ public:
         static_assert("use add_edge with side instead");
     }
 
+    void add_side_info(const std::shared_ptr<Node> &node, uint32_t side)
+    { edge_to_side_.insert({node, side}); }
+
     // the actual one
     void add_edge(const std::shared_ptr<Node> &node, uint32_t side);
     void assign_connection(const std::shared_ptr<Node> & node,
@@ -183,6 +186,7 @@ public:
                  const SwitchBoxNode &sb);
     // manually add tiles
     void add_tile(const Tile &tile) { grid_.insert({{tile.x, tile.y}, tile}); }
+    void remove_tile(const std::pair<uint32_t, uint32_t> &t) { grid_.erase(t); }
 
     // used to construct the routing graph.
     // called after tiles have been constructed.
@@ -191,6 +195,9 @@ public:
     // side is relative to node1 if it is a switch box
     // otherwise it's relative to node2
     void add_edge(const Node &node1, const Node &node2, uint32_t side);
+
+    // TODO
+    // add remove edge functions
 
     std::shared_ptr<SwitchBoxNode> get_sb(const uint32_t &x, const uint32_t &y,
                                           const uint32_t &track);

@@ -11,6 +11,7 @@
 class Router {
 public:
     Router() = default;
+    Router(const RoutingGraph &g) : graph_(std::move(g)) { }
 
     // add_net has to be used after constructing all the routing graph
     // otherwise it will throw errors
@@ -22,6 +23,7 @@ public:
     { graph_.add_edge(node1, node2); }
     bool overflow();
 
+    // routing related function
     virtual void route() { };
     // assign nets
     void assign_nets();

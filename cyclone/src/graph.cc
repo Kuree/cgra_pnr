@@ -1,6 +1,7 @@
 #include "graph.hh"
 #include <cassert>
 #include <sstream>
+#include <string>
 
 using std::make_pair;
 using std::make_shared;
@@ -129,7 +130,7 @@ SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node) : Node(node) {
 
 void SwitchBoxNode::add_edge(const std::shared_ptr<Node> &node,
                              uint32_t side) {
-    add_edge(node);
+    Node::add_edge(node);
     // add to side index table
     edge_to_side_.insert({node, side});
 }
@@ -202,6 +203,8 @@ RoutingGraph::RoutingGraph(uint32_t width, uint32_t height,
             for (uint32_t i = 0; i < num_tracks; i++) {
                 auto const & sb_instance = ::make_shared<SwitchBoxNode>(sb);
                 sb_instance->track = i;
+                sb_instance->x = x;
+                sb_instance->y = y;
                 grid_[{x, y}].sbs[i] = sb_instance;
             }
         }
@@ -243,7 +246,8 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
         sb1->add_edge(n2, side);
     } else {
         auto sb2 = std::reinterpret_pointer_cast<SwitchBoxNode>(n2);
-        sb2->add_edge(n1, side);
+        sb2->add_side_info(n1, side);
+        n1->add_edge(sb2);
     }
 }
 

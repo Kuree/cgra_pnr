@@ -176,3 +176,6 @@ GlobalRouter::create_cost_function(const ::map<::pair<::shared_ptr<Node>,
         return an * dn + (1 - an) * (dn + hn) * pn;
     };
 }
+
+GlobalRouter::GlobalRouter(uint32_t num_iteration, const RoutingGraph &g) :
+    Router(g), num_iteration_(num_iteration) {}

@@ -46,7 +46,6 @@ void init_router_class(py::class_<T> &class_) {
         .def("route", &T::route);
 }
 
-
 void init_graph(py::module &m) {
     py::enum_<NodeType>(m, "NodeType")
         .value("SwitchBox", NodeType::SwitchBox)
@@ -68,7 +67,8 @@ void init_graph(py::module &m) {
     init_node_class<SwitchBoxNode>(sb_node);
     sb_node
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
-        .def("clear", &SwitchBoxNode::clear);
+        .def("clear", &SwitchBoxNode::clear)
+        .def("add_side_info", &SwitchBoxNode::add_side_info);
 
     py::class_<Tile>(m, "Tile")
         .def(py::init<uint32_t, uint32_t, uint32_t>())
@@ -82,6 +82,7 @@ void init_graph(py::module &m) {
         .def(py::init<>())
         .def(py::init<uint32_t, uint32_t, uint32_t, const SwitchBoxNode &>())
         .def("add_tile", &RoutingGraph::add_tile)
+        .def("remove_tile", &RoutingGraph::remove_tile)
         .def("add_edge",
              py::overload_cast<const Node &,
                                const Node &>(&RoutingGraph::add_edge))
@@ -99,7 +100,8 @@ void init_router(py::module &m) {
     init_router_class<Router>(router);
 
     py::class_<GlobalRouter> gr(m, "GlobalRouter");
-    gr.def(py::init<uint32_t>());
+    gr.def(py::init<uint32_t>())
+      .def(py::init<uint32_t, RoutingGraph>());
     init_router_class<GlobalRouter>(gr);
 }
 
