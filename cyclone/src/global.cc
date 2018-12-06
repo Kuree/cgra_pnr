@@ -38,13 +38,14 @@ void GlobalRouter::route() {
         fail_count_ = 0;
         // update the slack ratio table
         compute_slack_ratio(slack_ratio, it);
-        // clear the routing resources, i.e. rip up all the nets
-        clear_connections();
 
         for (auto &net : netlist_) {
             route_net(net, it, slack_ratio);
         }
 
+
+        // clear the routing resources, i.e. rip up all the nets
+        clear_connections();
         // assign to the routing resource
         assign_nets();
 
