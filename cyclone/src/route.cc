@@ -192,7 +192,7 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         routed_path.emplace_back(head);
         if (trace.find(head) == trace.end())
             throw ::runtime_error("unexpected error in tracing back route");
-        head = trace[head];
+        head = trace.at(head);
     }
     routed_path.emplace_back(head);
 

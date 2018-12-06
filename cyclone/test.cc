@@ -49,6 +49,27 @@ int main(int, char **) {
             g.add_edge(sb, in_port, 2);
         }
     }
+
+    // wire these switch boxes together
+    for (uint32_t chan = 0; chan < NUM_TRACK; chan++) {
+        auto sb0 = g[{0, 0}].sbs[chan];
+        auto sb1 = g[{0, 1}].sbs[chan];
+        auto sb2 = g[{1, 0}].sbs[chan];
+        auto sb3 = g[{1, 1}].sbs[chan];
+
+        g.add_edge(*sb0, *sb1, 0);
+        g.add_edge(*sb1, *sb0, 2);
+
+        g.add_edge(*sb0, *sb2, 1);
+        g.add_edge(*sb2, *sb0, 3);
+
+        g.add_edge(*sb3, *sb1, 3);
+        g.add_edge(*sb1, *sb3, 1);
+
+        g.add_edge(*sb3, *sb2, 2);
+        g.add_edge(*sb2, *sb3, 0);
+    }
+
     // 2. create a global router and do the configuration in order
     GlobalRouter r(20, g);
     // add placement

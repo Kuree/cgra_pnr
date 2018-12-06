@@ -212,6 +212,12 @@ public:
     begin() { return grid_.begin(); }
     std::map<std::pair<uint32_t, uint32_t>, Tile>::iterator
     end() { return grid_.end(); }
+    // and direct assess
+    Tile &operator[](const std::pair<uint32_t, uint32_t> &tile)
+    { return grid_.at(tile); };
+    std::map<std::pair<uint32_t, uint32_t>, Tile>::iterator
+    find(const std::pair<uint32_t, uint32_t> &tile)
+    { return grid_.find(tile); }
 
 private:
     // grid is for fast locating the nodes. no longer used for routing

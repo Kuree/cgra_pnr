@@ -244,6 +244,12 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
     if (node1.type == NodeType::SwitchBox) {
         auto sb1 = std::reinterpret_pointer_cast<SwitchBoxNode>(n1);
         sb1->add_edge(n2, side);
+        if (node2.type == NodeType::SwitchBox) {
+            auto sb2 = std::reinterpret_pointer_cast<SwitchBoxNode>(n2);
+            // slip the side
+            uint32_t new_side = (side + 2) % 4;
+            sb2->add_side_info(n1, new_side);
+        }
     } else {
         auto sb2 = std::reinterpret_pointer_cast<SwitchBoxNode>(n2);
         sb2->add_side_info(n1, side);

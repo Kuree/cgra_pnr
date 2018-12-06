@@ -13,18 +13,16 @@ public:
 protected:
     virtual void
     route_net(Net &net, uint32_t it,
-              const std::function<uint32_t(const std::shared_ptr<Node> &,
-                                           const std::shared_ptr<Node> &)>
-                                           &cost_f);
+              const std::map<std::pair<std::shared_ptr<Node>,
+                                       std::shared_ptr<Node>>,
+                             double> &slack_ratio);
 
     virtual void compute_slack_ratio(std::map<std::pair<std::shared_ptr<Node>,
             std::shared_ptr<Node>>,
             double> &ratio, uint32_t current_iter);
     virtual std::function<uint32_t(const std::shared_ptr<Node> &,
                                    const std::shared_ptr<Node> &)>
-    create_cost_function(const std::map<std::pair<std::shared_ptr<Node>,
-                                            std::shared_ptr<Node>>,
-                                        double> &slack_ratio);
+    create_cost_function(uint32_t slack);
 
 private:
     uint32_t num_iteration_ = 40;

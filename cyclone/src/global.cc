@@ -33,7 +33,6 @@ void GlobalRouter::route() {
     reorder_reg_nets();
 
     ::map<::pair<::shared_ptr<Node>, ::shared_ptr<Node>>, double> slack_ratio;
-    auto cost_f = create_cost_function(slack_ratio);
 
     for (uint32_t it = 0; it < num_iteration_; it++) {
         fail_count_ = 0;
@@ -43,7 +42,7 @@ void GlobalRouter::route() {
         clear_connections();
 
         for (auto &net : netlist_) {
-            route_net(net, it, cost_f);
+            route_net(net, it, slack_ratio);
         }
 
         // assign to the routing resource
@@ -114,14 +113,17 @@ void GlobalRouter::compute_slack_ratio(::map<::pair<::shared_ptr<Node>,
 
 void
 GlobalRouter::route_net(Net &net, uint32_t it,
-                        const ::function<uint32_t(const ::shared_ptr<Node> &,
-                                                  const ::shared_ptr<Node> &)>
-                                                   &cost_f) {
+                       const ::map<::pair<::shared_ptr<Node>,
+                                          ::shared_ptr<Node>>,
+                                   double> &slack_ratio) {
     const auto &src = net[0].node;
     if (src == nullptr)
         throw ::runtime_error("unable to find src when route net");
     for (uint32_t i = 1; i < net.size(); i++) {
         auto const &sink_node = net[i];
+        auto slack = static_cast<uint32_t>(slack_ratio.at({src,
+                                                           sink_node.node}));
+        auto cost_f = create_cost_function(slack);
         // find the routes
         if (sink_node.name[0] == 'r') {
             ::pair<uint32_t, uint32_t> end = {sink_node.x, sink_node.y};
@@ -162,9 +164,7 @@ GlobalRouter::route_net(Net &net, uint32_t it,
 }
 
 ::function<uint32_t(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
-GlobalRouter::create_cost_function(const ::map<::pair<::shared_ptr<Node>,
-                                                      ::shared_ptr<Node>>,
-                                               double> &slack_ratio) {
+GlobalRouter::create_cost_function(uint32_t slack) {
     return [&](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> uint32_t {
         // based of the PathFinder paper
@@ -172,7 +172,7 @@ GlobalRouter::create_cost_function(const ::map<::pair<::shared_ptr<Node>,
         pn += node2->get_presence_cost(node1, IN);
         auto dn = node1->get_edge_cost(node2);
         auto hn = node1->get_history_cost(node2);
-        auto an = static_cast<uint32_t>(slack_ratio.at({node1, node2}));
+        auto an = slack;
         return an * dn + (1 - an) * (dn + hn) * pn;
     };
 }
