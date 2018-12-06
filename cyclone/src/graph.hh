@@ -39,9 +39,10 @@ public:
     uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
 
     // helper function to allow iteration
-    std::set<std::shared_ptr<Node>>::iterator begin()
+    std::set<std::shared_ptr<Node>>::iterator begin() const
     { return neighbors_.begin(); }
-    std::set<std::shared_ptr<Node>>::iterator end() { return neighbors_.end(); }
+    std::set<std::shared_ptr<Node>>::iterator end() const
+    { return neighbors_.end(); }
     std::set<std::shared_ptr<Node>>::iterator
     find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
 

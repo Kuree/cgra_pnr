@@ -22,11 +22,15 @@ void init_node_class(py::class_<T> &class_) {
         .def("add_edge",
            py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
         .def("get_edge_cost", &T::get_edge_cost)
+        .def("get_history_cost", &T::get_history_cost)
+        .def("assign_connection", &T::assign_connection)
+        .def("get_presence_cost", &T::get_presence_cost)
         .def("__repr__", [](const T &node) -> std::string {
-            std::ostringstream os;
-            os << node;
-            return os.str();
-        });
+            std::ostringstream os; os << node; return os.str();
+        })
+        .def("__iter__", [](const T &node) {
+            return py::make_iterator(node.begin(), node.end());
+        }, py::keep_alive<0, 1>());
 }
 
 template<class T>
@@ -62,15 +66,21 @@ void init_graph(py::module &m) {
     sb_node
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
         .def("clear", &SwitchBoxNode::clear)
-        .def("add_side_info", &SwitchBoxNode::add_side_info);
+        .def("add_side_info", &SwitchBoxNode::add_side_info)
+        .def("add_edge", py::overload_cast<const std::shared_ptr<Node> &,
+                                           uint32_t>(&SwitchBoxNode::add_edge));
 
     py::class_<Tile>(m, "Tile")
+        .def(py::init<>())
         .def(py::init<uint32_t, uint32_t, uint32_t>())
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
         .def_readwrite("x", &Tile::x)
         .def_readwrite("y", &Tile::y)
         .def_readwrite("height", &Tile::height)
-        .def("num_tracks", &Tile::num_tracks);
+        .def("num_tracks", &Tile::num_tracks)
+        .def_readwrite("sbs", &Tile::sbs)
+        .def_readwrite("registers", &Tile::registers)
+        .def_readwrite("ports", &Tile::ports);
 
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())
@@ -85,7 +95,11 @@ void init_graph(py::module &m) {
                                const Node &, uint32_t>(&RoutingGraph::add_edge))
         .def("get_sb", &RoutingGraph::get_sb)
         .def("get_port", &RoutingGraph::get_port)
-        .def("clear_connections", &RoutingGraph::clear_connections);
+        .def("clear_connections", &RoutingGraph::clear_connections)
+        .def("__getitem__", &RoutingGraph::operator[])
+        .def("__iter__", [](RoutingGraph &r) {
+            return py::make_iterator(r.begin(), r.end());
+        });
 }
 
 void init_router(py::module &m) {
