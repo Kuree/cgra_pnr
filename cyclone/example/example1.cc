@@ -1,6 +1,6 @@
 #include <iostream>
-#include "src/global.hh"
-#include "src/util.hh"
+#include "../src/global.hh"
+#include "../src/util.hh"
 
 #define WIDTH 1
 #define NUM_TRACK 2

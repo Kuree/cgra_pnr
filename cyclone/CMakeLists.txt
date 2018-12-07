@@ -12,6 +12,6 @@ add_library(cyclone src/graph.hh src/graph.cc src/route.hh
 add_subdirectory(python/pybind11)
 add_subdirectory(python)
 
-add_executable(demo_test example.cc)
+add_executable(demo_test example/example1.cc)
 target_link_libraries(demo_test cyclone)
 

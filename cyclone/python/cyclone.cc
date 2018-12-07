@@ -10,8 +10,8 @@ namespace py = pybind11;
 using std::to_string;
 
 // just to be lazy with meta programming
-template<class T>
-void init_node_class(py::class_<T> &class_) {
+template<class T, class D>
+void init_node_class(py::class_<T, D> &class_) {
     class_
         .def_readwrite("type", &T::type)
         .def_readwrite("name", &T::name)
@@ -26,6 +26,7 @@ void init_node_class(py::class_<T> &class_) {
         .def("__repr__", [](const T &node) -> std::string {
             std::ostringstream os; os << node; return os.str();
         })
+        .def("to_string", &T::to_string)
         .def("__iter__", [](const T &node) {
             return py::make_iterator(node.begin(), node.end());
         }, py::keep_alive<0, 1>());
@@ -53,20 +54,27 @@ void init_graph(py::module &m) {
         .value("Right", SwitchBoxSide::Right)
         .value("Top", SwitchBoxSide::Top);
 
-    py::class_<PortNode> p_node(m, "PortNode");
-    init_node_class<PortNode>(p_node);
+    // the generic node type
+    py::class_<Node, std::shared_ptr<Node>> node(m, "Node");
+    // init_node_class<Node>(node);
+    node.def(py::init<>());
+
+    py::class_<PortNode, std::shared_ptr<PortNode>> p_node(m, "PortNode", node);
+    init_node_class<PortNode, std::shared_ptr<PortNode>>(p_node);
     p_node
         .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t>())
         .def(py::init<const std::string &, uint32_t, uint32_t>());
 
-    py::class_<RegisterNode> r_node(m, "RegisterNode");
-    init_node_class<RegisterNode>(r_node);
+    py::class_<RegisterNode, std::shared_ptr<RegisterNode>>
+    r_node(m, "RegisterNode", node);
+    init_node_class<RegisterNode, std::shared_ptr<RegisterNode>>(r_node);
     r_node
         .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t,
                       uint32_t>());
 
-    py::class_<SwitchBoxNode> sb_node(m, "SwitchBoxNode");
-    init_node_class<SwitchBoxNode>(sb_node);
+    py::class_<SwitchBoxNode, std::shared_ptr<SwitchBoxNode>>
+    sb_node(m, "SwitchBoxNode", node);
+    init_node_class<SwitchBoxNode, std::shared_ptr<SwitchBoxNode>>(sb_node);
     sb_node
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
         .def("add_side_info", &SwitchBoxNode::add_side_info)
@@ -122,8 +130,8 @@ void init_graph(py::module &m) {
         .def("get_port", &RoutingGraph::get_port)
         .def("__getitem__", &RoutingGraph::operator[])
         .def("__iter__", [](RoutingGraph &r) {
-            return py::make_iterator(r.begin(), r.end());
-        });
+            return py::make_key_iterator(r.begin(), r.end());
+        }, py::keep_alive<0, 1>());
 }
 
 void init_router(py::module &m) {
@@ -131,7 +139,7 @@ void init_router(py::module &m) {
     router.def(py::init<RoutingGraph>());
     init_router_class<Router>(router);
 
-    py::class_<GlobalRouter> gr(m, "GlobalRouter");
+    py::class_<GlobalRouter> gr(m, "GlobalRouter", router);
     gr.def(py::init<uint32_t, RoutingGraph>())
       .def_readwrite("route_strategy_ratio",
                      &GlobalRouter::route_strategy_ratio);
