@@ -29,15 +29,13 @@ void GlobalRouter::route() {
     group_reg_nets();
     reorder_reg_nets();
 
-    ::map<::pair<::shared_ptr<Node>, ::shared_ptr<Node>>, double> slack_ratio;
-
     for (uint32_t it = 0; it < num_iteration_; it++) {
         fail_count_ = 0;
         // update the slack ratio table
-        compute_slack_ratio(slack_ratio, it);
+        compute_slack_ratio(it);
 
         for (auto &net : netlist_) {
-            route_net(net, it, slack_ratio);
+            route_net(net, it);
         }
 
 
@@ -55,10 +53,7 @@ void GlobalRouter::route() {
         throw ::runtime_error("unable to route. sorry!");
 }
 
-void GlobalRouter::compute_slack_ratio(::map<::pair<::shared_ptr<Node>,
-                                                    ::shared_ptr<Node>>,
-                                             double> &ratio,
-                                       uint32_t current_iter) {
+void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
     // Note
     // this is slightly different from the PathFinder
     // here we compute slack ratio for each pin pair, rather than for every
@@ -75,7 +70,7 @@ void GlobalRouter::compute_slack_ratio(::map<::pair<::shared_ptr<Node>,
             const auto &src = net[0].node;
             for (uint32_t i = 1; i < net.size(); i++) {
                 auto const &sink = net[i].node;
-                ratio[{src, sink}] = 1;
+                slack_ratio_[{src, sink}] = 1;
             }
         }
     } else {
@@ -98,30 +93,26 @@ void GlobalRouter::compute_slack_ratio(::map<::pair<::shared_ptr<Node>,
                 for (const auto &node : route) {
                     delay += node->delay;
                 }
-                ratio[{src, sink}] = delay;
+                slack_ratio_[{src, sink}] = delay;
                 if (delay > max_delay)
                     max_delay = delay;
             }
         }
         // normalize
-        for (auto &iter : ratio)
-            iter.second = iter.second / max_delay;
+        for (auto &iter : slack_ratio_)
+            slack_ratio_[iter.first] = iter.second / max_delay;
     }
 }
 
 void
-GlobalRouter::route_net(Net &net, uint32_t it,
-                       const ::map<::pair<::shared_ptr<Node>,
-                                          ::shared_ptr<Node>>,
-                                   double> &slack_ratio) {
+GlobalRouter::route_net(Net &net, uint32_t it) {
     const auto &src = net[0].node;
     if (src == nullptr)
         throw ::runtime_error("unable to find src when route net");
     for (uint32_t i = 1; i < net.size(); i++) {
         auto const &sink_node = net[i];
-        auto slack = static_cast<uint32_t>(slack_ratio.at({src,
-                                                           sink_node.node}));
-        auto cost_f = create_cost_function(slack);
+
+        auto cost_f = create_cost_function(src, sink_node.node);
         // find the routes
         if (sink_node.name[0] == 'r') {
             ::pair<uint32_t, uint32_t> end = {sink_node.x, sink_node.y};
@@ -162,7 +153,8 @@ GlobalRouter::route_net(Net &net, uint32_t it,
 }
 
 ::function<uint32_t(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
-GlobalRouter::create_cost_function(uint32_t slack) {
+GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
+                                   const ::shared_ptr<Node> &n2) {
     return [&](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> uint32_t {
         // based of the PathFinder paper
@@ -170,8 +162,8 @@ GlobalRouter::create_cost_function(uint32_t slack) {
         pn += get_presence_cost(node2, node1, IN);
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node1, node2);
-        auto an = slack;
-        return an * dn + (1 - an) * (dn + hn) * pn;
+        auto an = slack_ratio_.at({n1, n2});
+        return static_cast<uint32_t>(an * dn + (1 - an) * (dn + hn) * pn);
     };
 }
 

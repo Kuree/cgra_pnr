@@ -85,7 +85,9 @@ int main(int, char **) {
     map<string, vector<pair<string, string>>> netlist =
             {
             {"n1", {{"p0", "out"}, {"p3", "in"}}},
-            {"n2", {{"p1", "out"}, {"p2", "in"}}}
+            {"n2", {{"p1", "out"}, {"p0", "in"}}},
+            {"n3", {{"p3", "out"}, {"p2", "in"}}},
+            {"n4", {{"p2", "out"}, {"p1", "in"}}}
             };
 
     for (const auto &iter: netlist) {
@@ -99,8 +101,8 @@ int main(int, char **) {
     for (auto const &iter: result) {
         cout << "Net: " << iter.first << endl;
         for (auto const &seg : iter.second) {
-            for (auto const &node : seg) {
-                cout << *node << " -> ";
+            for (uint32_t i = 0; i < seg.size(); i++) {
+                cout << *seg[i] << (i == seg.size() - 1 ? "" : " -> ");
             }
             cout << endl;
         }
