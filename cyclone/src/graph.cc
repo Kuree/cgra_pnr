@@ -70,80 +70,12 @@ bool operator==(const std::shared_ptr<Node> &ptr, const Node &node) {
     return (*ptr) == node;
 }
 
-
-void PortNode::clear() {
-    for (auto &connection : connections) {
-        connection.clear();
-    }
-}
-
-void PortNode::assign_connection(const ::shared_ptr<Node> &node, uint32_t io) {
-    connections[io].insert(node);
-    // add to history count
-    history_count_++;
-}
-
-uint32_t PortNode::get_history_cost(const std::shared_ptr<Node> &) {
-    // really don't care about who's connected to since it doesn't have
-    // side capacity
-    return history_count_;
-}
-
-uint32_t PortNode::get_presence_cost(const ::shared_ptr<Node> &node,
-                                     uint32_t io) {
-    if (connections[io].find(node) == connections[io].end())
-        return static_cast<uint32_t>(connections[io].size());
-    else
-        return static_cast<uint32_t>(connections[io].size() - 1);
-}
-
-void RegisterNode::clear() {
-    for (auto &connection : connections) {
-        connection.clear();
-    }
-}
-
-void RegisterNode::assign_connection(const ::shared_ptr<Node> &node,
-                                     uint32_t io) {
-    connections[io].insert(node);
-    // add to history count
-    history_count_++;
-}
-
-uint32_t RegisterNode::get_history_cost(const std::shared_ptr<Node> &) {
-    // really don't care about who's connected to since it doesn't have
-    // side capacity
-    return history_count_;
-}
-
-uint32_t RegisterNode::get_presence_cost(const std::shared_ptr<Node> &node,
-                                         uint32_t io) {
-    if (connections[io].find(node) == connections[io].end())
-        return static_cast<uint32_t>(connections[io].size());
-    else
-        return static_cast<uint32_t>(connections[io].size() - 1);
-}
-
 SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
                              uint32_t track)
                              : Node(NodeType::SwitchBox, "", x, y,
-                                    width, track) {
-    // initialize the routing channels
-    for (auto &channel : channels) {
-        for (auto &route : channel) {
-            route = ::set<shared_ptr<Node>>();
-        }
-    }
-}
+                                    width, track) { }
 
-SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node) : Node(node) {
-    // copy the channels over
-    for (uint32_t i = 0; i < SIDES; i++) {
-        for (uint32_t j = 0; j < IO; j++) {
-            channels[i][j] = node.channels[i][j];
-        }
-    }
-}
+SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node) : Node(node) {}
 
 void SwitchBoxNode::add_edge(const std::shared_ptr<Node> &node,
                              uint32_t side) {
@@ -152,53 +84,11 @@ void SwitchBoxNode::add_edge(const std::shared_ptr<Node> &node,
     edge_to_side_.insert({node, side});
 }
 
-uint32_t SwitchBoxNode::get_side(const ::shared_ptr<Node> &node) {
+uint32_t SwitchBoxNode::get_side(const ::shared_ptr<Node> &node) const {
     if (edge_to_side_.find(node) == edge_to_side_.end())
         throw ::runtime_error("unable to find node when assigning"
                               "connections");
     return edge_to_side_.at(node);
-}
-
-bool SwitchBoxNode::overflow() const {
-    for (const auto &side : channels) {
-        for (const auto &io : side) {
-            if (io.size() > 1)
-                return true;
-        }
-    }
-    return false;
-}
-
-void SwitchBoxNode::clear() {
-    for (auto &side : channels) {
-        for (auto &io : side) {
-            io.clear();
-        }
-    }
-}
-
-void SwitchBoxNode::assign_connection(const std::shared_ptr<Node> &node,
-                                      uint32_t io) {
-    auto side = get_side(node);
-    channels[side][io].insert(node);
-    side_history_count_[side][io]++;
-}
-
-uint32_t SwitchBoxNode::get_history_cost(const std::shared_ptr<Node> & node) {
-    auto side = get_side(node);
-    uint32_t result = 0;
-    for (uint32_t i = 0; i < IO; i++)
-        result += side_history_count_[side][i];
-    return result;
-}
-
-uint32_t SwitchBoxNode::get_presence_cost(const std::shared_ptr<Node> &node,
-                                          uint32_t io) {
-    auto side = get_side(node);
-    if (channels[side][io].find(node) == channels[side][io].end())
-        return static_cast<uint32_t>(channels[side][io].size());
-    else
-        return static_cast<uint32_t>(channels[side][io].size() - 1);
 }
 
 Tile::Tile(uint32_t x, uint32_t y, uint32_t height, uint32_t num_tracks)
@@ -342,17 +232,5 @@ std::shared_ptr<SwitchBoxNode> RoutingGraph::get_sb(const uint32_t &x,
             throw ::runtime_error("tile ");
         }
         return tile.sbs[track];
-    }
-}
-
-void RoutingGraph::clear_connections() {
-    for (auto &it : grid_) {
-        auto &tile = it.second;
-        for (auto &sb : tile.sbs)
-            sb->clear();
-        for (auto &port_it : tile.ports)
-            port_it.second->clear();
-        for (auto &reg_it : tile.registers)
-            reg_it.second->clear();
     }
 }

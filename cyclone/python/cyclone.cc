@@ -22,9 +22,6 @@ void init_node_class(py::class_<T> &class_) {
         .def("add_edge",
            py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
         .def("get_edge_cost", &T::get_edge_cost)
-        .def("get_history_cost", &T::get_history_cost)
-        .def("assign_connection", &T::assign_connection)
-        .def("get_presence_cost", &T::get_presence_cost)
         .def("__repr__", [](const T &node) -> std::string {
             std::ostringstream os; os << node; return os.str();
         })
@@ -65,7 +62,6 @@ void init_graph(py::module &m) {
     init_node_class<SwitchBoxNode>(sb_node);
     sb_node
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
-        .def("clear", &SwitchBoxNode::clear)
         .def("add_side_info", &SwitchBoxNode::add_side_info)
         .def("add_edge", py::overload_cast<const std::shared_ptr<Node> &,
                                            uint32_t>(&SwitchBoxNode::add_edge));
@@ -95,7 +91,6 @@ void init_graph(py::module &m) {
                                const Node &, uint32_t>(&RoutingGraph::add_edge))
         .def("get_sb", &RoutingGraph::get_sb)
         .def("get_port", &RoutingGraph::get_port)
-        .def("clear_connections", &RoutingGraph::clear_connections)
         .def("__getitem__", &RoutingGraph::operator[])
         .def("__iter__", [](RoutingGraph &r) {
             return py::make_iterator(r.begin(), r.end());

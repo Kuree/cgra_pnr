@@ -46,18 +46,12 @@ public:
     std::set<std::shared_ptr<Node>>::iterator
     find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
 
-    /* ---- functions related to routing algorithm ---- */
-    virtual void assign_connection(const std::shared_ptr<Node> &, uint32_t) = 0;
-    // how many times it's been used that way
-    virtual uint32_t get_history_cost(const std::shared_ptr<Node> &) = 0;
-    virtual void clear() = 0;
-    virtual uint32_t get_presence_cost(const std::shared_ptr<Node> &,
-                                       uint32_t) = 0;
-
     virtual std::string to_string() const;
     friend std::ostream& operator<<(std::ostream &s, const Node &node) {
         return s << node.to_string();
     }
+
+    const static int IO = 2;
 
 protected:
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y);
@@ -68,7 +62,6 @@ protected:
     std::set<std::shared_ptr<Node>> neighbors_;
     std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
 
-    const static int IO = 2;
 };
 
 class PortNode : public Node {
@@ -77,19 +70,6 @@ public:
              uint32_t width) : Node(NodeType::Port, name, x, y, width) {}
     PortNode(const std::string &name, uint32_t x, uint32_t y)
         : Node(NodeType::Port, name, x, y) {}
-
-    /* ---- functions related to routing algorithm ---- */
-    std::set<std::shared_ptr<Node>> connections[IO];
-
-    void clear() override;
-    void assign_connection(const std::shared_ptr<Node> & node,
-                           uint32_t io) override;
-    uint32_t get_history_cost(const std::shared_ptr<Node> & node) override;
-    uint32_t
-    get_presence_cost(const std::shared_ptr<Node> &node, uint32_t io) override;
-
-private:
-    uint32_t history_count_ = 0;
 };
 
 class RegisterNode : public Node {
@@ -97,19 +77,6 @@ public:
     RegisterNode(const std::string &name, uint32_t x, uint32_t y,
                  uint32_t width, uint32_t track)
         : Node(NodeType::Register, name, x, y, width, track) { }
-
-    /* ---- functions related to routing algorithm ---- */
-    std::set<std::shared_ptr<Node>> connections[IO];
-
-    void clear() override;
-    void assign_connection(const std::shared_ptr<Node> & node,
-                           uint32_t io) override;
-    uint32_t get_history_cost(const std::shared_ptr<Node> &node) override;
-    uint32_t
-    get_presence_cost(const std::shared_ptr<Node> & node, uint32_t io) override;
-
-private:
-    uint32_t history_count_ = 0;
 };
 
 // side illustration
@@ -120,22 +87,12 @@ private:
 //    -----
 //      1
 class SwitchBoxNode : public Node {
-private:
-    const static int SIDES = 4;
-    std::map<std::shared_ptr<Node>, uint32_t> edge_to_side_;
-    uint32_t side_history_count_[SIDES][IO] = {};
-
-    uint32_t get_side(const std::shared_ptr<Node> &node);
-
 public:
     SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width, uint32_t track);
 
     SwitchBoxNode(const SwitchBoxNode &node);
 
-    std::set<std::shared_ptr<Node>> channels[SIDES][IO];
-
-    bool overflow() const;
-    void clear() override;
+    const static int SIDES = 4;
 
     // Note:
     // because we need to indicate the side of switchbox,
@@ -150,11 +107,11 @@ public:
 
     // the actual one
     void add_edge(const std::shared_ptr<Node> &node, uint32_t side);
-    void assign_connection(const std::shared_ptr<Node> & node,
-                           uint32_t io) override;
-    uint32_t get_history_cost(const std::shared_ptr<Node> &node) override;
-    uint32_t
-    get_presence_cost(const std::shared_ptr<Node> & node, uint32_t io) override;
+
+    uint32_t get_side(const std::shared_ptr<Node> &node) const;
+
+private:
+    std::map<std::shared_ptr<Node>, uint32_t> edge_to_side_;
 
 };
 
@@ -211,8 +168,6 @@ public:
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);
-
-    void clear_connections();
 
     // helper functions to iterate through the entire graph
     std::map<std::pair<uint32_t, uint32_t>, Tile>::iterator

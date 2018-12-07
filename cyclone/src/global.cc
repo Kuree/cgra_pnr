@@ -169,10 +169,10 @@ GlobalRouter::create_cost_function(uint32_t slack) {
     return [&](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> uint32_t {
         // based of the PathFinder paper
-        auto pn = node1->get_presence_cost(node2, OUT);
-        pn += node2->get_presence_cost(node1, IN);
+        auto pn = get_presence_cost(node1, node2, OUT);
+        pn += get_presence_cost(node2, node1, IN);
         auto dn = node1->get_edge_cost(node2);
-        auto hn = node1->get_history_cost(node2);
+        auto hn = get_history_cost(node1, node2);
         auto an = slack;
         return an * dn + (1 - an) * (dn + hn) * pn;
     };

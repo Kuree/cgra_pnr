@@ -27,10 +27,9 @@ public:
     virtual void route() { };
     // assign nets
     void assign_nets();
-    void clear_connections() { graph_.clear_connections(); }
+    void clear_connections();
     std::map<std::string, std::vector<std::vector<std::shared_ptr<Node>>>>
     realize();
-
 
 protected:
     RoutingGraph graph_;
@@ -41,6 +40,17 @@ protected:
     std::map<int,
             std::map<std::shared_ptr<Node>,
                     std::vector<std::shared_ptr<Node>>>> current_routes;
+
+    // graph independent look tables for computing routing cost
+    std::map<std::shared_ptr<Node>,
+            std::set<std::shared_ptr<Node>>
+            [SwitchBoxNode::SIDES][Node::IO]> sb_connections_;
+    std::map<std::shared_ptr<Node>,
+            std::set<std::shared_ptr<Node>>[Node::IO]> node_connections_;
+
+    std::map<std::shared_ptr<Node>,
+             uint32_t[SwitchBoxNode::SIDES][Node::IO]> sb_history_;
+    std::map<std::shared_ptr<Node>, uint32_t[Node::IO]> node_history_;
 
     const static uint32_t IN = 0;
     const static uint32_t OUT = 1;
@@ -122,9 +132,22 @@ protected:
     void group_reg_nets();
     void reorder_reg_nets();
 
+
+    void assign_connection(std::shared_ptr<Node> &start,
+                           std::shared_ptr<Node> &end,
+                           uint32_t io);
+
+    uint32_t get_history_cost(const std::shared_ptr<Node> &start,
+                              const std::shared_ptr<Node> &end);
+
+    uint32_t get_presence_cost(const std::shared_ptr<Node> &start,
+                               const std::shared_ptr<Node> &end,
+                               uint32_t io);
+
 private:
     static constexpr char REG_IN[] = "in";
     static constexpr char REG_OUT[] = "out";
+
 };
 
 #endif //CYCLONE_ROUTE_HH
