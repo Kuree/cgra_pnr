@@ -8,11 +8,12 @@ NUM_TRACK = 2
 SIDES = 4
 SIZE = 2
 
+
 def main():
     # constructing the routing graph
     sb = SwitchBoxNode(0, 0, WIDTH, 0)
     # 2 x 2 board with 2 routing tracks
-    g = RoutingGraph(SIZE, SIZE, NUM_TRACK, sb);
+    g = RoutingGraph(SIZE, SIZE, NUM_TRACK, sb)
 
     in_port = PortNode("in", 0, 0, WIDTH)
     out_port = PortNode("out", 0, 0, WIDTH)
@@ -32,26 +33,26 @@ def main():
                 g.add_edge(out_port, sb, gsi(side))
             # only left or tight can come in
             g.add_edge(sb, in_port, SwitchBoxSide.Left)
-            g.add_edge(sb, in_port, SwitchBoxSide.Right);
+            g.add_edge(sb, in_port, SwitchBoxSide.Right)
 
     # wire these switch boxes together
     for chan in range(NUM_TRACK):
-        sb0 = g[(0, 0)].sbs[chan];
-        sb1 = g[(0, 1)].sbs[chan];
-        sb2 = g[(1, 0)].sbs[chan];
-        sb3 = g[(1, 1)].sbs[chan];
+        sb0 = g[(0, 0)].sbs[chan]
+        sb1 = g[(0, 1)].sbs[chan]
+        sb2 = g[(1, 0)].sbs[chan]
+        sb3 = g[(1, 1)].sbs[chan]
 
         g.add_edge(sb0, sb1, SwitchBoxSide.Left)
         g.add_edge(sb1, sb0, SwitchBoxSide.Right)
 
-        g.add_edge(sb0, sb2, SwitchBoxSide.Bottom);
-        g.add_edge(sb2, sb0, SwitchBoxSide.Top);
+        g.add_edge(sb0, sb2, SwitchBoxSide.Bottom)
+        g.add_edge(sb2, sb0, SwitchBoxSide.Top)
 
-        g.add_edge(sb3, sb1, SwitchBoxSide.Top);
-        g.add_edge(sb1, sb3, SwitchBoxSide.Bottom);
+        g.add_edge(sb3, sb1, SwitchBoxSide.Top)
+        g.add_edge(sb1, sb3, SwitchBoxSide.Bottom)
 
-        g.add_edge(sb3, sb2, SwitchBoxSide.Right);
-        g.add_edge(sb2, sb3, SwitchBoxSide.Left);
+        g.add_edge(sb3, sb2, SwitchBoxSide.Right)
+        g.add_edge(sb2, sb3, SwitchBoxSide.Left)
 
     # create a global router and do the configuration in order
     r = GlobalRouter(20, g)
@@ -80,6 +81,7 @@ def main():
             seg_list = [x.to_string() for x in seg]
             print(" -> ".join(seg_list))
         print()
+
 
 if __name__ == "__main__":
     main()
