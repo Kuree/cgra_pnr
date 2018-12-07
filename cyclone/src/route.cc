@@ -382,14 +382,13 @@ uint32_t Router::get_history_cost(const std::shared_ptr<Node> &start,
         auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
         auto side = sb->get_side(end);
         const auto &history = sb_history_[gsv(side)];
-        for (uint32_t io = 0; io < Node::IO; io++) {
-            auto &io_conn = history[io];
+        for (const auto &io_conn : history) {
             result += io_conn.at(start);
         }
 
     } else {
-        for (uint32_t io = 0; io < Node::IO; io++) {
-            result += node_history_[io].at(start);
+        for (auto &io : node_history_) {
+            result += io.at(start);
         }
     }
     return result;

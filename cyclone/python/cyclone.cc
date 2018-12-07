@@ -132,7 +132,9 @@ void init_router(py::module &m) {
     init_router_class<Router>(router);
 
     py::class_<GlobalRouter> gr(m, "GlobalRouter");
-    gr.def(py::init<uint32_t, RoutingGraph>());
+    gr.def(py::init<uint32_t, RoutingGraph>())
+      .def_readwrite("route_strategy_ratio",
+                     &GlobalRouter::route_strategy_ratio);
     init_router_class<GlobalRouter>(gr);
 }
 

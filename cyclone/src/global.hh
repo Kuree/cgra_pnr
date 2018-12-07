@@ -9,6 +9,8 @@ public:
 
     void route() override;
 
+    double route_strategy_ratio = 0.5;
+
 protected:
     virtual void
     route_net(Net &net, uint32_t it);

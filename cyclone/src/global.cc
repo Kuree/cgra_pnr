@@ -12,6 +12,12 @@ using std::string;
 using std::function;
 using std::move;
 
+// routing strategy
+enum class RoutingStrategy {
+    DelayDriven,
+    CongestionDriven
+};
+
 void GlobalRouter::route() {
     // the actual routing part
     // algorithm based on PathFinder with modification for CGRA architecture
@@ -37,7 +43,6 @@ void GlobalRouter::route() {
         for (auto &net : netlist_) {
             route_net(net, it);
         }
-
 
         // clear the routing resources, i.e. rip up all the nets
         clear_connections();
@@ -74,8 +79,14 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
             }
         }
     } else {
+        // Note:
+        // Keyi:
+        // This is a little bit different from the original path finder
+        // we also calculate the min delay to normalize the slack ratio
+        // there fore A_n is actually \in [0, 1]
         // traverse the segments to find the actual delay
         double max_delay = 0;
+        double min_delay = std::numeric_limits<double>::max();
         for (auto &net : netlist_) {
             const auto &src = net[0].node;
             const auto &segments = current_routes[net.id];
@@ -96,11 +107,21 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
                 slack_ratio_[{src, sink}] = delay;
                 if (delay > max_delay)
                     max_delay = delay;
+                if (delay < min_delay)
+                    min_delay = delay;
             }
         }
         // normalize
-        for (auto &iter : slack_ratio_)
-            slack_ratio_[iter.first] = iter.second / max_delay;
+        max_delay -= min_delay;
+        if (max_delay != 0) {
+            for (auto &iter : slack_ratio_)
+                slack_ratio_[iter.first] =
+                        (iter.second - min_delay) / max_delay;
+        } else {
+            // every net has the same delay
+            for (auto &iter : slack_ratio_)
+                slack_ratio_[iter.first] = 1;
+        }
     }
 }
 
@@ -109,9 +130,26 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
     const auto &src = net[0].node;
     if (src == nullptr)
         throw ::runtime_error("unable to find src when route net");
+    ::vector<::shared_ptr<Node>> current_path;
     for (uint32_t i = 1; i < net.size(); i++) {
         auto const &sink_node = net[i];
-
+        auto slack = slack_ratio_.at({src, sink_node.node});
+        RoutingStrategy strategy = slack > route_strategy_ratio ?
+                                   RoutingStrategy::DelayDriven :
+                                   RoutingStrategy::CongestionDriven;
+        ::shared_ptr<Node> src_node = src;
+        // choose src_node
+        if (strategy == RoutingStrategy::CongestionDriven
+            && !current_path.empty()) {
+            // find the closest point
+            uint32_t min_dist = manhattan_distance(src_node, sink_node.node);
+            for (uint32_t p = 1; i < current_path.size(); p++) {
+                if (manhattan_distance(current_path[p], sink_node.node)
+                    < min_dist) {
+                    src_node = current_path[p];
+                }
+            }
+        }
         auto cost_f = create_cost_function(src, sink_node.node);
         // find the routes
         if (sink_node.name[0] == 'r') {
@@ -124,7 +162,9 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                 fail_count_++;
                 continue;
             }
-            auto segment = route_a_star(src, end, cost_f);
+            // based on the slack ratio, we choose which one to start
+
+            auto segment = route_a_star(src_node, end, cost_f);
             ::shared_ptr<Node> end_node = segment.back();
             // then route for nearest
             auto reg_segment = route_a_star(end_node, end_reg_f, cost_f,
@@ -138,17 +178,25 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             for (auto &net_id: reg_nets_.at(net.id)) {
                 netlist_[net_id][0].node = reg_node;
             }
+            // add it to the segment
+            segment.insert(segment.end(), reg_segment.begin() + 1,
+                           reg_segment.end());
+            // store the segment
+            current_routes[net.id][sink_node.node] = segment;
         } else {
             if (sink_node.node == nullptr)
                 throw ::runtime_error("unable to find node for block"
                                       " " + sink_node.name);
-            auto segment = route_a_star(src, sink_node.node, cost_f);
+            auto segment = route_a_star(src_node, sink_node.node, cost_f);
             if (segment.back() != sink_node.node) {
                 fail_count_++;
                 continue;
             }
             current_routes[net.id][sink_node.node] = segment;
         }
+        // also put segment into the current path
+        const auto &segment = current_routes[net.id][sink_node.node];
+        current_path.insert(current_path.end(), segment.begin(), segment.end());
     }
 }
 
