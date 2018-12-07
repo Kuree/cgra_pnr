@@ -4,6 +4,7 @@
 #include "../src/graph.hh"
 #include "../src/route.hh"
 #include "../src/global.hh"
+#include "../src/util.hh"
 
 namespace py = pybind11;
 using std::to_string;
@@ -120,8 +121,17 @@ void init_router(py::module &m) {
     init_router_class<GlobalRouter>(gr);
 }
 
+void init_util(py::module &m) {
+    auto util_m = m.def_submodule("util");
+    util_m.def("get_side_value", &get_side_value)
+          .def("gsv", &get_side_value)
+          .def("get_side_int", &get_side_int)
+          .def("gsi", &get_side_int);
+}
+
 PYBIND11_MODULE(pycyclone, m) {
     m.doc() = "pycyclone";
     init_graph(m);
     init_router(m);
+    init_util(m);
 }

@@ -32,9 +32,9 @@ Node::Node(const Node &node) {
     track = node.track;
 }
 
-void Node::add_edge(const std::shared_ptr<Node> &node) {
+void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t wire_delay) {
     neighbors_.insert(node);
-    edge_cost_[node] = node->delay;
+    edge_cost_[node] = node->delay + wire_delay;
 }
 
 uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
@@ -81,6 +81,13 @@ SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node) : Node(node) {}
 void SwitchBoxNode::add_edge(const std::shared_ptr<Node> &node,
                              SwitchBoxSide side) {
     Node::add_edge(node);
+    // add to side index table
+    edge_to_side_.insert({node, side});
+}
+
+void SwitchBoxNode::add_edge(const std::shared_ptr<Node> &node,
+                             SwitchBoxSide side, uint32_t wire_delay) {
+    Node::add_edge(node, wire_delay);
     // add to side index table
     edge_to_side_.insert({node, side});
 }

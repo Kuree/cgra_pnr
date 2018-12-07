@@ -41,9 +41,10 @@ public:
     // used for delay calculation routing
     uint32_t delay = 1;
 
-    virtual void add_edge(const std::shared_ptr<Node> &node);
-    //virtual void add_edge(const std::shared_ptr<Node> &node,
-    //                      uint32_t wire_delay);
+    virtual void add_edge(const std::shared_ptr<Node> &node)
+    { add_edge(node, 0); }
+    virtual void add_edge(const std::shared_ptr<Node> &node,
+                          uint32_t wire_delay);
 
     uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
 
@@ -116,6 +117,8 @@ public:
 
     // the actual one
     void add_edge(const std::shared_ptr<Node> &node, SwitchBoxSide side);
+    void add_edge(const std::shared_ptr<Node> &node, SwitchBoxSide side,
+                  uint32_t wire_delay);
 
     SwitchBoxSide get_side(const std::shared_ptr<Node> &node) const;
 
