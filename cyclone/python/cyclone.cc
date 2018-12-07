@@ -34,7 +34,6 @@ template<class T>
 void init_router_class(py::class_<T> &class_) {
     class_
         .def("add_net", &T::add_net)
-        .def("add_edge", &T::add_edge)
         .def("add_placement", &T::add_placement)
         .def("overflow", &T::overflow)
         .def("route", &T::route)
@@ -99,12 +98,11 @@ void init_graph(py::module &m) {
 
 void init_router(py::module &m) {
     py::class_<Router> router(m, "Router");
-    router.def(py::init<>());
+    router.def(py::init<RoutingGraph>());
     init_router_class<Router>(router);
 
     py::class_<GlobalRouter> gr(m, "GlobalRouter");
-    gr.def(py::init<uint32_t>())
-      .def(py::init<uint32_t, RoutingGraph>());
+    gr.def(py::init<RoutingGraph>());
     init_router_class<GlobalRouter>(gr);
 }
 

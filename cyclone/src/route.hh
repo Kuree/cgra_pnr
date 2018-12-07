@@ -10,8 +10,7 @@
 // implement basic routing algorithms and IO handling
 class Router {
 public:
-    Router() = default;
-    explicit Router(const RoutingGraph &g) : graph_(std::move(g)) { }
+    explicit Router(const RoutingGraph &g);
 
     // add_net has to be used after constructing all the routing graph
     // otherwise it will throw errors
@@ -19,8 +18,6 @@ public:
                  const std::vector<std::pair<std::string, std::string>> &net);
     void add_placement(const uint32_t &x, const uint32_t &y,
                        const std::string &blk_id);
-    void add_edge(const Node &node1, const Node &node2)
-    { graph_.add_edge(node1, node2); }
     bool overflow();
 
     // routing related function
@@ -42,15 +39,14 @@ protected:
                     std::vector<std::shared_ptr<Node>>>> current_routes;
 
     // graph independent look tables for computing routing cost
-    std::map<std::shared_ptr<Node>,
-            std::set<std::shared_ptr<Node>>
-            [SwitchBoxNode::SIDES][Node::IO]> sb_connections_;
-    std::map<std::shared_ptr<Node>,
-            std::set<std::shared_ptr<Node>>[Node::IO]> node_connections_;
+    std::map<std::shared_ptr<Node>, std::set<std::shared_ptr<Node>>>
+    sb_connections_[SwitchBoxNode::SIDES][Node::IO];
+    std::map<std::shared_ptr<Node>, std::set<std::shared_ptr<Node>>>
+    node_connections_[Node::IO];
 
-    std::map<std::shared_ptr<Node>,
-             uint32_t[SwitchBoxNode::SIDES][Node::IO]> sb_history_;
-    std::map<std::shared_ptr<Node>, uint32_t[Node::IO]> node_history_;
+    std::map<std::shared_ptr<Node>, uint32_t>
+    sb_history_[SwitchBoxNode::SIDES][Node::IO];
+    std::map<std::shared_ptr<Node>, uint32_t> node_history_[Node::IO];
 
     const static uint32_t IN = 0;
     const static uint32_t OUT = 1;

@@ -5,7 +5,6 @@
 
 class GlobalRouter : public Router {
 public:
-    explicit GlobalRouter(uint32_t num_iteration);
     GlobalRouter(uint32_t num_iteration, const RoutingGraph &g);
 
     void route() override;

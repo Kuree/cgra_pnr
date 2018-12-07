@@ -12,9 +12,6 @@ using std::string;
 using std::function;
 using std::move;
 
-GlobalRouter::GlobalRouter(uint32_t num_iteration)
-    : Router(), num_iteration_(num_iteration) { }
-
 void GlobalRouter::route() {
     // the actual routing part
     // algorithm based on PathFinder with modification for CGRA architecture
