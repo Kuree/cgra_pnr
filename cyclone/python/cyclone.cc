@@ -26,7 +26,6 @@ void init_node_class(py::class_<T, D> &class_) {
         .def("__repr__", [](const T &node) -> std::string {
             std::ostringstream os; os << node; return os.str();
         })
-        .def("to_string", &T::to_string)
         .def("__iter__", [](const T &node) {
             return py::make_iterator(node.begin(), node.end());
         }, py::keep_alive<0, 1>());

@@ -78,7 +78,7 @@ def main():
         print("NET:", net_id)
         segments = result[net_id]
         for seg in segments:
-            seg_list = [x.to_string() for x in seg]
+            seg_list = [str(x) for x in seg]
             print(" -> ".join(seg_list))
         print()
 
