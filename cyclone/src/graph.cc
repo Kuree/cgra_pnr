@@ -126,7 +126,8 @@ RoutingGraph::RoutingGraph(uint32_t width, uint32_t height,
     }
 }
 
-void RoutingGraph::add_edge(const Node &node1, const Node &node2) {
+void RoutingGraph::add_edge(const Node &node1, const Node &node2,
+                            uint32_t wire_delay) {
     if (node1.type == NodeType::SwitchBox || node2.type == NodeType::SwitchBox)
         throw ::runtime_error("switch box uses add_edge(node, node, side)");
     // we don't use the nodes passed in, instead, we manage our own node
@@ -141,11 +142,11 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2) {
     // notice that this is directional, that is, add n2 to n1's neighbor
     if (n1->width != n2->width)
         throw ::runtime_error("node2 width does not equal to node1");
-    n1->add_edge(n2);
+    n1->add_edge(n2, wire_delay);
 }
 
 void RoutingGraph::add_edge(const Node &node1, const Node &node2,
-                            SwitchBoxSide side) {
+                            SwitchBoxSide side, uint32_t wire_delay) {
     if (node1.type != NodeType::SwitchBox && node2.type != NodeType::SwitchBox)
         throw ::runtime_error("only switch box uses "
                               "add_edge(node, node, side)");
@@ -158,7 +159,7 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
 
     if (node1.type == NodeType::SwitchBox) {
         auto sb1 = std::reinterpret_pointer_cast<SwitchBoxNode>(n1);
-        sb1->add_edge(n2, side);
+        sb1->add_edge(n2, side, wire_delay);
         if (node2.type == NodeType::SwitchBox) {
             auto sb2 = std::reinterpret_pointer_cast<SwitchBoxNode>(n2);
             auto new_side = get_opposite_side(side);
@@ -167,22 +168,23 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
     } else {
         auto sb2 = std::reinterpret_pointer_cast<SwitchBoxNode>(n2);
         sb2->add_side_info(n1, side);
-        n1->add_edge(sb2);
+        n1->add_edge(sb2, wire_delay);
     }
 }
 
 void RoutingGraph::add_edge(const SwitchBoxNode &node1,
                             const SwitchBoxNode &node2,
                             SwitchBoxSide side1,
-                            SwitchBoxSide side2) {
+                            SwitchBoxSide side2,
+                            uint32_t wire_delay) {
     auto n1 = search_create_node(node1);
     auto n2 = search_create_node(node2);
     if (n1->type != NodeType::Register || n2->type != NodeType::Register)
         throw ::runtime_error("it has to be switch box");
     auto sb1 = std::reinterpret_pointer_cast<SwitchBoxNode>(n1);
     auto sb2 = std::reinterpret_pointer_cast<SwitchBoxNode>(n2);
-    sb1->add_edge(n2, side1);
-    sb2->add_edge(n1, side2);
+    sb1->add_edge(n2, side1, wire_delay);
+    sb2->add_edge(n1, side2, wire_delay);
 }
 
 std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {

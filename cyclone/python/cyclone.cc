@@ -97,12 +97,27 @@ void init_graph(py::module &m) {
         .def("add_edge",
              py::overload_cast<const Node &,
                                const Node &,
+                               uint32_t>(&RoutingGraph::add_edge))
+        .def("add_edge",
+             py::overload_cast<const Node &,
+                               const Node &,
                                SwitchBoxSide>(&RoutingGraph::add_edge))
+        .def("add_edge",
+             py::overload_cast<const Node &,
+                               const Node &,
+                               SwitchBoxSide,
+                               uint32_t>(&RoutingGraph::add_edge))
         .def("add_edge",
              py::overload_cast<const SwitchBoxNode &,
                                const SwitchBoxNode &,
                                SwitchBoxSide,
                                SwitchBoxSide>(&RoutingGraph::add_edge))
+        .def("add_edge",
+             py::overload_cast<const SwitchBoxNode &,
+                               const SwitchBoxNode &,
+                               SwitchBoxSide,
+                               SwitchBoxSide,
+                               uint32_t>(&RoutingGraph::add_edge))
         .def("get_sb", &RoutingGraph::get_sb)
         .def("get_port", &RoutingGraph::get_port)
         .def("__getitem__", &RoutingGraph::operator[])

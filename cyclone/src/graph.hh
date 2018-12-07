@@ -42,7 +42,7 @@ public:
     uint32_t delay = 1;
 
     virtual void add_edge(const std::shared_ptr<Node> &node)
-    { add_edge(node, 0); }
+    { add_edge(node, DEFAULT_WIRE_DELAY); }
     virtual void add_edge(const std::shared_ptr<Node> &node,
                           uint32_t wire_delay);
 
@@ -62,6 +62,7 @@ public:
     }
 
     const static int IO = 2;
+    const static uint32_t DEFAULT_WIRE_DELAY = 0;
 
 protected:
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y);
@@ -108,8 +109,11 @@ public:
     // because we need to indicate the side of switchbox,
     // we need to disable the parent method
     // throw an exception whenever they are called
-    void add_edge(const std::shared_ptr<Node> &) override {
-        static_assert("use add_edge with side instead");
+    void add_edge(const std::shared_ptr<Node> &) override  {
+        throw std::runtime_error("use add_edge with side instead");
+    }
+    void add_edge(const std::shared_ptr<Node>&, uint32_t) override {
+        throw std::runtime_error("use add_edge with side instead");
     }
 
     void add_side_info(const std::shared_ptr<Node> &node, SwitchBoxSide side)
@@ -167,13 +171,23 @@ public:
     // used to construct the routing graph.
     // called after tiles have been constructed.
     // concepts copied from networkx as it will create nodes along the way
-    void add_edge(const Node &node1, const Node &node2);
+    void add_edge(const Node &node1, const Node &node2)
+    { add_edge(node1, node2, Node::DEFAULT_WIRE_DELAY); }
+    void add_edge(const Node &node1, const Node &node2, uint32_t wire_delay);
+
     // side is relative to node1 if it is a switch box
     // otherwise it's relative to node2
-    void add_edge(const Node &node1, const Node &node2, SwitchBoxSide side);
+    void add_edge(const Node &node1, const Node &node2, SwitchBoxSide side)
+    { add_edge(node1, node2, side, Node::DEFAULT_WIRE_DELAY); }
+    void add_edge(const Node &node1, const Node &node2, SwitchBoxSide side,
+                  uint32_t wire_delay);
 
     void add_edge(const SwitchBoxNode &node1, const SwitchBoxNode &node2,
-                  SwitchBoxSide side1, SwitchBoxSide side2);
+                  SwitchBoxSide side1, SwitchBoxSide side2)
+    { add_edge(node1, node2, side1, side2, Node::DEFAULT_WIRE_DELAY); }
+    void add_edge(const SwitchBoxNode &node1, const SwitchBoxNode &node2,
+                  SwitchBoxSide side1, SwitchBoxSide side2,
+                  uint32_t wire_delay);
 
     // TODO
     // add remove edge functions
