@@ -15,6 +15,7 @@ using std::string;
 using std::function;
 using std::move;
 
+constexpr auto gsv = get_side_value;
 
 Router::Router(const RoutingGraph &g) : graph_(g) {
     // create the look up table for cost analysis
@@ -350,8 +351,8 @@ void Router::assign_connection(std::shared_ptr<Node> &start,
     if (start->type == NodeType::SwitchBox) {
         auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
         auto side = sb->get_side(end);
-        sb_connections_[side][io].at(start).insert(end);
-        sb_history_[side][io].at(start)++;
+        sb_connections_[gsv(side)][io].at(start).insert(end);
+        sb_history_[gsv(side)][io].at(start)++;
     } else {
         node_connections_[io].at(start).insert(end);
         node_history_[io].at(start)++;
@@ -380,7 +381,7 @@ uint32_t Router::get_history_cost(const std::shared_ptr<Node> &start,
     if (start->type == NodeType::SwitchBox) {
         auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
         auto side = sb->get_side(end);
-        const auto &history = sb_history_[side];
+        const auto &history = sb_history_[gsv(side)];
         for (uint32_t io = 0; io < Node::IO; io++) {
             auto &io_conn = history[io];
             result += io_conn.at(start);
@@ -401,7 +402,7 @@ uint32_t Router::get_presence_cost(const std::shared_ptr<Node> &start,
     if (start->type == NodeType::SwitchBox) {
         auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
         auto side = sb->get_side(end);
-        start_connection = sb_connections_[side][io].at(start);
+        start_connection = sb_connections_[gsv(side)][io].at(start);
     } else {
         start_connection = node_connections_[io].at(start);
     }

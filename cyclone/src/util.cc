@@ -34,3 +34,9 @@ same_node(const std::shared_ptr<Node> &node1) {
 bool end_reg_f(const std::shared_ptr<Node> &node) {
     return node->type == NodeType::Register;
 }
+
+SwitchBoxSide get_opposite_side(SwitchBoxSide side) {
+    auto side_i = static_cast<uint32_t>(side);
+    uint32_t new_side = (side_i + 2) % 4;
+    return static_cast<SwitchBoxSide>(new_side);
+}

@@ -43,7 +43,14 @@ void init_router_class(py::class_<T> &class_) {
 void init_graph(py::module &m) {
     py::enum_<NodeType>(m, "NodeType")
         .value("SwitchBox", NodeType::SwitchBox)
-        .value("Port", NodeType::Port);
+        .value("Port", NodeType::Port)
+        .value("Register", NodeType::Register);
+
+    py::enum_<SwitchBoxSide>(m, "SwitchBoxSide")
+        .value("Left", SwitchBoxSide::Left)
+        .value("Bottom", SwitchBoxSide::Bottom)
+        .value("Right", SwitchBoxSide::Right)
+        .value("Top", SwitchBoxSide::Top);
 
     py::class_<PortNode> p_node(m, "PortNode");
     init_node_class<PortNode>(p_node);
@@ -62,8 +69,9 @@ void init_graph(py::module &m) {
     sb_node
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
         .def("add_side_info", &SwitchBoxNode::add_side_info)
-        .def("add_edge", py::overload_cast<const std::shared_ptr<Node> &,
-                                           uint32_t>(&SwitchBoxNode::add_edge));
+        .def("add_edge",
+             py::overload_cast<const std::shared_ptr<Node> &,
+                               SwitchBoxSide >(&SwitchBoxNode::add_edge));
 
     py::class_<Tile>(m, "Tile")
         .def(py::init<>())
@@ -87,7 +95,13 @@ void init_graph(py::module &m) {
                                const Node &>(&RoutingGraph::add_edge))
         .def("add_edge",
              py::overload_cast<const Node &,
-                               const Node &, uint32_t>(&RoutingGraph::add_edge))
+                               const Node &,
+                               SwitchBoxSide>(&RoutingGraph::add_edge))
+        .def("add_edge",
+             py::overload_cast<const SwitchBoxNode &,
+                               const SwitchBoxNode &,
+                               SwitchBoxSide,
+                               SwitchBoxSide>(&RoutingGraph::add_edge))
         .def("get_sb", &RoutingGraph::get_sb)
         .def("get_port", &RoutingGraph::get_port)
         .def("__getitem__", &RoutingGraph::operator[])
@@ -102,7 +116,7 @@ void init_router(py::module &m) {
     init_router_class<Router>(router);
 
     py::class_<GlobalRouter> gr(m, "GlobalRouter");
-    gr.def(py::init<RoutingGraph>());
+    gr.def(py::init<uint32_t, RoutingGraph>());
     init_router_class<GlobalRouter>(gr);
 }
 

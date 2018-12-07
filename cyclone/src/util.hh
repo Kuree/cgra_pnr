@@ -24,4 +24,12 @@ bool end_reg_f(const std::shared_ptr<Node> &node);
 std::function<bool(const std::shared_ptr<Node> &)>
 same_node(const std::shared_ptr<Node> &node1);
 
+SwitchBoxSide get_opposite_side(SwitchBoxSide side);
+
+inline uint32_t get_side_value(SwitchBoxSide s)
+{ return static_cast<uint32_t>(s); }
+
+inline SwitchBoxSide get_side_int(uint32_t i)
+{ return static_cast<SwitchBoxSide>(i); }
+
 #endif //CYCLONE_UTIL_HH

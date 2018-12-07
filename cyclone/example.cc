@@ -1,5 +1,6 @@
 #include <iostream>
 #include "src/global.hh"
+#include "src/util.hh"
 
 #define WIDTH 1
 #define NUM_TRACK 2
@@ -12,6 +13,8 @@ using std::string;
 using std::vector;
 using std::cout;
 using std::endl;
+
+constexpr auto gsi = get_side_int;
 
 int main(int, char **) {
     // just some example on how to use it
@@ -44,11 +47,11 @@ int main(int, char **) {
 
             // out can go any sides
             for (uint32_t side = 0; side < SIDES; side++) {
-                g.add_edge(out_port, sb, side);
+                g.add_edge(out_port, sb, gsi(side));
             }
             // only left or right can come in
-            g.add_edge(sb, in_port, 0);
-            g.add_edge(sb, in_port, 2);
+            g.add_edge(sb, in_port, SwitchBoxSide::Left);
+            g.add_edge(sb, in_port, SwitchBoxSide::Right);
         }
     }
 
@@ -59,17 +62,17 @@ int main(int, char **) {
         auto sb2 = g[{1, 0}].sbs[chan];
         auto sb3 = g[{1, 1}].sbs[chan];
 
-        g.add_edge(*sb0, *sb1, 0);
-        g.add_edge(*sb1, *sb0, 2);
+        g.add_edge(*sb0, *sb1, SwitchBoxSide::Left);
+        g.add_edge(*sb1, *sb0, SwitchBoxSide::Right);
 
-        g.add_edge(*sb0, *sb2, 1);
-        g.add_edge(*sb2, *sb0, 3);
+        g.add_edge(*sb0, *sb2, SwitchBoxSide::Bottom);
+        g.add_edge(*sb2, *sb0, SwitchBoxSide::Top);
 
-        g.add_edge(*sb3, *sb1, 3);
-        g.add_edge(*sb1, *sb3, 1);
+        g.add_edge(*sb3, *sb1, SwitchBoxSide::Top);
+        g.add_edge(*sb1, *sb3, SwitchBoxSide::Bottom);
 
-        g.add_edge(*sb3, *sb2, 2);
-        g.add_edge(*sb2, *sb3, 0);
+        g.add_edge(*sb3, *sb2, SwitchBoxSide::Right);
+        g.add_edge(*sb2, *sb3, SwitchBoxSide::Left);
     }
 
     // 2. create a global router and do the configuration in order

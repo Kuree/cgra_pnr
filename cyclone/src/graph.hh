@@ -13,6 +13,13 @@ enum NodeType {
     Register
 };
 
+enum class SwitchBoxSide {
+    Left = 0,
+    Bottom = 1,
+    Right = 2,
+    Top = 3
+};
+
 class Node {
 public:
     Node() = default;
@@ -35,6 +42,8 @@ public:
     uint32_t delay = 1;
 
     virtual void add_edge(const std::shared_ptr<Node> &node);
+    //virtual void add_edge(const std::shared_ptr<Node> &node,
+    //                      uint32_t wire_delay);
 
     uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
 
@@ -102,16 +111,16 @@ public:
         static_assert("use add_edge with side instead");
     }
 
-    void add_side_info(const std::shared_ptr<Node> &node, uint32_t side)
+    void add_side_info(const std::shared_ptr<Node> &node, SwitchBoxSide side)
     { edge_to_side_.insert({node, side}); }
 
     // the actual one
-    void add_edge(const std::shared_ptr<Node> &node, uint32_t side);
+    void add_edge(const std::shared_ptr<Node> &node, SwitchBoxSide side);
 
-    uint32_t get_side(const std::shared_ptr<Node> &node) const;
+    SwitchBoxSide get_side(const std::shared_ptr<Node> &node) const;
 
 private:
-    std::map<std::shared_ptr<Node>, uint32_t> edge_to_side_;
+    std::map<std::shared_ptr<Node>, SwitchBoxSide> edge_to_side_;
 
 };
 
@@ -158,7 +167,10 @@ public:
     void add_edge(const Node &node1, const Node &node2);
     // side is relative to node1 if it is a switch box
     // otherwise it's relative to node2
-    void add_edge(const Node &node1, const Node &node2, uint32_t side);
+    void add_edge(const Node &node1, const Node &node2, SwitchBoxSide side);
+
+    void add_edge(const SwitchBoxNode &node1, const SwitchBoxNode &node2,
+                  SwitchBoxSide side1, SwitchBoxSide side2);
 
     // TODO
     // add remove edge functions
