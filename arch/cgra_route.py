@@ -177,7 +177,7 @@ def build_routing_resource(parsed_resource):
                               "port": operands}
             continue
         # build operand connection
-        operands = {"out": set(), "rdata": set(), "valid": set()}
+        operands = {"out": set(), "outb": set(), "rdata": set(), "valid": set()}
         connections = {}
         for bus in entry["cb"]:
             for sink in entry["cb"][bus]:
@@ -199,8 +199,10 @@ def build_routing_resource(parsed_resource):
                     sink_info = convert_bus_to_tuple(wire)
                     if sink_info is not None:
                         connections[sink].add(sink_info)
-                    elif wire[:2] == "pe":
+                    elif wire == "pe_out_res":
                         operands["out"].add(sink_wire)
+                    elif wire == "pe_out_res_p":
+                        operands["outb"].add(sink_wire)
                     elif wire == "rdata":
                         operands["rdata"].add(sink_wire)
                     elif wire == "valid":

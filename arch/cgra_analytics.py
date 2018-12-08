@@ -78,7 +78,7 @@ def convert_timed_path(timed_paths, netlists, folded_blocks, name_to_id):
     blk_to_net = {}
     for net_id in netlists:
         blk_id, blk_port = netlists[net_id][0]
-        if blk_port in ["out", "rdata", "reg"]:
+        if blk_port in ["out", "outb", "rdata", "reg"]:
             blk_to_net[blk_id] = net_id
 
     result = []

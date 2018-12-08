@@ -334,8 +334,10 @@ def generate_netlists(connections, instances):
                 port = "rdata"
             elif port == "wdata":
                 port = "wdata"
-            elif "out" in port:
+            elif port == "data.out" or port == "out":
                 port = "out"
+            elif port == "bit.out":
+                port = "outb"
             elif "valid" in port:
                 port = "valid"
             else:

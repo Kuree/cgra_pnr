@@ -619,11 +619,12 @@ def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
     tile = tile_mapping[src_pos]
     if src_port == "out":
         src_port = "pe_out"
+    elif src_port == "outb":
+        src_port = "pe_outb"
     elif src_port == "reg":
         assert fold_reg
         return ""
-    track = "" if conn[0][0] == 16 else "b"
-    start = "Tx{:04X}_{}{}".format(tile, src_port, track)
+    start = "Tx{:04X}_{}".format(tile, src_port)
     end = make_track_string(src_pos, conn[0], tile_mapping, board_layout)
     result = start + " -> " + end + "\n"
     # Keyi:
