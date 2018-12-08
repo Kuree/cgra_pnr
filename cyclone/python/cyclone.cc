@@ -96,6 +96,8 @@ void init_graph(py::module &m) {
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())
         .def(py::init<uint32_t, uint32_t, uint32_t, const SwitchBoxNode &>())
+        .def(py::init<uint32_t, uint32_t, uint32_t,
+                      const std::vector<SwitchBoxNode> &>())
         .def("add_tile", &RoutingGraph::add_tile)
         .def("remove_tile", &RoutingGraph::remove_tile)
         .def("add_edge",
@@ -150,7 +152,11 @@ void init_util(py::module &m) {
     util_m.def("get_side_value", &get_side_value)
           .def("gsv", &get_side_value)
           .def("get_side_int", &get_side_int)
-          .def("gsi", &get_side_int);
+          .def("gsi", &get_side_int)
+          .def("get_opposite_side",
+               py::overload_cast<SwitchBoxSide>(&get_opposite_side))
+          .def("get_opposite_side",
+               py::overload_cast<uint32_t>(&get_opposite_side));
 }
 
 PYBIND11_MODULE(pycyclone, m) {

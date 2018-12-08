@@ -25,6 +25,8 @@ std::function<bool(const std::shared_ptr<Node> &)>
 same_node(const std::shared_ptr<Node> &node1);
 
 SwitchBoxSide get_opposite_side(SwitchBoxSide side);
+inline SwitchBoxSide get_opposite_side(uint32_t side)
+{ return get_opposite_side(static_cast<SwitchBoxSide>(side)); }
 
 inline uint32_t get_side_value(SwitchBoxSide s)
 { return static_cast<uint32_t>(s); }

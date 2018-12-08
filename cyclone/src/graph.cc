@@ -110,17 +110,20 @@ std::ostream& operator<<(std::ostream &out, const Tile &tile) {
 }
 
 RoutingGraph::RoutingGraph(uint32_t width, uint32_t height,
-                           uint32_t num_tracks, const SwitchBoxNode &sb) {
+                           uint32_t num_tracks,
+                           const ::vector<SwitchBoxNode> &sbs) {
     // pre allocate tiles
     for (uint32_t x = 0; x < width; x++) {
         for (uint32_t y = 0; y < height; y++) {
             grid_[{x, y}] = Tile(x, y, num_tracks);
             for (uint32_t i = 0; i < num_tracks; i++) {
-                auto const & sb_instance = ::make_shared<SwitchBoxNode>(sb);
-                sb_instance->track = i;
-                sb_instance->x = x;
-                sb_instance->y = y;
-                grid_[{x, y}].sbs[i] = sb_instance;
+                for (auto const &sb : sbs) {
+                    auto const &sb_instance = ::make_shared<SwitchBoxNode>(sb);
+                    sb_instance->track = i;
+                    sb_instance->x = x;
+                    sb_instance->y = y;
+                    grid_[{x, y}].sbs[i] = sb_instance;
+                }
             }
         }
     }
@@ -179,7 +182,7 @@ void RoutingGraph::add_edge(const SwitchBoxNode &node1,
                             uint32_t wire_delay) {
     auto n1 = search_create_node(node1);
     auto n2 = search_create_node(node2);
-    if (n1->type != NodeType::Register || n2->type != NodeType::Register)
+    if (n1->type != NodeType::SwitchBox || n2->type != NodeType::SwitchBox)
         throw ::runtime_error("it has to be switch box");
     auto sb1 = std::reinterpret_pointer_cast<SwitchBoxNode>(n1);
     auto sb2 = std::reinterpret_pointer_cast<SwitchBoxNode>(n2);
@@ -218,6 +221,8 @@ std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {
                 return tile.ports[node.name];
             case NodeType::SwitchBox:
                 auto const &track = node.track;
+                if (tile.sbs.size() <= track)
+                    tile.sbs.resize(track + 1, nullptr);
                 if (tile.sbs[track] == nullptr) {
                     tile.sbs[track] =
                             ::make_shared<SwitchBoxNode>(node.x, node.y,

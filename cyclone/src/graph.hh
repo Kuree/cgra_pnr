@@ -14,9 +14,9 @@ enum NodeType {
 };
 
 enum class SwitchBoxSide {
-    Left = 0,
+    Left = 2,
     Bottom = 1,
-    Right = 2,
+    Right = 0,
     Top = 3
 };
 
@@ -161,9 +161,13 @@ std::ostream& operator<<(std::ostream &out, const Tile &tile);
 class RoutingGraph {
 public:
     RoutingGraph() : grid_() {}
-    // helper class to create the grid efficiently
+    // helper constructors to create the grid efficiently
     RoutingGraph(uint32_t width, uint32_t height, uint32_t num_tracks,
-                 const SwitchBoxNode &sb);
+                 const SwitchBoxNode &sb)
+                 : RoutingGraph(width, height, num_tracks,
+                                std::vector<SwitchBoxNode>{sb}) {}
+    RoutingGraph(uint32_t width, uint32_t height, uint32_t num_tracks,
+                 const std::vector<SwitchBoxNode> &sbs);
     // manually add tiles
     void add_tile(const Tile &tile) { grid_.insert({{tile.x, tile.y}, tile}); }
     void remove_tile(const std::pair<uint32_t, uint32_t> &t) { grid_.erase(t); }
