@@ -55,9 +55,9 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
     for net_id in netlists:
         for blk_id, port in netlists[net_id]:
             if blk_id[0] == "i":
-                if port == "in":     # this is an output port
+                if port == "in" or port == "inb":     # this is an output port
                     io_mapping[blk_id] = False
-                elif port == "out":
+                elif port == "out" or port == "outb":
                     io_mapping[blk_id] = True
                 else:
                     raise Exception("Unknown port: " + port + " for IO: " +
@@ -589,7 +589,7 @@ def handle_sink(self_conn, conn, dst, track_in,
     # else:
     #    track_str = ""
     tile = tile_mapping[dst_pos]
-    track = "" if conn[0] == 16 else "b"
+    track = "" if (conn[0] == 16 or dst_port[-1] == "b")  else "b"
     end = "Tx{:04X}_{}{}{}\n".format(tile,
                                     dst_port,
                                     track,
@@ -624,7 +624,8 @@ def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
     elif src_port == "reg":
         assert fold_reg
         return ""
-    start = "Tx{:04X}_{}".format(tile, src_port)
+    track = "" if (conn[0][0] == 16 or src_port[-1] == "b") else "b"
+    start = "Tx{:04X}_{}{}".format(tile, src_port, track)
     end = make_track_string(src_pos, conn[0], tile_mapping, board_layout)
     result = start + " -> " + end + "\n"
     # Keyi:

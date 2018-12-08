@@ -318,6 +318,8 @@ def generate_netlists(connections, instances):
                 port = "data0"
             elif port == "data.in.1":
                 port = "data1"
+            elif port == "in" and "io1_" in v:
+                port = "inb"
             elif port == "in":
                 # either a reg or IO
                 port = "in"
@@ -334,14 +336,15 @@ def generate_netlists(connections, instances):
                 port = "rdata"
             elif port == "wdata":
                 port = "wdata"
-            elif port == "data.out" or port == "out":
+            elif port == "data.out" or (port == "out" and "io1in" not in v):
                 port = "out"
-            elif port == "bit.out":
+            elif port == "bit.out" or (port == "out" and "io1in" in v):
                 port = "outb"
             elif "valid" in port:
                 port = "valid"
             else:
-                raise Exception("Unrecognized port " + port)
+                raise Exception("Unrecognized port " + port + " for name " +
+                                v)
             hyper_edge.append((blk_id, port))
         netlists[edge_id] = hyper_edge
     return netlists, name_to_id

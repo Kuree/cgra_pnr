@@ -3,7 +3,7 @@ import sys
 import os
 from argparse import ArgumentParser
 from pycyclone import RoutingGraph, SwitchBoxNode, PortNode, SwitchBoxSide
-from pycyclone import Tile, RegisterNode
+from pycyclone import Tile, RegisterNode, NodeType
 from pycyclone import GlobalRouter
 from pycyclone.util import get_side_int as gsi
 from pycyclone.util import get_opposite_side as gos
@@ -86,10 +86,13 @@ def build_routing_graph(meta, routing_resource):
         for sb in current_tile.sbs:
             reg = RegisterNode("", x, y, sb.width,
                                sb.track)
-            for node in sb:
+            neighbors = list(sb)
+            for node in neighbors:
                 # FIXME
                 # hack to get registers in
                 # insert reg connection here
+                if node.type != NodeType.SwitchBox:
+                    continue
                 reg.name = "reg" + str(reg_count)
                 reg_count += 1
                 side = sb.get_side(node)
@@ -97,7 +100,33 @@ def build_routing_graph(meta, routing_resource):
                 # node.add_side_info(reg, gos(side))
                 g_16.add_edge(reg, node, gos(side))
 
-    return True
+        # handling ports
+        for port_name in ports:
+            port = PortNode(port_name, x, y, 0)
+            sb = SwitchBoxNode(0, 0, 0, 0)
+            for width, io, side, track in ports[port_name]:
+                if width == 16:
+                    g = g_16
+                else:
+                    g = g_1
+                if port.width == 0:
+                    port.width = width
+                else:
+                    assert port.width == width
+                sb.width = width
+                sb.track = track
+                # a lot of complications
+                if io == 0:
+                    # this is coming in, so we need to recalculate the
+                    # coordinates to see where the connection comes from
+                    sb.x, sb.y = get_new_coord(x, y, side)
+                    new_side = gos(side)
+                    g.add_edge(sb, port, new_side)
+                else:
+                    sb.x, sb.y = x, y
+                    g.add_edge(sb, port, gsi(side))
+
+    return g_16, g_1
 
 
 def main():

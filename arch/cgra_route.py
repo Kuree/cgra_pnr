@@ -155,22 +155,26 @@ def build_routing_resource(parsed_resource):
         entry = parsed_resource[(x, y)]
         if "cb" not in entry:
             # io entry
-            operands = {}
+            operands = {"in": set(), "out": set(), "inb": set(), "outb": set()}
             input_channels = entry["input"]
             output_channels = entry["output"]
-            sink = "in"
-            operands[sink] = set()
             for wire_info in input_channels:
                 wire = convert_bus_to_tuple(wire_info)
                 if wire is not None:
                     assert wire[1] == 0
+                    if wire[0] == 1:
+                        sink = "inb"
+                    else:
+                        sink = "in"
                     operands[sink].add(wire)
-            sink = "out"
-            operands[sink] = set()
             for wire_info in output_channels:
                 wire = convert_bus_to_tuple(wire_info)
                 if wire is not None:
                     assert wire[1] == 1
+                    if wire[0] == 1:
+                        sink = "outb"
+                    else:
+                        sink = "out"
                     operands[sink].add(wire)
 
             result[(x, y)] = {"route_resource": set(),
