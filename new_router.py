@@ -30,7 +30,7 @@ def get_new_coord(x, y, side):
         raise Exception(str(side) + " is not a valid side")
 
 
-def build_routing_graph(meta, routing_resource):
+def build_routing_graph(routing_resource):
     # FIXME:
     # read the number of track width from the graph
     g_1 = RoutingGraph()
@@ -126,7 +126,20 @@ def build_routing_graph(meta, routing_resource):
                     sb.x, sb.y = x, y
                     g.add_edge(sb, port, gsi(side))
 
-    return g_16, g_1
+    return g_1, g_16
+
+
+def assign_placement_nets(routers, placement, netlists, track_mode):
+    for width in routers:
+        r = routers[width]
+        for blk_id in placement:
+            x, y = placement[blk_id]
+            r.add_placement(x, y, blk_id)
+    for net_id in netlists:
+        width = track_mode[net_id]
+        r = routers[width]
+        net = netlists[net_id]
+        r.add_net(net_id, net)
 
 
 def main():
@@ -162,8 +175,14 @@ def main():
     placement, _ = parse_placement(placement_filename)
     raw_routing_resource = parse_routing_resource(arch_filename)
     routing_resource = build_routing_resource(raw_routing_resource)
-    g = build_routing_graph(meta, routing_resource)
-    print()
+    g_1, g_16 = build_routing_graph(routing_resource)
+    r_1 = GlobalRouter(40, g_1)
+    r_16 = GlobalRouter(40, g_16)
+    assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)
+
+    # route these nets
+    r_1.route()
+    r_16.route()
 
 
 if __name__ == "__main__":
