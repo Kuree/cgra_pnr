@@ -77,6 +77,7 @@ void init_graph(py::module &m) {
     sb_node
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
         .def("add_side_info", &SwitchBoxNode::add_side_info)
+        .def("get_side", &SwitchBoxNode::get_side)
         .def("add_edge",
              py::overload_cast<const std::shared_ptr<Node> &,
                                SwitchBoxSide >(&SwitchBoxNode::add_edge));

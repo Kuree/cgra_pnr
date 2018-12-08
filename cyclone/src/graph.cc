@@ -212,7 +212,7 @@ std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {
                                                         node.y,
                                                         node.width,
                                                         node.track);
-                return tile.ports[node.name];
+                return tile.registers[node.name];
             case NodeType::Port:
                 if (tile.ports.find(node.name) == tile.ports.end())
                     tile.ports[node.name] =

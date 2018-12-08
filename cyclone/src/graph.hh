@@ -14,9 +14,9 @@ enum NodeType {
 };
 
 enum class SwitchBoxSide {
-    Left = 2,
-    Bottom = 1,
     Right = 0,
+    Bottom = 1,
+    Left = 2,
     Top = 3
 };
 

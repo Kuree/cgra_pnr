@@ -31,13 +31,16 @@ def get_new_coord(x, y, side):
 
 
 def build_routing_graph(meta, routing_resource):
-    # one pass to figure out how many tracks we have, and channel width
-    g = RoutingGraph()
+    # FIXME:
+    # read the number of track width from the graph
+    g_1 = RoutingGraph()
+    g_16 = RoutingGraph()
     for x, y in routing_resource:
         t = Tile()
         t.x = x
         t.y = y
-        g.add_tile(t)
+        g_1.add_tile(t)
+        g_16.add_tile(t)
 
     for x, y in routing_resource:
         res = routing_resource[(x, y)]["route_resource"]
@@ -47,8 +50,6 @@ def build_routing_graph(meta, routing_resource):
         sb1 = SwitchBoxNode(0, 0, 0, 0)
         sb2 = SwitchBoxNode(0, 0, 0, 0)
         reg_count = 0
-        tracks = set()
-        widths = set()
         for conn1, conn2 in res:
             width1, io1, side1, track1 = conn1
             width2, io2, side2, track2 = conn2
@@ -63,11 +64,15 @@ def build_routing_graph(meta, routing_resource):
             sb1.track = track1
             sb2.track = track2
 
+            if width1 == 16:
+                g = g_16
+            else:
+                g = g_1
+
             # FIXME
             # change this once a new interconnect is designed
             sb1.x, sb1.y = get_new_coord(x, y, side1)
             sb2.x, sb2.y = get_new_coord(x, y, side2)
-
 
             # side_1 = gos(side1)
             # side_2 = gsi(side1)
@@ -77,15 +82,20 @@ def build_routing_graph(meta, routing_resource):
             g.add_edge(sb1, sb, gos(side1), gsi(side1))
             g.add_edge(sb, sb2, gsi(side2), gos(side2))
 
-        current_tile = g[(x, y)]
+        current_tile = g_16[(x, y)]
         for sb in current_tile.sbs:
+            reg = RegisterNode("", x, y, sb.width,
+                               sb.track)
             for node in sb:
-                print(node)
-            print()
-        # FIXME
-        # hack to get registers in
-
-
+                # FIXME
+                # hack to get registers in
+                # insert reg connection here
+                reg.name = "reg" + str(reg_count)
+                reg_count += 1
+                side = sb.get_side(node)
+                g_16.add_edge(sb, reg, side)
+                # node.add_side_info(reg, gos(side))
+                g_16.add_edge(reg, node, gos(side))
 
     return True
 
