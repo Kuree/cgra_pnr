@@ -31,7 +31,7 @@ def get_new_coord(x, y, side):
         raise Exception(str(side) + " is not a valid side")
 
 
-def build_routing_graph(routing_resource):
+def build_routing_graph(routing_resource, layout):
     # FIXME:
     # read the number of track width from the graph
     g_1 = RoutingGraph()
@@ -84,21 +84,24 @@ def build_routing_graph(routing_resource):
             g.add_edge(sb, sb2, gsi(side2), gos(side2))
 
         current_tile = g_16[(x, y)]
-        for sb in current_tile.sbs:
-            reg = RegisterNode("", x, y, sb.width,
-                               sb.track)
-            for node in sb:
-                # FIXME
-                # hack to get registers in
-                # insert reg connection here
-                if node.type != NodeType.SwitchBox:
-                    continue
-                reg.name = "reg" + str(reg_count)
-                reg_count += 1
-                side = sb.get_side(node)
-                g_16.add_edge(sb, reg, side)
-                # node.add_side_info(reg, gos(side))
-                g_16.add_edge(reg, node, gos(side))
+        tile_type = layout[y][x]
+        if tile_type != ' ' and tile_type != None and tile_type != "i" \
+           and tile_type != "I":
+            for sb in current_tile.sbs:
+                reg = RegisterNode("", x, y, sb.width,
+                                   sb.track)
+                for node in sb:
+                    # FIXME
+                    # hack to get registers in
+                    # insert reg connection here
+                    if node.type != NodeType.SwitchBox:
+                        continue
+                    reg.name = "reg" + str(reg_count)
+                    reg_count += 1
+                    side = sb.get_side(node)
+                    g_16.add_edge(sb, reg, side)
+                    # node.add_side_info(reg, gos(side))
+                    g_16.add_edge(reg, node, gos(side))
 
         # handling ports
         for port_name in ports:
@@ -168,6 +171,7 @@ def main():
 
     placement_filename = args.placement_filename
     meta = parse_cgra(arch_filename)["CGRA"]
+    layout = meta[0]
 
     netlists, _, id_to_name, _, track_mode = load_packed_file(
         packed_filename, load_track_mode=True)
@@ -175,7 +179,7 @@ def main():
     placement, _ = parse_placement(placement_filename)
     raw_routing_resource = parse_routing_resource(arch_filename)
     routing_resource = build_routing_resource(raw_routing_resource)
-    g_1, g_16 = build_routing_graph(routing_resource)
+    g_1, g_16 = build_routing_graph(routing_resource, layout)
     r_1 = GlobalRouter(40, g_1)
     r_16 = GlobalRouter(40, g_16)
     assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)

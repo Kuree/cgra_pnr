@@ -177,6 +177,16 @@ def build_routing_resource(parsed_resource):
                         sink = "out"
                     operands[sink].add(wire)
 
+            # clean up
+            if len(operands["out"]) == 0:
+                operands.pop("out", None)
+            if len(operands["outb"]) == 0:
+                operands.pop("outb", None)
+            if len(operands["in"]) == 0:
+                operands.pop("in", None)
+            if len(operands["inb"]) == 0:
+                operands.pop("inb", None)
+
             result[(x, y)] = {"route_resource": set(),
                               "port": operands}
             continue

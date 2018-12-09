@@ -51,10 +51,10 @@ std::string Node::to_string() const {
             node_type = "SB";
             break;
         case NodeType::Register:
-            node_type = "REG-" + name;
+            node_type = "REG " + name;
             break;
         case NodeType::Port:
-            node_type = "PORT-" + name;
+            node_type = "PORT " + name;
             break;
     }
     return node_type + " (" + std::to_string(track) + ", " +
