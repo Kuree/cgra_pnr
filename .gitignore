@@ -155,3 +155,6 @@ ntu_dataset
 #aws stuff
 aws-access
 sls
+
+# routing graph
+*.graph

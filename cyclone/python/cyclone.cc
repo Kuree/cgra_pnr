@@ -5,6 +5,7 @@
 #include "../src/route.hh"
 #include "../src/global.hh"
 #include "../src/util.hh"
+#include "../src/io.hh"
 
 namespace py = pybind11;
 using std::to_string;
@@ -20,6 +21,7 @@ void init_node_class(py::class_<T, D> &class_) {
         .def_readwrite("width", &T::width)
         .def_readwrite("delay", &T::delay)
         .def_readwrite("track", &T::track)
+        .def("size", &T::size)
         .def("add_edge",
            py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
         .def("get_edge_cost", &T::get_edge_cost)
@@ -160,9 +162,16 @@ void init_util(py::module &m) {
                py::overload_cast<uint32_t>(&get_opposite_side));
 }
 
+void init_io(py::module &m) {
+    auto io_m = m.def_submodule("io");
+    io_m.def("dump_routing_graph", &dump_routing_graph)
+        .def("load_routing_graph", &load_routing_graph);
+}
+
 PYBIND11_MODULE(pycyclone, m) {
     m.doc() = "pycyclone";
     init_graph(m);
     init_router(m);
     init_util(m);
+    init_io(m);
 }

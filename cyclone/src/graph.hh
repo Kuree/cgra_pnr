@@ -55,6 +55,7 @@ public:
     { return neighbors_.end(); }
     std::set<std::shared_ptr<Node>>::iterator
     find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
+    uint64_t size() { return neighbors_.size(); }
 
     virtual std::string to_string() const;
     friend std::ostream& operator<<(std::ostream &s, const Node &node) {
@@ -125,6 +126,9 @@ public:
                   uint32_t wire_delay);
 
     SwitchBoxSide get_side(const std::shared_ptr<Node> &node) const;
+
+    const std::map<std::shared_ptr<Node>, SwitchBoxSide> get_sides_info() const
+    { return edge_to_side_; }
 
 private:
     std::map<std::shared_ptr<Node>, SwitchBoxSide> edge_to_side_;

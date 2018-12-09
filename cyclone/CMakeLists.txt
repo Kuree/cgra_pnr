@@ -7,11 +7,10 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread \
 
 add_library(cyclone src/graph.hh src/graph.cc src/route.hh
                     src/route.cc src/net.cc src/net.hh src/util.cc src/util.hh
-                    src/global.cc src/global.hh)
+                    src/global.cc src/global.hh src/io.cc src/io.hh)
 
 add_subdirectory(python/pybind11)
 add_subdirectory(python)
 
-add_executable(demo_test example/example1.cc)
-target_link_libraries(demo_test cyclone)
 
+add_subdirectory(example)

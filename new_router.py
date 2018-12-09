@@ -2,6 +2,7 @@ from __future__ import print_function
 import sys
 import os
 from argparse import ArgumentParser
+import pycyclone
 from pycyclone import RoutingGraph, SwitchBoxNode, PortNode, SwitchBoxSide
 from pycyclone import Tile, RegisterNode, NodeType
 from pycyclone import GlobalRouter
@@ -86,8 +87,7 @@ def build_routing_graph(routing_resource):
         for sb in current_tile.sbs:
             reg = RegisterNode("", x, y, sb.width,
                                sb.track)
-            neighbors = list(sb)
-            for node in neighbors:
+            for node in sb:
                 # FIXME
                 # hack to get registers in
                 # insert reg connection here
@@ -124,7 +124,7 @@ def build_routing_graph(routing_resource):
                     g.add_edge(sb, port, new_side)
                 else:
                     sb.x, sb.y = x, y
-                    g.add_edge(sb, port, gsi(side))
+                    g.add_edge(port, sb, gsi(side))
 
     return g_1, g_16
 
@@ -180,9 +180,11 @@ def main():
     r_16 = GlobalRouter(40, g_16)
     assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)
 
+    # pycyclone.io.dump_routing_graph(g_1, "1bit.graph")
+
     # route these nets
     r_1.route()
-    r_16.route()
+    # r_16.route()
 
 
 if __name__ == "__main__":
