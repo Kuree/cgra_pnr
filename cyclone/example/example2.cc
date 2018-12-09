@@ -1,6 +1,7 @@
 #include <iostream>
 #include "../src/graph.hh"
 #include "../src/io.hh"
+#include "../src/global.hh"
 
 using namespace std;
 
@@ -19,11 +20,25 @@ int main(int argc, char *argv[]) {
     string placement_filename = argv[2];
     string graph_filename = argv[3];
     auto [netlist, track_mode] = load_netlist(packed_filename);
-    (void)netlist;
-    (void)track_mode;
     auto placement = load_placement(placement_filename);
     (void)placement;
     auto graph = load_routing_graph(graph_filename);
-    (void)graph;
+
+    // set up the router
+    GlobalRouter r(40, graph);
+    for (auto const &it : placement) {
+        auto [x, y] = it.second;
+        r.add_placement(x, y, it.first);
+    }
+
+    for (const auto &iter: netlist) {
+        // Note
+        // we only route 1bit at this time
+        if (track_mode.at(iter.first) == 1)
+            r.add_net(iter.first, iter.second);
+    }
+
+    r.route();
+
     return EXIT_SUCCESS;
 }

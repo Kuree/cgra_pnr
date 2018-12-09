@@ -143,7 +143,7 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             && !current_path.empty()) {
             // find the closest point
             uint32_t min_dist = manhattan_distance(src_node, sink_node.node);
-            for (uint32_t p = 1; i < current_path.size(); p++) {
+            for (uint32_t p = 1; p < current_path.size(); p++) {
                 if (manhattan_distance(current_path[p], sink_node.node)
                     < min_dist) {
                     src_node = current_path[p];

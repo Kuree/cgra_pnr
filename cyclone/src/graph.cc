@@ -94,7 +94,7 @@ void SwitchBoxNode::add_edge(const std::shared_ptr<Node> &node,
 
 SwitchBoxSide SwitchBoxNode::get_side(const ::shared_ptr<Node> &node) const {
     if (edge_to_side_.find(node) == edge_to_side_.end())
-        throw ::runtime_error("unable to find node when assigning"
+        throw ::runtime_error("unable to find node when assigning "
                               "connections");
     return edge_to_side_.at(node);
 }

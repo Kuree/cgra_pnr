@@ -176,12 +176,19 @@ load_placement(const std::string &filename) {
 void print_conn(std::ofstream &out, const std::string &pad,
                 const std::shared_ptr<Node> &node) {
     for (auto const &n : *node) {
-        out << pad << pad << node_to_string(pad, n) << endl;
+        out << pad << pad << node_to_string(pad, n);
+        if (n->type == NodeType::SwitchBox) {
+            auto const &sb = std::reinterpret_pointer_cast<SwitchBoxNode>(n);
+            out << " " << gsv(sb->get_side(node));
+        }
+        out << endl;
     }
 }
 
 void dump_routing_graph(RoutingGraph &graph,
                         const std::string &filename) {
+    // TODO:
+    // add delay info into the graph
     std::ofstream out;
     out.open(filename);
     static const ::string PAD = "  ";
@@ -193,16 +200,18 @@ void dump_routing_graph(RoutingGraph &graph,
             auto const sb = tile.sbs[i];
             out << PAD << "SB " << i << " " << sb->width << endl;
             out << PAD << "SB BEGIN" << endl;
-            auto const &sides = sb->get_sides_info();
-            for (const auto &iter_side : sides) {
-                if (sb->find(iter_side.first) != sb->end()) {
-                    // Note
-                    // We can further reduce the graph size by only listing
-                    // edges out, since the in-coming edges will be constructed
-                    // when another switch box connected to it.
-                    out << PAD << node_to_string(PAD, iter_side.first) << " "
-                        << gsv(iter_side.second) << endl;
-                }
+            auto const &side_info = sb->get_sides_info();
+            for (const auto &n : *sb) {
+                if (side_info.find(n) == side_info.end())
+                    throw ::runtime_error("unable to find node "
+                                          + n->to_string());
+                // Note
+                // We can further reduce the graph size by only listing
+                // edges out, since the in-coming edges will be constructed
+                // when another switch box connected to it.
+                out << PAD << node_to_string(PAD, n) << " "
+                    << gsv(sb->get_side(n)) << endl;
+
             }
             out << PAD << "SB END" << endl;
         }
@@ -268,6 +277,15 @@ create_node_from_tokens_sb(const ::vector<::string> &tokens) {
     }
 }
 
+void get_line_tokens(vector<string> &line_tokens, ifstream &in, string &line) {
+    while (getline(in, line)) {
+        trim(line);
+        if (!line.empty() && line[0] != '#')
+            break;
+    }
+    line_tokens = get_tokens(line);
+}
+
 RoutingGraph load_routing_graph(const std::string &filename) {
     std::ifstream in;
     in.open(filename);
@@ -293,44 +311,71 @@ RoutingGraph load_routing_graph(const std::string &filename) {
     }
     // we have to create all tiles first
     // so we rewind and start to process the graph nodes
-    in.seekg(0);
+    in.clear();
+    in.seekg(0, std::ios::beg);
+    uint32_t x = 0;
+    uint32_t y = 0;
     while(std::getline(in, line)) {
         trim(line);
-        if (line.empty())
+        if (line.empty() || line[0] == '#')
             continue;
+
         auto line_tokens = get_tokens(line);
         if (line_tokens[0] == "TILE") {
             if (line_tokens.size() != 5)
                 throw ::runtime_error("unable to process line " + line);
-            uint32_t x = stou(line_tokens[1]);
-            uint32_t y = stou(line_tokens[2]);
-
-            // parse SBs
-            while(std::getline(in, line)) {
+            x = stou(line_tokens[1]);
+            y = stou(line_tokens[2]);
+        } else if (line_tokens[0] == "SB") {
+            uint32_t track = stou(line_tokens[1]);
+            uint32_t width = stou(line_tokens[2]);
+            SwitchBoxNode sb(x, y, width, track);
+            // the next line has to be SB
+            get_line_tokens(line_tokens, in, line);
+            if (line_tokens[0] != "SB" && line_tokens[1] != "BEGIN")
+                throw ::runtime_error("expect SB BEGIN, got " + line);
+            while (std::getline(in, line)) {
                 trim(line);
                 line_tokens = get_tokens(line);
-                if (line_tokens[0] != "SB") {
-                    throw ::runtime_error("expect token SB, got " + line);
-                }
-                uint32_t track = stou(line_tokens[1]);
-                uint32_t width = stou(line_tokens[2]);
-                SwitchBoxNode sb(x, y, width, track);
-                // the next line has to be SB
-                std::getline(in, line);
+                if (line_tokens[0] == "SB" && line_tokens[1] == "END")
+                    break;
+                auto[node, side] = create_node_from_tokens_sb(
+                        line_tokens);
+                g.add_edge(sb, node, gsi(side));
+            }
+        } else if (line_tokens[0] == "PORT" || line_tokens[0] == "REG") {
+            uint32_t track = stou(line_tokens[2]);
+            // TODO: verify the x/y
+            const ::string &name = line_tokens[1];
+            Node src_node;
+            if (line_tokens[0] == "PORT") {
+                src_node = PortNode(name, x, y, 0);
+                src_node.track = track;
+            } else {
+                src_node = RegisterNode(name, x, y, 0, track);
+            }
+            // assign width later
+            get_line_tokens(line_tokens, in, line);
+            if (line_tokens[0] != "CONN" && line_tokens[1] != "BEGIN")
+                throw ::runtime_error("expect CONN BEGIN, got " + line);
+            while (std::getline(in, line)) {
                 trim(line);
                 line_tokens = get_tokens(line);
-                if (line_tokens[0] != "SB" && line_tokens[1] != "BEGIN")
-                    throw ::runtime_error("expect SB BEGIN, got " + line);
-                while(std::getline(in, line)) {
-                    trim(line);
-                    line_tokens = get_tokens(line);
-                    if (line_tokens[0] == "SB" && line_tokens[1] == "END")
-                        break;
-                    auto [node, side] = create_node_from_tokens_sb(line_tokens);
-                    g.add_edge(sb, node, gsi(side));
+                if (line_tokens[0] == "CONN" && line_tokens[1] == "END")
+                    break;
+                auto[node, side] = create_node_from_tokens_sb(
+                        line_tokens);
+                if (src_node.width == 0) {
+                    src_node.width = node.width;
+                } else {
+                    if (src_node.width != node.width)
+                        throw::runtime_error("src node width doesn't equal to "
+                                             "linked nodes");
                 }
+                g.add_edge(src_node, node, gsi(side));
             }
         }
     }
+    in.close();
     return g;
 }
