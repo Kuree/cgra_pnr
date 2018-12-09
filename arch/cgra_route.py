@@ -156,6 +156,7 @@ def build_routing_resource(parsed_resource):
         if "cb" not in entry:
             # io entry
             operands = {"in": set(), "out": set(), "inb": set(), "outb": set()}
+            port_io = {"in": 0, "out": 1, "inb": 0, "outb": 1}
             input_channels = entry["input"]
             output_channels = entry["output"]
             for wire_info in input_channels:
@@ -188,10 +189,14 @@ def build_routing_resource(parsed_resource):
                 operands.pop("inb", None)
 
             result[(x, y)] = {"route_resource": set(),
-                              "port": operands}
+                              "port": operands,
+                              "port_io": port_io}
             continue
         # build operand connection
         operands = {"out": set(), "outb": set(), "rdata": set(), "valid": set()}
+        port_io = {}
+        for port in operands:
+            port_io[port] = 1
         connections = {}
         for bus in entry["cb"]:
             for sink in entry["cb"][bus]:
@@ -202,6 +207,7 @@ def build_routing_resource(parsed_resource):
                     wire_info = convert_bus_to_tuple(wire)
                     if wire_info is not None:
                         operands[sink].add(wire_info)
+                        port_io[sink] = 0
 
         for bus in entry["sb"]:
             muxes = entry["sb"][bus]["mux"]
@@ -239,7 +245,8 @@ def build_routing_resource(parsed_resource):
                 # in -> in on different rows
                 route_resource.add((w2, w1_info))
         result[(x, y)] = {"route_resource": route_resource,
-                          "port": operands}
+                          "port": operands,
+                          "port_io": port_io}
 
     return result
 

@@ -296,8 +296,8 @@ void Router::reorder_reg_nets() {
 }
 
 bool Router::overflow() {
-    for (const auto &chan : sb_connections_) {
-        for (const auto &io : chan) {
+    for (const auto &side : sb_connections_) {
+        for (const auto &io : side) {
             for (const auto &iter : io) {
                 if (iter.second.size() > 1)
                     return true;
