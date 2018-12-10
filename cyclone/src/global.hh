@@ -23,7 +23,7 @@ protected:
 
 private:
     uint32_t num_iteration_ = 40;
-    uint32_t fail_count_ = 0;
+    uint32_t reg_fix_iteration_ = 10;
 
     std::map<std::pair<std::shared_ptr<Node>,
                        std::shared_ptr<Node>>,

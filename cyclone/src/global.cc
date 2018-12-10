@@ -1,4 +1,5 @@
 #include <limits>
+#include <cmath>
 #include "global.hh"
 #include "util.hh"
 
@@ -36,7 +37,6 @@ void GlobalRouter::route() {
     auto reordered_netlist = reorder_reg_nets();
 
     for (uint32_t it = 0; it < num_iteration_; it++) {
-        fail_count_ = 0;
         // update the slack ratio table
         compute_slack_ratio(it);
 
@@ -163,8 +163,8 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                 throw ::runtime_error("iteration 0 failed to assign registers");
             }
             // based on the slack ratio, we choose which one to start
-
-            auto segment = route_a_star(src_node, end, cost_f);
+            auto end_f = same_loc_sb(end);
+            auto segment = route_a_star(src_node, end_f, cost_f);
             ::shared_ptr<Node> end_node = segment.back();
             if (end_node->type != NodeType::SwitchBox) {
                 // it took a shortcut to the input port
@@ -200,8 +200,8 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                                       " " + sink_node.name);
             auto segment = route_a_star(src_node, sink_node.node, cost_f);
             if (segment.back() != sink_node.node) {
-                fail_count_++;
-                continue;
+                throw ::runtime_error("unable to route to port " +
+                                      sink_node.node->name);
             }
             current_routes[net.id][sink_node.node] = segment;
         }
@@ -230,4 +230,6 @@ GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
 }
 
 GlobalRouter::GlobalRouter(uint32_t num_iteration, const RoutingGraph &g) :
-    Router(g), num_iteration_(num_iteration) {}
+    Router(g), num_iteration_(num_iteration) {
+    reg_fix_iteration_ = std::min(10u, num_iteration / 4);
+}

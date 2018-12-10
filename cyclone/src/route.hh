@@ -85,6 +85,12 @@ protected:
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
+                 std::function<bool(const std::shared_ptr<Node> &)> end_f,
+                 std::function<uint32_t(const std::shared_ptr<Node> &,
+                                        const std::shared_ptr<Node> &)> cost_f);
+
+    std::vector<std::shared_ptr<Node>>
+    route_a_star(const std::shared_ptr<Node> &start,
                  const std::pair<uint32_t, uint32_t> &end,
                  std::function<uint32_t(const std::shared_ptr<Node> &,
                                         const std::shared_ptr<Node> &)> cost_f,

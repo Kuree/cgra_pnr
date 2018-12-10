@@ -139,6 +139,15 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
+                     std::function<bool(const std::shared_ptr<Node> &)> end_f,
+                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                                         const ::shared_ptr<Node> &)> cost_f) {
+    return route_a_star(start, ::move(end_f), ::move(cost_f),
+                        manhattan_distance);
+}
+
+std::vector<std::shared_ptr<Node>>
+Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::pair<uint32_t, uint32_t> &end,
                      ::function<uint32_t(const ::shared_ptr<Node> &,
                                          const ::shared_ptr<Node> &)> cost_f,
@@ -319,9 +328,9 @@ Router::reorder_reg_nets() {
 }
 
 bool Router::overflow() {
-    for (auto &sb_connection : sb_connections_) {
-        for (const auto &conns : sb_connection) {
-            for (const auto &iter : conns) {
+    for (uint32_t side = 0; side < SwitchBoxNode::SIDES; side++) {
+        for (uint32_t io = 0; io < Node::IO; io++) {
+            for (const auto &iter : sb_connections_[side][io]) {
                 if (iter.second.size() > 1)
                     return true;
             }

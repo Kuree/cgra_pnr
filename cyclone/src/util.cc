@@ -28,6 +28,16 @@ same_loc(const std::pair<uint32_t, uint32_t> &p) {
 }
 
 std::function<bool(const std::shared_ptr<Node> &)>
+same_loc_sb(const std::pair<uint32_t, uint32_t> &p) {
+    return [&](const std::shared_ptr<Node> &node) -> bool {
+        if (node == nullptr || node->type != NodeType::SwitchBox)
+            return false;
+        else
+            return node->x == p.first && node->y == p.second;
+    };;
+}
+
+std::function<bool(const std::shared_ptr<Node> &)>
 same_node(const std::shared_ptr<Node> &node1) {
     return [&](const ::shared_ptr<Node> &node2) -> bool {
         return node1 == node2;
