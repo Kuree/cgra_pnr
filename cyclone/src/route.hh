@@ -32,7 +32,8 @@ protected:
     RoutingGraph graph_;
     std::vector<Net> netlist_;
     std::map<std::string, std::pair<uint32_t, uint32_t>> placement_;
-    std::map<int, std::set<int>> reg_nets_;
+    std::map<std::string, uint32_t> reg_net_order_;
+    std::map<std::string, uint32_t> reg_net_src_;
     // a list of routing segments indexed by net id
     std::map<int,
             std::map<std::shared_ptr<Node>,
@@ -126,7 +127,7 @@ protected:
     // group the nets to determine the relative net placement order
     // this is because we assign register locations on the fly
     void group_reg_nets();
-    void reorder_reg_nets();
+    std::vector<uint32_t> reorder_reg_nets();
 
 
     void assign_connection(std::shared_ptr<Node> &start,
@@ -141,9 +142,10 @@ protected:
                                uint32_t io);
 
 private:
+    // TODO: fix the usage of "reg" in the packed netlist
     static constexpr char REG_IN[] = "in";
     static constexpr char REG_OUT[] = "out";
-
+    static constexpr char REG[] = "reg";
 };
 
 #endif //CYCLONE_ROUTE_HH

@@ -33,15 +33,15 @@ void GlobalRouter::route() {
     // 3. actually perform iterations (described in PathFiner)
 
     group_reg_nets();
-    reorder_reg_nets();
+    auto reordered_netlist = reorder_reg_nets();
 
     for (uint32_t it = 0; it < num_iteration_; it++) {
         fail_count_ = 0;
         // update the slack ratio table
         compute_slack_ratio(it);
 
-        for (auto &net : netlist_) {
-            route_net(net, it);
+        for (const auto &net_id : reordered_netlist) {
+            route_net(netlist_[net_id], it);
         }
 
         // clear the routing resources, i.e. rip up all the nets
@@ -133,7 +133,10 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
     ::vector<::shared_ptr<Node>> current_path;
     for (uint32_t i = 1; i < net.size(); i++) {
         auto const &sink_node = net[i];
-        auto slack = slack_ratio_.at({src, sink_node.node});
+        auto slack_entry = make_pair(src, sink_node.node);
+        double slack = 1;
+        if (slack_ratio_.find(slack_entry) != slack_ratio_.end())
+            slack = slack_ratio_.at(slack_entry);
         RoutingStrategy strategy = slack > route_strategy_ratio ?
                                    RoutingStrategy::DelayDriven :
                                    RoutingStrategy::CongestionDriven;
@@ -157,17 +160,21 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
         if (sink_node.name[0] == 'r') {
             ::pair<uint32_t, uint32_t> end = {sink_node.x, sink_node.y};
             if (it != 0 && sink_node.node == nullptr) {
-                // previous attempts have failed;
-                // don't clear the previous routing table so that it will
-                // increase the cost function to re-use the same route.
-                // FIXME: remove failed count
-                fail_count_++;
-                continue;
+                throw ::runtime_error("iteration 0 failed to assign registers");
             }
             // based on the slack ratio, we choose which one to start
 
             auto segment = route_a_star(src_node, end, cost_f);
             ::shared_ptr<Node> end_node = segment.back();
+            if (end_node->type != NodeType::SwitchBox) {
+                // it took a shortcut to the input port
+                segment.pop_back();
+                end_node = segment.back();
+            }
+            if (segment.back()->type != NodeType::SwitchBox) {
+                throw ::runtime_error("the beginning of a reg search has to be "
+                                      "a switchbox");
+            }
             // then route for nearest
             auto reg_segment = route_a_star(end_node, end_reg_f, cost_f,
                                             zero_estimate);
@@ -177,9 +184,11 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                 throw ::runtime_error("unable to route for net id " + net.name);
             // assign register locations across all grouped nets
             net[i].node = reg_node;
-            for (auto &net_id: reg_nets_.at(net.id)) {
-                netlist_[net_id][0].node = reg_node;
-            }
+
+            // assign pins to the downstream
+            uint32_t reg_net_id = reg_net_src_.at(sink_node.name);
+            netlist_[reg_net_id][0].node = reg_node;
+
             // add it to the segment
             segment.insert(segment.end(), reg_segment.begin() + 1,
                            reg_segment.end());
@@ -212,7 +221,10 @@ GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
         pn += get_presence_cost(node2, node1, IN);
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node1, node2);
-        auto an = slack_ratio_.at({n1, n2});
+        auto slack_entry = std::make_pair(n1, n2);
+        double an = 1;
+        if (slack_ratio_.find(slack_entry) != slack_ratio_.end())
+            an = slack_ratio_.at({n1, n2});
         return static_cast<uint32_t>(an * dn + (1 - an) * (dn + hn) * pn);
     };
 }

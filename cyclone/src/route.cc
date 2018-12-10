@@ -258,41 +258,64 @@ std::shared_ptr<Node> Router::get_port(const uint32_t &x, const uint32_t &y,
 }
 
 void Router::group_reg_nets() {
-    ::map<::string, int> main_nets;
+    ::map<::string, int> driven_by;
     // first pass to determine where the reg nets originates.
     for (auto &net : netlist_) {
-        for (const auto &pin : net) {
-            if (pin.port == REG_IN and pin.name[0] == 'r') {
+        for (uint32_t i = 1; i < net.size(); i++) {
+            auto const &pin = net[i];
+            if (pin.port == REG and pin.name[0] == 'r') {
                 // we assume it's already packed
-                main_nets[pin.name] = net.id;
-                reg_nets_[net.id] = {};
-                break;
+                driven_by.insert({pin.name, net.id});
             }
         }
     }
 
-    // second pass the group the reg nets
+    // second pass to create a map from the reg src to sink
     for (auto &net : netlist_) {
-        for (const auto &pin : net) {
-            if (pin.port == REG_OUT and pin.name[0] == 'r') {
-                // it has to be included in the main_nets;
-                if (main_nets.find(pin.name) == main_nets.end())
-                    throw ::runtime_error("unable to find " + pin.name);
-                auto main_id = main_nets[pin.name];
-                reg_nets_[main_id].insert(net.id);
-                break;
-            }
+        if (driven_by.find(net[0].name) != driven_by.end()) {
+            // we have found a reg that drives this net
+            reg_net_src_.insert({net[0].name, net.id});
         }
     }
+
+    // a similar algorithm to topological sort to assure the orders
+    // we don't care about the lowest level of the reg tree.
+    // it is because by ensuring routing the nets that has reg sinks first,
+    // the leaves regs will automatically be routed last, hence ensure its
+    // legality
+    for (const auto &iter : driven_by) {
+        uint32_t level = 0;
+        ::string name = iter.first;
+        while (driven_by.find(name) != driven_by.end()) {
+            name = netlist_[driven_by.at(name)][0].name;
+            level++;
+        }
+        reg_net_order_.insert({iter.first, level});
+        reg_net_order_.insert({name, 0});
+    }
+
 }
 
-void Router::reorder_reg_nets() {
-    std::sort(netlist_.begin(), netlist_.end(),
-              [&](const Net &net1, const Net &net2) -> bool {
-        int net1_value = reg_nets_.find(net1.id) == reg_nets_.end()? 1 : 0;
-        int net2_value = reg_nets_.find(net2.id) == reg_nets_.end()? 1 : 0;
+std::vector<uint32_t>
+Router::reorder_reg_nets() {
+    ::vector<uint32_t> result(netlist_.size());
+    for (uint32_t i = 0; i < netlist_.size(); i++)
+        result[i] = i;
+    std::sort(result.begin(), result.end(),
+              [&](uint32_t n1, uint32_t n2) -> bool {
+        auto &net1 = netlist_[n1];
+        auto &net2 = netlist_[n2];
+        uint32_t net1_value = reg_net_order_.find(net1[0].name)
+                                  != reg_net_order_.end()?
+                              reg_net_order_.at(net1[0].name)
+                              : std::numeric_limits<uint32_t>::max();
+        uint32_t net2_value = reg_net_order_.find(net2[0].name)
+                                  != reg_net_order_.end()?
+                              reg_net_order_.at(net2[0].name)
+                              : std::numeric_limits<uint32_t>::max();
         return net1_value < net2_value;
     });
+    return result;
 }
 
 bool Router::overflow() {
