@@ -296,9 +296,9 @@ void Router::reorder_reg_nets() {
 }
 
 bool Router::overflow() {
-    for (const auto &side : sb_connections_) {
-        for (const auto &io : side) {
-            for (const auto &iter : io) {
+    for (auto &sb_connection : sb_connections_) {
+        for (const auto &conns : sb_connection) {
+            for (const auto &iter : conns) {
                 if (iter.second.size() > 1)
                     return true;
             }
@@ -306,11 +306,11 @@ bool Router::overflow() {
     }
 
     // also look at the nodes
-    for (const auto &io : node_connections_) {
-        for (const auto &iter : io) {
-            if (iter.second.size() > 1)
-                return true;
-        }
+    // FIXME
+    // solve this elegantly
+    for (const auto &iter : node_connections_[IN]) {
+        if (iter.second.size() > 1)
+            return true;
     }
 
     return false;
