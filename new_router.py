@@ -191,7 +191,7 @@ def main():
     r_16 = GlobalRouter(40, g_16)
     assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)
 
-    pycyclone.io.dump_routing_graph(g_1, "1bit.graph")
+    pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
 
     # route these nets
     # r_1.route()

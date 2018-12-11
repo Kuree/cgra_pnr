@@ -1,5 +1,9 @@
 #include <limits>
 #include <cmath>
+#include <iostream>
+#include <chrono>
+#include <iomanip>
+#include <ctime>
 #include "global.hh"
 #include "util.hh"
 
@@ -12,6 +16,7 @@ using std::runtime_error;
 using std::string;
 using std::function;
 using std::move;
+using std::setw;
 
 // routing strategy
 enum class RoutingStrategy {
@@ -37,17 +42,31 @@ void GlobalRouter::route() {
     auto reordered_netlist = reorder_reg_nets();
 
     for (uint32_t it = 0; it < num_iteration_; it++) {
+        auto time_start = std::chrono::system_clock::now();
+
+        std::cout << "Routing iteration: " << ::setw(3) << it;
+
         // update the slack ratio table
         compute_slack_ratio(it);
+        overflowed_ = false;
 
         for (const auto &net_id : reordered_netlist) {
             route_net(netlist_[net_id], it);
-        }
 
+            // assign to the routing resource
+            assign_net(net_id);
+        }
+        // assign history table
+        assign_history();
         // clear the routing resources, i.e. rip up all the nets
         clear_connections();
-        // assign to the routing resource
-        assign_nets();
+
+        auto time_end = std::chrono::system_clock::now();
+        // compute the duration
+        auto duration =
+                std::chrono::duration_cast<
+                        std::chrono::milliseconds>(time_end - time_start);
+        std::cout << " duration: " << duration.count() << " ms" << std::endl;
 
         if (!overflow()) {
             return;
@@ -223,7 +242,6 @@ GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
         pn *= pn_factor_;
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node1, node2);
-        hn *= 0.1;
         auto slack_entry = std::make_pair(n1, n2);
         double an = 1;
         if (slack_ratio_.find(slack_entry) != slack_ratio_.end())

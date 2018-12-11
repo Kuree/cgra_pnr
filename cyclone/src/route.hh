@@ -23,7 +23,8 @@ public:
     // routing related function
     virtual void route() { };
     // assign nets
-    void assign_nets();
+    void assign_net(int net_id);
+    void assign_history();
     void clear_connections();
     std::map<std::string, std::vector<std::vector<std::shared_ptr<Node>>>>
     realize();
@@ -48,6 +49,8 @@ protected:
     std::map<std::shared_ptr<Node>, uint32_t>
     sb_history_[SwitchBoxNode::SIDES][Node::IO];
     std::map<std::shared_ptr<Node>, uint32_t> node_history_[Node::IO];
+
+    bool overflowed_ = false;
 
     const static uint32_t IN = 0;
     const static uint32_t OUT = 1;
@@ -139,7 +142,10 @@ protected:
     void assign_connection(std::shared_ptr<Node> &start,
                            std::shared_ptr<Node> &end,
                            uint32_t io,
-                           uint32_t net_id);
+                           int net_id);
+    void assign_history(std::shared_ptr<Node> &start,
+                        std::shared_ptr<Node> &end,
+                        uint32_t io);
 
     uint32_t get_history_cost(const std::shared_ptr<Node> &start,
                               const std::shared_ptr<Node> &end);
@@ -154,7 +160,6 @@ private:
     static constexpr char REG_IN[] = "in";
     static constexpr char REG_OUT[] = "out";
     static constexpr char REG[] = "reg";
-    bool overflowed_ = false;
 };
 
 #endif //CYCLONE_ROUTE_HH
