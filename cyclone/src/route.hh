@@ -154,6 +154,7 @@ private:
     static constexpr char REG_IN[] = "in";
     static constexpr char REG_OUT[] = "out";
     static constexpr char REG[] = "reg";
+    bool overflowed_ = false;
 };
 
 #endif //CYCLONE_ROUTE_HH

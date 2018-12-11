@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
     auto graph = load_routing_graph(graph_filename);
 
     // set up the router
-    GlobalRouter r(40, graph);
+    GlobalRouter r(100, graph);
     for (auto const &it : placement) {
         auto [x, y] = it.second;
         r.add_placement(x, y, it.first);

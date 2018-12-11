@@ -330,27 +330,11 @@ Router::reorder_reg_nets() {
 }
 
 bool Router::overflow() {
-    for (uint32_t side = 0; side < SwitchBoxNode::SIDES; side++) {
-        for (uint32_t io = 0; io < Node::IO; io++) {
-            for (const auto &iter : sb_connections_[side][io]) {
-                if (iter.second.size() > 1)
-                    return true;
-            }
-        }
-    }
-
-    // also look at the nodes
-    // FIXME
-    // solve this elegantly
-    for (const auto &iter : node_connections_[IN]) {
-        if (iter.second.size() > 1)
-            return true;
-    }
-
-    return false;
+    return overflowed_;
 }
 
 void Router::assign_nets() {
+    overflowed_ = false;
     // using the current nets to assign routes
     for (Net &net : netlist_) {
         auto net_id = static_cast<uint32_t>(net.id);
@@ -387,10 +371,15 @@ void Router::assign_connection(std::shared_ptr<Node> &start,
     if (start->type == NodeType::SwitchBox) {
         auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
         auto side = sb->get_side(end);
-        sb_connections_[gsv(side)][io].at(start).insert(net_id);
+        auto &count = sb_connections_[gsv(side)][io].at(start);
+        count.insert(net_id);
         sb_history_[gsv(side)][io].at(start)++;
+        if (!overflowed_ && count.size() > 1)
+            overflowed_ = true;
     } else {
         node_connections_[io].at(start).insert(net_id);
+        if (!overflowed_ && node_connections_[io].at(start).size() > 1)
+            overflowed_ = true;
         node_history_[io].at(start)++;
     }
 }

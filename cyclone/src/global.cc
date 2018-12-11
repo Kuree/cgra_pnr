@@ -223,6 +223,7 @@ GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
         pn *= pn_factor_;
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node1, node2);
+        hn *= 0.1;
         auto slack_entry = std::make_pair(n1, n2);
         double an = 1;
         if (slack_ratio_.find(slack_entry) != slack_ratio_.end())
