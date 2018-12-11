@@ -14,6 +14,8 @@ using std::priority_queue;
 using std::string;
 using std::function;
 using std::move;
+using std::unordered_map;
+
 
 constexpr auto gsv = get_side_value;
 
@@ -175,8 +177,8 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         std::function<uint32_t(const ::shared_ptr<Node> &,
                                const ::shared_ptr<Node>)> h_f) {
     ::set<::shared_ptr<Node>> visited;
-    ::map<::shared_ptr<Node>, uint32_t> cost = {{start, 0}};
-    ::map<::shared_ptr<Node>, uint32_t> t_cost = {{start, 0}};
+    ::unordered_map<::shared_ptr<Node>, uint32_t> cost = {{start, 0}};
+    ::unordered_map<::shared_ptr<Node>, uint32_t> t_cost = {{start, 0}};
     // use cost as a comparator
     auto cost_comp = [&](const ::shared_ptr<Node> &a,
                          const ::shared_ptr<Node> &b) -> bool {
@@ -351,14 +353,15 @@ bool Router::overflow() {
 void Router::assign_nets() {
     // using the current nets to assign routes
     for (Net &net : netlist_) {
+        auto net_id = static_cast<uint32_t>(net.id);
         auto segments = current_routes[net.id];
         for (auto &seg_it : segments) {
             auto &segment = seg_it.second;
             for (uint32_t i = 0; i < segment.size() - 1; i++) {
                 auto &node1 = segment[i];
                 auto &node2 = segment[i + 1];
-                assign_connection(node1, node2, OUT);
-                assign_connection(node2, node1, IN);
+                assign_connection(node1, node2, OUT, net_id);
+                assign_connection(node2, node1, IN, net_id);
             }
         }
     }
@@ -379,14 +382,15 @@ Router::realize() {
 }
 
 void Router::assign_connection(std::shared_ptr<Node> &start,
-                               std::shared_ptr<Node> &end, uint32_t io) {
+                               std::shared_ptr<Node> &end, uint32_t io,
+                               uint32_t net_id) {
     if (start->type == NodeType::SwitchBox) {
         auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
         auto side = sb->get_side(end);
-        sb_connections_[gsv(side)][io].at(start).insert(end);
+        sb_connections_[gsv(side)][io].at(start).insert(net_id);
         sb_history_[gsv(side)][io].at(start)++;
     } else {
-        node_connections_[io].at(start).insert(end);
+        node_connections_[io].at(start).insert(net_id);
         node_history_[io].at(start)++;
     }
 }
@@ -428,8 +432,9 @@ uint32_t Router::get_history_cost(const std::shared_ptr<Node> &start,
 
 uint32_t Router::get_presence_cost(const std::shared_ptr<Node> &start,
                                    const std::shared_ptr<Node> &end,
-                                   uint32_t io) {
-    ::set<shared_ptr<Node>> start_connection;
+                                   uint32_t io,
+                                   int net_id) {
+    ::set<int> start_connection;
     if (start->type == NodeType::SwitchBox) {
         auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
         auto side = sb->get_side(end);
@@ -437,7 +442,7 @@ uint32_t Router::get_presence_cost(const std::shared_ptr<Node> &start,
     } else {
         start_connection = node_connections_[io].at(start);
     }
-    if (start_connection.find(end) == start_connection.end())
+    if (start_connection.find(net_id) == start_connection.end())
         return static_cast<uint32_t>(start_connection.size());
     else
         return static_cast<uint32_t>(start_connection.size() - 1);

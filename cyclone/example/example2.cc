@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     for (const auto &iter: netlist) {
         // Note
         // we only route 1bit at this time
-        if (track_mode.at(iter.first) == 16)
+        if (track_mode.at(iter.first) == 1)
             r.add_net(iter.first, iter.second);
     }
 

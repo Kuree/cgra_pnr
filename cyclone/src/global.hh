@@ -19,7 +19,8 @@ protected:
     virtual std::function<uint32_t(const std::shared_ptr<Node> &,
                                    const std::shared_ptr<Node> &)>
     create_cost_function(const std::shared_ptr<Node> &node1,
-                         const std::shared_ptr<Node> &node2);
+                         const std::shared_ptr<Node> &node2,
+                         int net_id);
 
 private:
     uint32_t num_iteration_ = 40;
@@ -28,6 +29,7 @@ private:
     std::map<std::pair<std::shared_ptr<Node>,
                        std::shared_ptr<Node>>,
              double> slack_ratio_;
+    uint32_t pn_factor_ = 5;
 };
 
 

@@ -155,7 +155,7 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                 }
             }
         }
-        auto cost_f = create_cost_function(src, sink_node.node);
+        auto cost_f = create_cost_function(src, sink_node.node, net.id);
         // find the routes
         if (sink_node.name[0] == 'r') {
             ::pair<uint32_t, uint32_t> end = {sink_node.x, sink_node.y};
@@ -213,12 +213,14 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
 
 ::function<uint32_t(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
 GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
-                                   const ::shared_ptr<Node> &n2) {
+                                   const ::shared_ptr<Node> &n2,
+                                   int net_id) {
     return [&](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> uint32_t {
         // based of the PathFinder paper
-        auto pn = get_presence_cost(node1, node2, OUT);
-        pn += get_presence_cost(node2, node1, IN);
+        auto pn = get_presence_cost(node1, node2, OUT, net_id);
+        pn += get_presence_cost(node2, node1, IN, net_id);
+        pn *= pn_factor_;
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node1, node2);
         auto slack_entry = std::make_pair(n1, n2);
@@ -230,6 +232,6 @@ GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
 }
 
 GlobalRouter::GlobalRouter(uint32_t num_iteration, const RoutingGraph &g) :
-    Router(g), num_iteration_(num_iteration) {
+    Router(g), num_iteration_(num_iteration), slack_ratio_()  {
     reg_fix_iteration_ = std::min(10u, num_iteration / 4);
 }

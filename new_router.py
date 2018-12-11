@@ -132,8 +132,9 @@ def build_routing_graph(routing_resource, layout):
                         sb.x, sb.y = x, y
                         g.add_edge(sb, port, gsi(side))
                 else:
-                    sb.x, sb.y = x, y
-                    g.add_edge(port, sb, gsi(side))
+                    sb.x, sb.y = get_new_coord(x, y, side)
+                    new_side = gos(side)
+                    g.add_edge(port, sb, new_side)
 
     return g_1, g_16
 
@@ -190,7 +191,7 @@ def main():
     r_16 = GlobalRouter(40, g_16)
     assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)
 
-    pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
+    pycyclone.io.dump_routing_graph(g_1, "1bit.graph")
 
     # route these nets
     # r_1.route()

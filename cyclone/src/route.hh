@@ -40,9 +40,9 @@ protected:
                     std::vector<std::shared_ptr<Node>>>> current_routes;
 
     // graph independent look tables for computing routing cost
-    std::map<std::shared_ptr<Node>, std::set<std::shared_ptr<Node>>>
+    std::map<std::shared_ptr<Node>, std::set<int>>
     sb_connections_[SwitchBoxNode::SIDES][Node::IO];
-    std::map<std::shared_ptr<Node>, std::set<std::shared_ptr<Node>>>
+    std::map<std::shared_ptr<Node>, std::set<int>>
     node_connections_[Node::IO];
 
     std::map<std::shared_ptr<Node>, uint32_t>
@@ -138,14 +138,16 @@ protected:
 
     void assign_connection(std::shared_ptr<Node> &start,
                            std::shared_ptr<Node> &end,
-                           uint32_t io);
+                           uint32_t io,
+                           uint32_t net_id);
 
     uint32_t get_history_cost(const std::shared_ptr<Node> &start,
                               const std::shared_ptr<Node> &end);
 
     uint32_t get_presence_cost(const std::shared_ptr<Node> &start,
                                const std::shared_ptr<Node> &end,
-                               uint32_t io);
+                               uint32_t io,
+                               int net_id);
 
 private:
     // TODO: fix the usage of "reg" in the packed netlist
