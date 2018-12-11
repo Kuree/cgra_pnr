@@ -18,6 +18,8 @@ using std::function;
 using std::move;
 using std::setw;
 
+constexpr auto gsv = get_side_value;
+
 // routing strategy
 enum class RoutingStrategy {
     DelayDriven,
@@ -50,6 +52,9 @@ void GlobalRouter::route() {
         compute_slack_ratio(it);
         overflowed_ = false;
 
+        // clear the routing resources, i.e. rip up all the nets
+        clear_connections();
+
         for (const auto &net_id : reordered_netlist) {
             route_net(netlist_[net_id], it);
 
@@ -58,8 +63,6 @@ void GlobalRouter::route() {
         }
         // assign history table
         assign_history();
-        // clear the routing resources, i.e. rip up all the nets
-        clear_connections();
 
         auto time_end = std::chrono::system_clock::now();
         // compute the duration
@@ -91,10 +94,8 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
         for (auto &net : netlist_) {
             // FIXME
             // refactor the net to distinguish the source and sinks
-            const auto &src = net[0].node;
-            for (uint32_t i = 1; i < net.size(); i++) {
-                auto const &sink = net[i].node;
-                slack_ratio_[{src, sink}] = 1;
+            for (uint32_t seg_index = 1; seg_index < net.size(); seg_index++) {
+                slack_ratio_[{net.id, seg_index}] = 1;
             }
         }
     } else {
@@ -112,8 +113,8 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
             if (src == nullptr)
                 throw ::runtime_error("unable to find src when compute slack"
                                       "ratio");
-            for (uint32_t i = 1; i < net.size(); i++) {
-                auto const &sink = net[i].node;
+            for (uint32_t seg_index = 1; seg_index < net.size(); seg_index++) {
+                auto const &sink = net[seg_index].node;
                 // find the routes
                 if (sink == nullptr)
                     throw ::runtime_error("unable to find sink when compute"
@@ -123,7 +124,7 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
                 for (const auto &node : route) {
                     delay += node->delay;
                 }
-                slack_ratio_[{src, sink}] = delay;
+                slack_ratio_[{net.id, seg_index}] = delay;
                 if (delay > max_delay)
                     max_delay = delay;
                 if (delay < min_delay)
@@ -150,12 +151,10 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
     if (src == nullptr)
         throw ::runtime_error("unable to find src when route net");
     ::vector<::shared_ptr<Node>> current_path;
-    for (uint32_t i = 1; i < net.size(); i++) {
-        auto const &sink_node = net[i];
-        auto slack_entry = make_pair(src, sink_node.node);
-        double slack = 1;
-        if (slack_ratio_.find(slack_entry) != slack_ratio_.end())
-            slack = slack_ratio_.at(slack_entry);
+    for (uint32_t seg_index = 1; seg_index < net.size(); seg_index++) {
+        auto const &sink_node = net[seg_index];
+        auto slack_entry = make_pair(src, sink_node.name);
+        double slack = slack_ratio_.at({net.id, seg_index});
         RoutingStrategy strategy = slack > route_strategy_ratio ?
                                    RoutingStrategy::DelayDriven :
                                    RoutingStrategy::CongestionDriven;
@@ -174,7 +173,8 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                 }
             }
         }
-        auto cost_f = create_cost_function(src, sink_node.node, net.id);
+        auto cost_f = create_cost_function(src, sink_node.node, net.id,
+                                           seg_index);
         // find the routes
         if (sink_node.name[0] == 'r') {
             ::pair<uint32_t, uint32_t> end = {sink_node.x, sink_node.y};
@@ -182,35 +182,27 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                 throw ::runtime_error("iteration 0 failed to assign registers");
             }
             // based on the slack ratio, we choose which one to start
-            auto end_f = same_loc_sb(end);
+            auto end_f = get_free_register(end);
             auto segment = route_a_star(src_node, end_f, cost_f);
-            ::shared_ptr<Node> end_node = segment.back();
-            if (end_node->type != NodeType::SwitchBox) {
-                // it took a shortcut to the input port
-                segment.pop_back();
-                end_node = segment.back();
-            }
-            if (segment.back()->type != NodeType::SwitchBox) {
+
+            if (segment.back()->type != NodeType::Register) {
                 throw ::runtime_error("the beginning of a reg search has to be "
-                                      "a switchbox");
+                                      "a register");
             }
-            // then route for nearest
-            auto reg_segment = route_a_star(end_node, end_reg_f, cost_f,
-                                            zero_estimate);
-            auto reg_node = reg_segment.back();
+
+            auto reg_node = segment.back();
             // make sure it's an reg node
             if (reg_node == nullptr || reg_node->type != NodeType::Register)
                 throw ::runtime_error("unable to route for net id " + net.name);
+            if (reg_node->x != sink_node.x || reg_node->y != sink_node.y)
+                throw ::runtime_error("error in assigning registers");
             // assign register locations across all grouped nets
-            net[i].node = reg_node;
+            net[seg_index].node = reg_node;
 
             // assign pins to the downstream
             uint32_t reg_net_id = reg_net_src_.at(sink_node.name);
             netlist_[reg_net_id][0].node = reg_node;
 
-            // add it to the segment
-            segment.insert(segment.end(), reg_segment.begin() + 1,
-                           reg_segment.end());
             // store the segment
             current_routes[net.id][sink_node.node] = segment;
         } else {
@@ -233,19 +225,19 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
 ::function<uint32_t(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
 GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
                                    const ::shared_ptr<Node> &n2,
-                                   int net_id) {
-    return [&](const ::shared_ptr<Node> &node1,
+                                   int net_id,
+                                   uint32_t seg_index) {
+    return [&, net_id, seg_index](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> uint32_t {
         // based of the PathFinder paper
         auto pn = get_presence_cost(node1, node2, OUT, net_id);
         pn += get_presence_cost(node2, node1, IN, net_id);
         pn *= pn_factor_;
         auto dn = node1->get_edge_cost(node2);
-        auto hn = get_history_cost(node1, node2);
+        auto hn = get_history_cost(node1, node2) * 2;
         auto slack_entry = std::make_pair(n1, n2);
-        double an = 1;
-        if (slack_ratio_.find(slack_entry) != slack_ratio_.end())
-            an = slack_ratio_.at({n1, n2});
+        double an = slack_ratio_.at({net_id, seg_index});
+
         return static_cast<uint32_t>(an * dn + (1 - an) * (dn + hn) * pn);
     };
 }
@@ -253,4 +245,35 @@ GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
 GlobalRouter::GlobalRouter(uint32_t num_iteration, const RoutingGraph &g) :
     Router(g), num_iteration_(num_iteration), slack_ratio_()  {
     reg_fix_iteration_ = std::min(10u, num_iteration / 4);
+}
+
+std::function<bool(const std::shared_ptr<Node> &)>
+GlobalRouter::get_free_register(const std::pair<uint32_t, uint32_t> &p) {
+    return [&, p](const std::shared_ptr<Node> &node) -> bool {
+        if (node == nullptr || node->type != NodeType::Register
+            || node->x != p.first || node->y != p.second) {
+            return false;
+        }
+        else {
+            // see it's been used or not
+            if (!node_connections_[IN].at(node).empty())
+                return false;
+            // one of it's connections has to be free
+            for (auto const &n : *node) {
+                if (n->type == NodeType::SwitchBox) {
+                    auto sb =
+                            std::reinterpret_pointer_cast<SwitchBoxNode>(n);
+                    auto side = sb->get_side(node);
+                    if (sb_connections_[gsv(side)][OUT].at(n).empty()) {
+                        return true;
+                    }
+                } else {
+                    if (node_connections_[IN].at(n).empty())
+                        return true;
+                }
+            }
+
+            return false;
+        }
+    };;
 }

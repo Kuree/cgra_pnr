@@ -55,6 +55,8 @@ protected:
     const static uint32_t IN = 0;
     const static uint32_t OUT = 1;
 
+    static constexpr char REG[] = "reg";
+
     std::vector<std::shared_ptr<Node>>
     route_dijkstra(const std::shared_ptr<Node> &start,
                    const std::shared_ptr<Node> &end);
@@ -159,7 +161,6 @@ private:
     // TODO: fix the usage of "reg" in the packed netlist
     static constexpr char REG_IN[] = "in";
     static constexpr char REG_OUT[] = "out";
-    static constexpr char REG[] = "reg";
 };
 
 #endif //CYCLONE_ROUTE_HH
