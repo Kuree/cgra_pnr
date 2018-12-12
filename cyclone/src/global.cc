@@ -258,22 +258,7 @@ GlobalRouter::get_free_register(const std::pair<uint32_t, uint32_t> &p) {
             // see it's been used or not
             if (!node_connections_[IN].at(node).empty())
                 return false;
-            // one of it's connections has to be free
-            for (auto const &n : *node) {
-                if (n->type == NodeType::SwitchBox) {
-                    auto sb =
-                            std::reinterpret_pointer_cast<SwitchBoxNode>(n);
-                    auto side = sb->get_side(node);
-                    if (sb_connections_[gsv(side)][OUT].at(n).empty()) {
-                        return true;
-                    }
-                } else {
-                    if (node_connections_[IN].at(n).empty())
-                        return true;
-                }
-            }
-
-            return false;
+            return true;
         }
     };;
 }

@@ -193,6 +193,7 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
     ::map<::shared_ptr<Node>, ::shared_ptr<Node>> trace;
 
     ::shared_ptr<Node> head = nullptr;
+    ::shared_ptr<Node> pre_node = nullptr;
 
     while (!end_f(head)) {
         if (working_set.empty())
@@ -201,8 +202,11 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         head = working_set.top();
         working_set.pop();
 
+        if (trace.find(head) != trace.end())
+            pre_node = trace.at(head);
+
         uint32_t current_cost = cost[head];
-        for (auto const &node : *head) {
+        for (auto const &node : head->get_neighbor(pre_node)) {
             if (visited.find(node) != visited.end())
                 continue;
             uint32_t edge_cost = head->get_edge_cost(node) + cost_f(head, node);

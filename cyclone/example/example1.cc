@@ -1,6 +1,7 @@
 #include <iostream>
 #include "../src/global.hh"
 #include "../src/util.hh"
+#include "../src/io.hh"
 
 #define WIDTH 1
 #define NUM_TRACK 2
@@ -13,8 +14,24 @@ using std::string;
 using std::vector;
 using std::cout;
 using std::endl;
+using std::set;
+using std::shared_ptr;
 
 constexpr auto gsi = get_side_int;
+
+::set<::pair<uint32_t, uint32_t>>
+get_nearby_tiles(const Tile &t, RoutingGraph &g) {
+    // brute force to compute the distance
+    ::set<::pair<uint32_t, uint32_t>> tiles;
+    for (const auto &tile_iter : g) {
+        const auto &xy = tile_iter.first;
+        int dist = abs(static_cast<int>(t.x) - static_cast<int>(xy.first)) +
+                   abs(static_cast<int>(t.y) - static_cast<int>(xy.second));
+        if (dist == 1)
+            tiles.insert(xy);
+    }
+    return tiles;
+}
 
 int main(int, char **) {
     // just some example on how to use it
@@ -42,38 +59,43 @@ int main(int, char **) {
         out_port.y = tile.y;
         for (uint32_t i = 0; i < NUM_TRACK; i++) {
             sb.track = i;
-            sb.x = tile.x;
-            sb.y = tile.y;
 
-            // out can go any sides
+            // out can go any sides, that is to the tiles nearby
+            // so we wire the switch box as well
             for (uint32_t side = 0; side < SIDES; side++) {
-                g.add_edge(out_port, sb, gsi(side));
+                for (auto const xy : get_nearby_tiles(tile, g)) {
+                    sb.x = xy.first;
+                    sb.y = xy.second;
+                    g.add_edge(out_port, sb, gsi(side));
+                    for (auto const new_xy : get_nearby_tiles(g[xy], g)) {
+                        auto new_sb = SwitchBoxNode(sb);
+                        new_sb.x = new_xy.first;
+                        new_sb.y = new_xy.second;
+
+                        for (uint32_t chan = 0; chan < NUM_TRACK; chan++) {
+                            sb.track = chan;
+                            new_sb.track = chan;
+                            g.add_edge(out_port, sb, new_sb, gsi(side));
+                        }
+                    }
+
+                }
             }
             // only left or right can come in
-            g.add_edge(sb, in_port, SwitchBoxSide::Left);
-            g.add_edge(sb, in_port, SwitchBoxSide::Right);
+            sb.x = tile.x;
+            sb.y = tile.y;
+            auto new_sb = SwitchBoxNode(sb);
+            for (auto const xy : get_nearby_tiles(tile, g)) {
+                new_sb.x = xy.first;
+                new_sb.y = xy.second;
+
+                g.add_edge(new_sb, sb, in_port, SwitchBoxSide::Left);
+                g.add_edge(new_sb, sb, in_port, SwitchBoxSide::Right);
+            }
         }
     }
 
-    // wire these switch boxes together
-    for (uint32_t chan = 0; chan < NUM_TRACK; chan++) {
-        auto sb0 = g[{0, 0}].sbs[chan];
-        auto sb1 = g[{0, 1}].sbs[chan];
-        auto sb2 = g[{1, 0}].sbs[chan];
-        auto sb3 = g[{1, 1}].sbs[chan];
-
-        g.add_edge(*sb0, *sb1, SwitchBoxSide::Left);
-        g.add_edge(*sb1, *sb0, SwitchBoxSide::Right);
-
-        g.add_edge(*sb0, *sb2, SwitchBoxSide::Bottom);
-        g.add_edge(*sb2, *sb0, SwitchBoxSide::Top);
-
-        g.add_edge(*sb3, *sb1, SwitchBoxSide::Top);
-        g.add_edge(*sb1, *sb3, SwitchBoxSide::Bottom);
-
-        g.add_edge(*sb3, *sb2, SwitchBoxSide::Right);
-        g.add_edge(*sb2, *sb3, SwitchBoxSide::Left);
-    }
+    dump_routing_graph(g, "test.graph");
 
     // 2. create a global router and do the configuration in order
     GlobalRouter r(20, g);
