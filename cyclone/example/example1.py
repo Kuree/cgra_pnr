@@ -64,7 +64,6 @@ def main():
     netlist = {"n1": [("p0", "out"), ("p3", "in")],
                "n2": [("p1", "out"), ("p0", "in")],
                "n3": [("p3", "out"), ("p2", "in")],
-               "n4": [("p2", "out"), ("p1", "in")]}
 
     for net_id in netlist:
         r.add_net(net_id, netlist[net_id])
