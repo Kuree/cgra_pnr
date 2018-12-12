@@ -175,7 +175,7 @@ load_placement(const std::string &filename) {
 
 void print_conn(std::ofstream &out, const std::string &pad,
                 const std::shared_ptr<Node> &node) {
-    for (auto const &n : node->get_neighbor(nullptr)) {
+    for (auto const &n : *node) {
         out << pad << pad << node_to_string(pad, n);
         if (n->type == NodeType::SwitchBox) {
             auto const &sb = std::reinterpret_pointer_cast<SwitchBoxNode>(n);
@@ -201,22 +201,17 @@ void dump_routing_graph(RoutingGraph &graph,
             out << PAD << "SB " << i << " " << sb->width << endl;
             out << PAD << "SB BEGIN" << endl;
             auto const &side_info = sb->get_sides_info();
-            auto neighbors = sb->get_track_from();
-            for (const auto &from_node : neighbors) {
-                auto const &to_nodes = sb->get_neighbor(from_node);
-                out << PAD << node_to_string(PAD, from_node) << endl;
-                for (const auto &n : to_nodes) {
-                    if (side_info.find(n) == side_info.end())
-                        throw ::runtime_error("unable to find node "
-                                              + n->to_string());
-                    // Note
-                    // We can further reduce the graph size by only listing
-                    // edges out, since the in-coming edges will be constructed
-                    // when another switch box connected to it.
-                    out << PAD << PAD << node_to_string(PAD, n) << " "
-                        << gsv(sb->get_side(n)) << endl;
+            for (const auto &n : *sb) {
+                if (side_info.find(n) == side_info.end())
+                    throw ::runtime_error("unable to find node "
+                                          + n->to_string());
+                // Note
+                // We can further reduce the graph size by only listing
+                // edges out, since the in-coming edges will be constructed
+                // when another switch box connected to it.
+                out << PAD << node_to_string(PAD, n) << " "
+                    << gsv(sb->get_side(n)) << endl;
 
-                }
             }
             out << PAD << "SB END" << endl;
         }
@@ -225,8 +220,6 @@ void dump_routing_graph(RoutingGraph &graph,
             // This is to compress the output graph since it will be referenced
             // by other tile that's connected to
             if (port_iter.second->size() == 0)
-                continue;
-            if (!port_iter.second->has_track_from(nullptr))
                 continue;
             out << PAD << port_iter.second->to_string() << endl;
             out << PAD << "CONN BEGIN" << endl;

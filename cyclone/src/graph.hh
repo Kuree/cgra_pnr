@@ -6,9 +6,6 @@
 #include <map>
 #include <vector>
 #include <iostream>
-#include <unordered_map>
-#include <forward_list>
-#include <unordered_set>
 
 enum NodeType {
     SwitchBox,
@@ -22,9 +19,6 @@ enum class SwitchBoxSide {
     Left = 2,
     Top = 3
 };
-
-class Node;
-
 
 class Node {
 public:
@@ -50,25 +44,17 @@ public:
     virtual void add_edge(const std::shared_ptr<Node> &node)
     { add_edge(node, DEFAULT_WIRE_DELAY); }
     virtual void add_edge(const std::shared_ptr<Node> &node,
-                          uint32_t wire_delay)
-    { add_edge(nullptr, node, wire_delay); }    
-    virtual void add_edge(const std::shared_ptr<Node> &start,
-                          const std::shared_ptr<Node> &end)
-    { add_edge(start, end, DEFAULT_WIRE_DELAY); }
-    virtual void add_edge(const std::shared_ptr<Node> &start,
-                          const std::shared_ptr<Node> &end,
                           uint32_t wire_delay);
 
     uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
 
-    // operator overload to help with looping
-    std::forward_list<std::shared_ptr<Node>>&
-    get_neighbor(std::shared_ptr<Node> start);
-    std::unordered_set<std::shared_ptr<Node>> get_track_from();
-    void add_empty_track_from(const std::shared_ptr<Node> &node);
-    bool has_track_from(const std::shared_ptr<Node> &node) const
-    { return neighbors_.find(node) != neighbors_.end(); }
-
+    // helper function to allow iteration
+    std::set<std::shared_ptr<Node>>::iterator begin() const
+    { return neighbors_.begin(); }
+    std::set<std::shared_ptr<Node>>::iterator end() const
+    { return neighbors_.end(); }
+    std::set<std::shared_ptr<Node>>::iterator
+    find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
     uint64_t size() { return neighbors_.size(); }
 
     virtual std::string to_string() const;
@@ -85,10 +71,8 @@ protected:
          uint32_t width);
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
          uint32_t width, uint32_t track);
-    std::unordered_map<std::shared_ptr<Node>,
-                       std::forward_list<std::shared_ptr<Node>>>  neighbors_;
-
-    std::unordered_map<std::shared_ptr<Node>, uint32_t> edge_cost_;
+    std::set<std::shared_ptr<Node>> neighbors_;
+    std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
 
 };
 
@@ -126,27 +110,19 @@ public:
     // because we need to indicate the side of switchbox,
     // we need to disable the parent method
     // throw an exception whenever they are called
-    void add_edge(const std::shared_ptr<Node>&) override 
-    { throw std::runtime_error("use add_edge with side instead"); }
-    void add_edge(const std::shared_ptr<Node>&, uint32_t) override
-    { throw std::runtime_error("use add_edge with side instead"); }
-    void add_edge(const std::shared_ptr<Node>&,
-                  const std::shared_ptr<Node>&) override
-    { throw std::runtime_error("use add_edge with side instead"); }
-    void add_edge(const std::shared_ptr<Node>&,
-                  const std::shared_ptr<Node>&, uint32_t) override
-    { throw std::runtime_error("use add_edge with side instead"); }
+    void add_edge(const std::shared_ptr<Node> &) override  {
+        throw std::runtime_error("use add_edge with side instead");
+    }
+    void add_edge(const std::shared_ptr<Node>&, uint32_t) override {
+        throw std::runtime_error("use add_edge with side instead");
+    }
 
     void add_side_info(const std::shared_ptr<Node> &node, SwitchBoxSide side)
     { edge_to_side_.insert({node, side}); }
 
     // the actual one
-    void add_edge(const std::shared_ptr<Node> &start,
-                  const std::shared_ptr<Node> &end, SwitchBoxSide side)
-    { add_edge(start, end, side, Node::DEFAULT_WIRE_DELAY); }
-    void add_edge(const std::shared_ptr<Node> &start,
-                  const std::shared_ptr<Node> &end,
-                  SwitchBoxSide side,
+    void add_edge(const std::shared_ptr<Node> &node, SwitchBoxSide side);
+    void add_edge(const std::shared_ptr<Node> &node, SwitchBoxSide side,
                   uint32_t wire_delay);
 
     SwitchBoxSide get_side(const std::shared_ptr<Node> &node) const;
@@ -203,7 +179,6 @@ public:
     // used to construct the routing graph.
     // called after tiles have been constructed.
     // concepts copied from networkx as it will create nodes along the way
-    // FIXME: refactor the code to make it cleaner, instead of plain add_edge
     void add_edge(const Node &node1, const Node &node2)
     { add_edge(node1, node2, Node::DEFAULT_WIRE_DELAY); }
     void add_edge(const Node &node1, const Node &node2, uint32_t wire_delay);
@@ -215,11 +190,11 @@ public:
     void add_edge(const Node &node1, const Node &node2, SwitchBoxSide side,
                   uint32_t wire_delay);
 
-    void add_edge(const Node &start, const Node &mid,
-                  const Node &end, SwitchBoxSide side)
-    { add_edge(start, mid, end, side, Node::DEFAULT_WIRE_DELAY); }
-    void add_edge(const Node &start, const Node &mid,
-                  const Node &end, SwitchBoxSide side,
+    void add_edge(const SwitchBoxNode &node1, const SwitchBoxNode &node2,
+                  SwitchBoxSide side1, SwitchBoxSide side2)
+    { add_edge(node1, node2, side1, side2, Node::DEFAULT_WIRE_DELAY); }
+    void add_edge(const SwitchBoxNode &node1, const SwitchBoxNode &node2,
+                  SwitchBoxSide side1, SwitchBoxSide side2,
                   uint32_t wire_delay);
 
     // TODO
