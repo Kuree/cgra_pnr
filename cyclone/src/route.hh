@@ -42,12 +42,8 @@ protected:
 
     // graph independent look tables for computing routing cost
     std::map<std::shared_ptr<Node>, std::set<int>>
-    sb_connections_[SwitchBoxNode::SIDES][Node::IO];
-    std::map<std::shared_ptr<Node>, std::set<int>>
     node_connections_[Node::IO];
 
-    std::map<std::shared_ptr<Node>, uint32_t>
-    sb_history_[SwitchBoxNode::SIDES][Node::IO];
     std::map<std::shared_ptr<Node>, uint32_t> node_history_[Node::IO];
 
     bool overflowed_ = false;
@@ -141,19 +137,16 @@ protected:
     std::vector<uint32_t> reorder_reg_nets();
 
 
-    void assign_connection(std::shared_ptr<Node> &start,
-                           std::shared_ptr<Node> &end,
+    void assign_connection(const std::shared_ptr<Node> &node,
                            uint32_t io,
                            int net_id);
-    void assign_history(std::shared_ptr<Node> &start,
-                        std::shared_ptr<Node> &end,
+    void assign_history(std::shared_ptr<Node> &node,
                         uint32_t io);
 
     uint32_t get_history_cost(const std::shared_ptr<Node> &start,
                               const std::shared_ptr<Node> &end);
 
-    uint32_t get_presence_cost(const std::shared_ptr<Node> &start,
-                               const std::shared_ptr<Node> &end,
+    uint32_t get_presence_cost(const std::shared_ptr<Node> &node,
                                uint32_t io,
                                int net_id);
 

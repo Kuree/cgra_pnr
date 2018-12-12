@@ -82,6 +82,7 @@ public:
              uint32_t width) : Node(NodeType::Port, name, x, y, width) {}
     PortNode(const std::string &name, uint32_t x, uint32_t y)
         : Node(NodeType::Port, name, x, y) {}
+    virtual std::string to_string() const override;
 };
 
 class RegisterNode : public Node {
@@ -89,6 +90,8 @@ public:
     RegisterNode(const std::string &name, uint32_t x, uint32_t y,
                  uint32_t width, uint32_t track)
         : Node(NodeType::Register, name, x, y, width, track) { }
+
+    virtual std::string to_string() const override;
 };
 
 // side illustration
@@ -100,38 +103,14 @@ public:
 //      1
 class SwitchBoxNode : public Node {
 public:
-    SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width, uint32_t track);
+    SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width, uint32_t track,
+                  SwitchBoxSide side = SwitchBoxSide::Bottom);
 
     SwitchBoxNode(const SwitchBoxNode &node);
 
-    const static int SIDES = 4;
+    virtual std::string to_string() const override;
 
-    // Note:
-    // because we need to indicate the side of switchbox,
-    // we need to disable the parent method
-    // throw an exception whenever they are called
-    void add_edge(const std::shared_ptr<Node> &) override  {
-        throw std::runtime_error("use add_edge with side instead");
-    }
-    void add_edge(const std::shared_ptr<Node>&, uint32_t) override {
-        throw std::runtime_error("use add_edge with side instead");
-    }
-
-    void add_side_info(const std::shared_ptr<Node> &node, SwitchBoxSide side)
-    { edge_to_side_.insert({node, side}); }
-
-    // the actual one
-    void add_edge(const std::shared_ptr<Node> &node, SwitchBoxSide side);
-    void add_edge(const std::shared_ptr<Node> &node, SwitchBoxSide side,
-                  uint32_t wire_delay);
-
-    SwitchBoxSide get_side(const std::shared_ptr<Node> &node) const;
-
-    const std::map<std::shared_ptr<Node>, SwitchBoxSide> get_sides_info() const
-    { return edge_to_side_; }
-
-private:
-    std::map<std::shared_ptr<Node>, SwitchBoxSide> edge_to_side_;
+    SwitchBoxSide side;
 
 };
 
@@ -139,39 +118,75 @@ private:
 bool operator==(const Node &node1, const Node &node2);
 bool operator==(const std::shared_ptr<Node> &ptr, const Node &node);
 
+
+class Switch {
+
+public:
+    Switch(uint32_t x, uint32_t y, uint32_t num_track,
+           uint32_t width, uint32_t switch_id,
+           const std::set<std::tuple<uint32_t,
+                          SwitchBoxSide, uint32_t,
+                          SwitchBoxSide>> &internal_wires);
+
+    Switch(const Switch &switchbox);
+
+    uint32_t x;
+    uint32_t y;
+    uint32_t num_track;
+    uint32_t width;
+
+    // it's the programmer's responsibility to ensure that each switch type
+    // has unique ID
+    uint32_t id;
+
+    const static int SIDES = 4;
+
+    const std::shared_ptr<SwitchBoxNode> &
+    operator[](const std::pair<uint32_t, SwitchBoxSide> &track_side) const;
+    const std::shared_ptr<SwitchBoxNode> &
+    operator[](const std::pair<SwitchBoxSide, uint32_t> &track_side) const;
+    const std::vector<std::shared_ptr<SwitchBoxNode>>&
+    operator[](const SwitchBoxSide &side) const;
+
+private:
+    // this is used to construct internal connection of switch boxes
+    std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide >>
+    internal_wires_;
+
+    std::vector<std::shared_ptr<SwitchBoxNode>> sbs_[SIDES];
+};
+
 struct Tile {
     // helper struct to holds the graph nodes
     uint32_t x = 0;
     uint32_t y = 0;
     uint32_t height = 1;
 
+    Switch switchbox;
     // Note:
     // node name has to be unique within a tile otherwise it can't be located
     // through the tiles
-    std::vector<std::shared_ptr<SwitchBoxNode>> sbs;
     std::map<std::string, std::shared_ptr<PortNode>> ports;
     std::map<std::string, std::shared_ptr<RegisterNode>> registers;
 
-    uint32_t num_tracks() { return static_cast<uint32_t>(sbs.size()); }
+    uint32_t num_tracks() { return static_cast<uint32_t>(switchbox.num_track); }
 
-    Tile() = default;
-    Tile(uint32_t x, uint32_t y, uint32_t num_tracks)
-        : Tile(x, y, 1, num_tracks) { };
-    Tile(uint32_t x, uint32_t y, uint32_t height, uint32_t num_tracks);
+    Tile(uint32_t x, uint32_t y, const Switch &switchbox)
+        : Tile(x, y, 1, switchbox) { };
+    Tile(uint32_t x, uint32_t y, uint32_t height, const Switch &switchbox);
 };
 
 std::ostream& operator<<(std::ostream &out, const Tile &tile);
+
+
 
 class RoutingGraph {
 public:
     RoutingGraph() : grid_() {}
     // helper constructors to create the grid efficiently
-    RoutingGraph(uint32_t width, uint32_t height, uint32_t num_tracks,
-                 const SwitchBoxNode &sb)
-                 : RoutingGraph(width, height, num_tracks,
-                                std::vector<SwitchBoxNode>{sb}) {}
-    RoutingGraph(uint32_t width, uint32_t height, uint32_t num_tracks,
-                 const std::vector<SwitchBoxNode> &sbs);
+    RoutingGraph(uint32_t width, uint32_t height,
+                 const Switch &switchbox);
+
     // manually add tiles
     void add_tile(const Tile &tile) { grid_.insert({{tile.x, tile.y}, tile}); }
     void remove_tile(const std::pair<uint32_t, uint32_t> &t) { grid_.erase(t); }
@@ -183,25 +198,12 @@ public:
     { add_edge(node1, node2, Node::DEFAULT_WIRE_DELAY); }
     void add_edge(const Node &node1, const Node &node2, uint32_t wire_delay);
 
-    // side is relative to node1 if it is a switch box
-    // otherwise it's relative to node2
-    void add_edge(const Node &node1, const Node &node2, SwitchBoxSide side)
-    { add_edge(node1, node2, side, Node::DEFAULT_WIRE_DELAY); }
-    void add_edge(const Node &node1, const Node &node2, SwitchBoxSide side,
-                  uint32_t wire_delay);
-
-    void add_edge(const SwitchBoxNode &node1, const SwitchBoxNode &node2,
-                  SwitchBoxSide side1, SwitchBoxSide side2)
-    { add_edge(node1, node2, side1, side2, Node::DEFAULT_WIRE_DELAY); }
-    void add_edge(const SwitchBoxNode &node1, const SwitchBoxNode &node2,
-                  SwitchBoxSide side1, SwitchBoxSide side2,
-                  uint32_t wire_delay);
-
     // TODO
     // add remove edge functions
 
     std::shared_ptr<SwitchBoxNode> get_sb(const uint32_t &x, const uint32_t &y,
-                                          const uint32_t &track);
+                                          const uint32_t &track,
+                                          const SwitchBoxSide &side);
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);

@@ -18,16 +18,18 @@ using std::unordered_map;
 
 
 constexpr auto gsv = get_side_value;
+constexpr auto gsi = get_side_int;
 
 Router::Router(const RoutingGraph &g) : graph_(g) {
     // create the look up table for cost analysis
     for (const auto &tile_iter : graph_) {
         const auto &tile = tile_iter.second;
-        for (auto const &sb : tile.sbs) {
-            for (uint32_t side = 0; side < SwitchBoxNode::SIDES; side++) {
+        for (uint32_t side = 0; side < Switch::SIDES; side++) {
+            auto &side_sbs = tile.switchbox[get_side_int(side)];
+            for (const auto &sb : side_sbs) {
                 for (uint32_t io = 0; io < Node::IO; io++) {
-                    sb_connections_[side][io].insert({sb, {}});
-                    sb_history_[side][io].insert({sb, {}});
+                    node_connections_[io].insert({sb, {}});
+                    node_history_[io].insert({sb, {}});
                 }
             }
         }
@@ -339,8 +341,8 @@ void Router::assign_net(int net_id) {
         for (uint32_t i = 0; i < segment.size() - 1; i++) {
             auto &node1 = segment[i];
             auto &node2 = segment[i + 1];
-            assign_connection(node1, node2, OUT, net_id);
-            assign_connection(node2, node1, IN, net_id);
+            assign_connection(node1, OUT, net_id);
+            assign_connection(node2, IN, net_id);
         }
     }
 }
@@ -353,8 +355,8 @@ void Router::assign_history() {
             for (uint32_t i = 0; i < segment.size() - 1; i++) {
                 auto &node1 = segment[i];
                 auto &node2 = segment[i + 1];
-                assign_history(node1, node2, OUT);
-                assign_history(node2, node1, IN);
+                assign_history(node1, OUT);
+                assign_history(node2, IN);
             }
         }
     }
@@ -374,33 +376,17 @@ Router::realize() {
     return result;
 }
 
-void Router::assign_connection(std::shared_ptr<Node> &start,
-                               std::shared_ptr<Node> &end, uint32_t io,
+void Router::assign_connection(const std::shared_ptr<Node> &node, uint32_t io,
                                int net_id) {
-    if (start->type == NodeType::SwitchBox) {
-        auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
-        auto side = sb->get_side(end);
-        auto &count = sb_connections_[gsv(side)][io].at(start);
-        count.insert(net_id);
-        if (!overflowed_ && count.size() > 1)
-            overflowed_ = true;
-    } else {
-        node_connections_[io].at(start).insert(net_id);
-        if (!overflowed_ && node_connections_[io].at(start).size() > 1)
-            overflowed_ = true;
-    }
+    node_connections_[io].at(node).insert(net_id);
+    if (!overflowed_ && node_connections_[io].at(node).size() > 1)
+        overflowed_ = true;
+
 }
 
-void Router::assign_history(std::shared_ptr<Node> &start,
-                            std::shared_ptr<Node> &end,
+void Router::assign_history(std::shared_ptr<Node> &end,
                             uint32_t io) {
-    if (start->type == NodeType::SwitchBox) {
-        auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
-        auto side = sb->get_side(end);
-        sb_history_[gsv(side)][io].at(start)++;
-    } else {
-        node_history_[io].at(start)++;
-    }
+    node_history_[io].at(end)++;
 }
 
 void Router::clear_connections() {
@@ -409,47 +395,23 @@ void Router::clear_connections() {
             iter.second.clear();
         }
     }
-    for (auto &chan : sb_connections_) {
-        for (auto &io : chan) {
-            for (auto &iter : io) {
-                iter.second.clear();
-            }
-        }
-    }
-
 }
 
-uint32_t Router::get_history_cost(const std::shared_ptr<Node> &start,
+uint32_t Router::get_history_cost(const std::shared_ptr<Node> &,
                                   const std::shared_ptr<Node> &end) {
     uint32_t result = 0;
-    if (start->type == NodeType::SwitchBox) {
-        auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
-        auto side = sb->get_side(end);
-        const auto &history = sb_history_[gsv(side)];
-        for (const auto &io_conn : history) {
-            result += io_conn.at(start);
-        }
 
-    } else {
-        for (auto &io : node_history_) {
-            result += io.at(start);
-        }
+    for (auto &io : node_history_) {
+        result += io.at(end);
     }
     return result;
 }
 
-uint32_t Router::get_presence_cost(const std::shared_ptr<Node> &start,
-                                   const std::shared_ptr<Node> &end,
+uint32_t Router::get_presence_cost(const std::shared_ptr<Node> &node,
                                    uint32_t io,
                                    int net_id) {
-    ::set<int> start_connection;
-    if (start->type == NodeType::SwitchBox) {
-        auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(start);
-        auto side = sb->get_side(end);
-        start_connection = sb_connections_[gsv(side)][io].at(start);
-    } else {
-        start_connection = node_connections_[io].at(start);
-    }
+    ::set<int> start_connection = node_connections_[io].at(node);
+
     if (start_connection.find(net_id) == start_connection.end())
         return static_cast<uint32_t>(start_connection.size());
     else

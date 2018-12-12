@@ -15,7 +15,7 @@ using std::runtime_error;
 using std::make_pair;
 using std::endl;
 
-constexpr auto gsv = get_side_value;
+//constexpr auto gsv = get_side_value;
 constexpr auto gsi = get_side_int;
 
 #define DELIMITER ": \t,()"
@@ -176,12 +176,7 @@ load_placement(const std::string &filename) {
 void print_conn(std::ofstream &out, const std::string &pad,
                 const std::shared_ptr<Node> &node) {
     for (auto const &n : *node) {
-        out << pad << pad << node_to_string(pad, n);
-        if (n->type == NodeType::SwitchBox) {
-            auto const &sb = std::reinterpret_pointer_cast<SwitchBoxNode>(n);
-            out << " " << gsv(sb->get_side(node));
-        }
-        out << endl;
+        out << pad << pad << node_to_string(pad, n) << endl;
     }
 }
 
@@ -195,25 +190,14 @@ void dump_routing_graph(RoutingGraph &graph,
     for (const auto &iter : graph) {
         auto tile = iter.second;
         out << "TILE (" << tile.x << ", " << tile.y << ", "
-            << tile.height << ", " << tile.num_tracks() << ")" << endl;
-        for (uint32_t i = 0; i < tile.sbs.size(); i++) {
-            auto const sb = tile.sbs[i];
-            out << PAD << "SB " << i << " " << sb->width << endl;
-            out << PAD << "SB BEGIN" << endl;
-            auto const &side_info = sb->get_sides_info();
-            for (const auto &n : *sb) {
-                if (side_info.find(n) == side_info.end())
-                    throw ::runtime_error("unable to find node "
-                                          + n->to_string());
-                // Note
-                // We can further reduce the graph size by only listing
-                // edges out, since the in-coming edges will be constructed
-                // when another switch box connected to it.
-                out << PAD << node_to_string(PAD, n) << " "
-                    << gsv(sb->get_side(n)) << endl;
-
+            << tile.height << ", )" << endl;
+        for (uint32_t side = 0; side < Switch::SIDES; side++) {
+            for (auto const &sb : tile.switchbox[gsi(side)]) {
+                out << PAD << sb->to_string() << endl;
+                out << PAD << "CONN BEGIN" << endl;
+                print_conn(out, PAD, sb);
+                out << PAD << "CONN END" << endl;
             }
-            out << PAD << "SB END" << endl;
         }
         for (auto const &port_iter : tile.ports) {
             // Note
@@ -304,8 +288,10 @@ RoutingGraph load_routing_graph(const std::string &filename) {
             uint32_t x = stou(line_tokens[1]);
             uint32_t y = stou(line_tokens[2]);
             uint32_t height = stou(line_tokens[3]);
-            uint32_t num_track = stou(line_tokens[4]);
-            Tile tile(x, y, height, num_track);
+            //uint32_t num_track = stou(line_tokens[4]);
+            // TODO FIX THIS
+            Switch switchbox(0, 0, 0, 0, 0, {});
+            Tile tile(x, y, height, switchbox);
             g.add_tile(tile);
         }
     }
@@ -339,9 +325,9 @@ RoutingGraph load_routing_graph(const std::string &filename) {
                 line_tokens = get_tokens(line);
                 if (line_tokens[0] == "SB" && line_tokens[1] == "END")
                     break;
-                auto[node, side] = create_node_from_tokens_sb(
-                        line_tokens);
-                g.add_edge(sb, node, gsi(side));
+                //auto[node, side] = create_node_from_tokens_sb(
+                //        line_tokens);
+                //g.add_edge(sb, node, gsi(side));
             }
         } else if (line_tokens[0] == "PORT" || line_tokens[0] == "REG") {
             uint32_t track = stou(line_tokens[2]);
@@ -363,16 +349,16 @@ RoutingGraph load_routing_graph(const std::string &filename) {
                 line_tokens = get_tokens(line);
                 if (line_tokens[0] == "CONN" && line_tokens[1] == "END")
                     break;
-                auto[node, side] = create_node_from_tokens_sb(
-                        line_tokens);
-                if (src_node.width == 0) {
-                    src_node.width = node.width;
-                } else {
-                    if (src_node.width != node.width)
-                        throw::runtime_error("src node width doesn't equal to "
-                                             "linked nodes");
-                }
-                g.add_edge(src_node, node, gsi(side));
+                //auto[node, side] = create_node_from_tokens_sb(
+                //        line_tokens);
+                //if (src_node.width == 0) {
+                //    src_node.width = node.width;
+                //} else {
+                //    if (src_node.width != node.width)
+                //        throw::runtime_error("src node width doesn't equal to "
+                //                             "linked nodes");
+                //}
+                //g.add_edge(src_node, node, gsi(side));
             }
         }
     }

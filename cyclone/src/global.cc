@@ -230,8 +230,7 @@ GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
     return [&, net_id, seg_index](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> uint32_t {
         // based of the PathFinder paper
-        auto pn = get_presence_cost(node1, node2, OUT, net_id);
-        pn += get_presence_cost(node2, node1, IN, net_id);
+        auto pn = get_presence_cost(node2, OUT, net_id);
         pn *= pn_factor_;
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node1, node2) * 2;
@@ -260,17 +259,8 @@ GlobalRouter::get_free_register(const std::pair<uint32_t, uint32_t> &p) {
                 return false;
             // one of it's connections has to be free
             for (auto const &n : *node) {
-                if (n->type == NodeType::SwitchBox) {
-                    auto sb =
-                            std::reinterpret_pointer_cast<SwitchBoxNode>(n);
-                    auto side = sb->get_side(node);
-                    if (sb_connections_[gsv(side)][OUT].at(n).empty()) {
-                        return true;
-                    }
-                } else {
-                    if (node_connections_[IN].at(n).empty())
-                        return true;
-                }
+                if (node_connections_[IN].at(n).empty())
+                    return true;
             }
 
             return false;
