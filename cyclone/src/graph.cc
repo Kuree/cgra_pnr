@@ -84,7 +84,7 @@ SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
 std::string SwitchBoxNode::to_string() const {
     return "SB (" + std::to_string(track) + ", " +
            std::to_string(x) + ", " + std::to_string(y) + ", " +
-           std::to_string(gsv(side)) + ", " + std::to_string(giv(io)) + " )";
+           std::to_string(gsv(side)) + ", " + std::to_string(giv(io)) + ")";
 }
 
 Switch::Switch(uint32_t x, uint32_t y, uint32_t num_track,
@@ -144,8 +144,8 @@ Switch::get_sbs_by_side(const SwitchBoxSide &side) const {
 }
 
 Tile::Tile(uint32_t x, uint32_t y, uint32_t height, const Switch &switchbox)
-        : x(x), y(y), height(height), switchbox(switchbox.x,
-                                                switchbox.y,
+        : x(x), y(y), height(height), switchbox(x,
+                                                y,
                                                 switchbox.num_track,
                                                 switchbox.width,
                                                 switchbox.id,
@@ -164,8 +164,8 @@ RoutingGraph::RoutingGraph(uint32_t width, uint32_t height,
     for (uint32_t x = 0; x < width; x++) {
         for (uint32_t y = 0; y < height; y++) {
             grid_.insert({{x, y},
-                          Tile(x, y, Switch(switchbox.x,
-                                            switchbox.y,
+                          Tile(x, y, Switch(x,
+                                            y,
                                             switchbox.num_track,
                                             switchbox.width,
                                             switchbox.id,
