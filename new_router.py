@@ -50,6 +50,8 @@ def build_routing_graph(routing_resource, layout):
     sb_1 = Switch(0, 0, NUM_TRACK, 1, SWITCH_ID,
                   get_uniform_sb_wires(NUM_TRACK))
     for x, y in routing_resource:
+        if not is_fu_tile(layout, x, y):
+            continue
         t1 = Tile(x, y, sb_1)
         t16 = Tile(x, y, sb_16)
         g_1.add_tile(t1)
@@ -134,6 +136,10 @@ def build_routing_graph(routing_resource, layout):
         ports = routing_resource[(x, y)]["port"]
         port_io = routing_resource[(x, y)]["port_io"]
 
+        if not is_fu_tile(layout, x, y):
+            for port in ports:
+                assert len(ports[port]) == 0
+            continue
         current_tile = g_16[(x, y)]
         tile_type = layout[y][x]
 
@@ -227,7 +233,7 @@ def main():
     r_16 = GlobalRouter(40, g_16)
     assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)
 
-    pycyclone.io.dump_routing_graph(g_1, "1bit.graph")
+    pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
 
     # route these nets
     # r_1.route()

@@ -402,7 +402,7 @@ RoutingGraph load_routing_graph(const std::string &filename) {
             auto port = create_port_from_tokens(line_tokens);
             connect_nodes(port, in, g);
         } else if (line_tokens[0] == "REG") {
-            auto reg = create_port_from_tokens(line_tokens);
+            auto reg = create_reg_from_tokens(line_tokens);
             connect_nodes(reg, in, g);
         }
     }
