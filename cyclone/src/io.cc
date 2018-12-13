@@ -234,8 +234,7 @@ create_node_from_tokens_sb(const ::vector<::string> &tokens) {
         for (uint32_t i = 0; i < 5; i++)
             values[i] = stou(tokens[i + 1]);
         // track, x, y, width, side
-        SwitchBoxNode node(values[1], values[2], values[3], values[0],
-                           SwitchBoxSide::Bottom);
+        SwitchBoxNode node(values[1], values[2], values[3], values[0]);
         uint32_t side = values[4];
         return {node, side};
     } else if (type_token == "PORT") {
@@ -316,7 +315,7 @@ RoutingGraph load_routing_graph(const std::string &filename) {
         } else if (line_tokens[0] == "SB") {
             uint32_t track = stou(line_tokens[1]);
             uint32_t width = stou(line_tokens[2]);
-            SwitchBoxNode sb(x, y, width, track, SwitchBoxSide::Bottom);
+            SwitchBoxNode sb(x, y, width, track);
             // the next line has to be SB
             get_line_tokens(line_tokens, in, line);
             if (line_tokens[0] != "SB" && line_tokens[1] != "BEGIN")
@@ -334,12 +333,12 @@ RoutingGraph load_routing_graph(const std::string &filename) {
             uint32_t track = stou(line_tokens[2]);
             // TODO: verify the x/y
             const ::string &name = line_tokens[1];
-            std::unique_ptr<Node> src_node;
+            Node src_node;
             if (line_tokens[0] == "PORT") {
-                src_node = std::make_unique<PortNode>(name, x, y, 0);
-                src_node->track = track;
+                src_node = PortNode(name, x, y, 0);
+                src_node.track = track;
             } else {
-                src_node = std::make_unique<RegisterNode>(name, x, y, 0, track);
+                src_node = RegisterNode(name, x, y, 0, track);
             }
             // assign width later
             get_line_tokens(line_tokens, in, line);

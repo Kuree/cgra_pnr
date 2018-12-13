@@ -15,9 +15,6 @@ using std::ostringstream;
 constexpr auto gsi = get_side_int;
 constexpr auto gsv = get_side_value;
 
-constexpr auto PORT_BEGIN = nullptr;
-constexpr auto PORT_END = nullptr;
-
 
 Node::Node(NodeType type, const std::string &name, uint32_t x, uint32_t y)
     : type(type), name(name), x(x), y(y) { }
@@ -38,24 +35,16 @@ Node::Node(const Node &node) {
     track = node.track;
 }
 
-void Node::add_edge(const std::shared_ptr<Node> &from,
-                    const std::shared_ptr<Node> &to, uint32_t wire_delay) {
-    edges_[from].insert(to);
-
-    edge_cost_.insert({{from, to}, wire_delay});
+void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t wire_delay) {
+    neighbors_.insert(node);
+    edge_cost_[node] = node->delay + wire_delay;
 }
 
-uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &from,
-                             const std::shared_ptr<Node> &to) {
-    return edge_cost_.at({from, to});
-}
-
-const std::unordered_set<std::shared_ptr<Node>> Node::get_neighbor(
-        std::shared_ptr<Node> pre_node) const {
-    if (edges_.find(pre_node) == edges_.end())
-        return {};
+uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
+    if (neighbors_.find(node) == neighbors_.end())
+        return 0xFFFFFF;
     else
-        return edges_.at(pre_node);
+        return edge_cost_[node];
 }
 
 std::string Node::to_string() const {
@@ -112,6 +101,13 @@ Switch::Switch(uint32_t x, uint32_t y, uint32_t num_track,
                                                         gsi(side));
         }
     }
+    // assign internal wiring
+    for (const auto &iter : internal_wires_) {
+        auto [track_from, side_from, track_to, side_to] = iter;
+        auto sb_from = sbs_[gsv(side_from)][track_from];
+        auto sb_to = sbs_[gsv(side_to)][track_to];
+        sb_from->add_edge(sb_to, 0);
+    }
 }
 
 Switch::Switch(const Switch &switchbox) : Switch(switchbox.x, switchbox.y,
@@ -120,124 +116,6 @@ Switch::Switch(const Switch &switchbox) : Switch(switchbox.x, switchbox.y,
                                                  switchbox.id,
                                                  switchbox.internal_wires_)
 {}
-
-void Switch::add_edge(const std::shared_ptr<PortNode> &from,
-                      const SwitchBoxNode &to,
-                      uint32_t wire_delay) {
-    // first locate the switch box specified by to
-    auto side = to.side;
-    auto track = to.track;
-    auto sb = sbs_[gsv(side)][track];
-
-    // based on the internal wiring, add all the edges
-    // 1. found all sbs get's connected to
-    auto const sides = get_from_sbs(side, track);
-    // 2. add the edge link
-    for (auto const &node : sides) {
-        sb->add_edge(from, node);
-    }
-
-    // in port node nullptr is indicated as the from node
-    from->add_edge(PORT_BEGIN, sb, wire_delay);
-}
-
-void Switch::add_edge(const SwitchBoxNode &from,
-                      const std::shared_ptr<PortNode> &to,
-                      uint32_t wire_delay) {
-    // first locate the switch box specified by from
-    auto side = from.side;
-    auto track = from.track;
-    auto sb = sbs_[gsv(side)][track];
-
-    // based on the internal wiring, add all the edges
-    // 1. found all sbs get's connected to
-    auto const sides = get_to_sbs(side, track);
-    // 2. add the edge link
-    for (auto const &node : sides) {
-        sb->add_edge(node, to, wire_delay);
-    }
-}
-
-void Switch::add_edge(const SwitchBoxNode &from,
-                      const std::shared_ptr<RegisterNode> &to,
-                      uint32_t wire_delay) {
-    // first locate the switch box specified by from
-    auto side = from.side;
-    auto track = from.track;
-    auto sb = sbs_[gsv(side)][track];
-
-    // if the register already has something connected to
-    ::shared_ptr<Node> reg_to = nullptr;
-    auto reg_connected_to = to->get_neighbor(PORT_END);
-    if (!reg_connected_to.empty()) {
-        if (reg_connected_to.size() != 1)
-            throw ::runtime_error("reg should only have one output connected"
-                                  " to");
-        reg_to = *reg_connected_to.begin();
-    }
-    // add that info so that we can connect this reg to a switch box
-    to->add_edge(sb, reg_to, wire_delay);
-
-    // based on the internal wiring, add all the edges
-    // 1. found all sbs get's connected to
-    auto const sides = get_to_sbs(side, track);
-    // 2. add the edge link
-    for (auto const &node : sides) {
-        sb->add_edge(node, to);
-    }
-
-}
-
-void Switch::add_edge(const std::shared_ptr<RegisterNode> &from,
-                      const SwitchBoxNode &to,
-                      uint32_t wire_delay) {
-    // first locate the switch box specified by to
-    auto side = to.side;
-    auto track = to.track;
-    auto sb = sbs_[gsv(side)][track];
-
-    // find out everything it's connected to
-    ::shared_ptr<Node> reg_from = nullptr;
-    for(const auto &iter: *from) {
-        reg_from = iter.first;
-    }
-    from->add_edge(reg_from, sb, wire_delay);
-
-    // based on the internal wiring, add all the edges
-    // 1. found all sbs get's connected to
-    auto const sides = get_from_sbs(side, track);
-    // 2. add the edge link
-    for (auto const &node : sides) {
-        sb->add_edge(from, node);
-    }
-}
-
-std::set<std::shared_ptr<SwitchBoxNode>>
-Switch::get_from_sbs(SwitchBoxSide side, uint32_t track) {
-    std::set<std::shared_ptr<SwitchBoxNode>> result;
-    for (auto const &iter : internal_wires_) {
-        auto [track_from, side_from, track_to, side_to] = iter;
-        if (track_from == track && side_from == side) {
-            result.insert(sbs_[gsv(side_to)][track_to]);
-        }
-    }
-
-    return result;
-}
-
-std::set<std::shared_ptr<SwitchBoxNode>>
-Switch::get_to_sbs(SwitchBoxSide side, uint32_t track) {
-    std::set<std::shared_ptr<SwitchBoxNode>> result;
-    for (auto const &iter : internal_wires_) {
-        auto [track_from, side_from, track_to, side_to] = iter;
-        if (track_to == track && side_to == side) {
-            result.insert(sbs_[gsv(side_from)][track_from]);
-        }
-    }
-
-    return result;
-}
-
 
 const std::shared_ptr<SwitchBoxNode>& Switch::operator[](
         const std::pair<uint32_t, SwitchBoxSide> &track_side) const {
@@ -290,56 +168,7 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
     // notice that this is directional, that is, add n2 to n1's neighbor
     if (n1->width != n2->width)
         throw ::runtime_error("node2 width does not equal to node1");
-
-    // choose which function to call based on the node type
-    if (n1->type == NodeType::Register && n2->type == NodeType::SwitchBox) {
-        auto &switch_box = grid_.at({n2->x, n2->y}).switchbox;
-        auto reg_node = std::reinterpret_pointer_cast<RegisterNode>(n1);
-        auto const &sb = dynamic_cast<const SwitchBoxNode&>(node2);
-        switch_box.add_edge(reg_node, sb, wire_delay);
-    } else if (n1->type == NodeType::SwitchBox
-               && n2->type == NodeType::Register) {
-        auto &switch_box = grid_.at({n1->x, n1->y}).switchbox;
-        auto reg_node = std::reinterpret_pointer_cast<RegisterNode>(n2);
-        auto const &sb = dynamic_cast<const SwitchBoxNode&>(node1);
-        switch_box.add_edge(sb, reg_node, wire_delay);
-    } else if (n1->type == NodeType::Port && n2->type == NodeType::SwitchBox) {
-        auto &switch_box = grid_.at({n2->x, n2->y}).switchbox;
-        auto port_node = std::reinterpret_pointer_cast<PortNode>(n1);
-        auto const &sb = dynamic_cast<const SwitchBoxNode&>(node2);
-        switch_box.add_edge(port_node, sb, wire_delay);
-    } else if (n1->type == NodeType::SwitchBox && n2->type == NodeType::Port) {
-        auto &switch_box = grid_.at({n1->x, n1->y}).switchbox;
-        auto port_node = std::reinterpret_pointer_cast<PortNode>(n2);
-        auto const &sb = dynamic_cast<const SwitchBoxNode&>(node1);
-        switch_box.add_edge(sb, port_node, wire_delay);
-    } else if (n1->type == NodeType::SwitchBox
-               && n2->type == NodeType::SwitchBox) {
-        auto sb_from = std::reinterpret_pointer_cast<SwitchBoxNode>(n1);
-        auto sb_to = std::reinterpret_pointer_cast<SwitchBoxNode>(n2);
-        add_edge(sb_from, sb_to, wire_delay);
-    } else {
-        throw ::runtime_error("unable to connect nodes due to type conflicts");
-    }
-}
-
-void RoutingGraph::add_edge(std::shared_ptr<SwitchBoxNode> &from,
-                            std::shared_ptr<SwitchBoxNode> &to,
-                            uint32_t wire_delay) {
-    auto &switchbox_from = grid_.at({from->x, from->y}).switchbox;
-    auto &switchbox_to = grid_.at({to->x, to->y}).switchbox;
-
-    auto const &from_set = switchbox_from.get_from_sbs(from->side, from->track);
-    auto const &to_set = switchbox_to.get_to_sbs(to->side, to->track);
-
-    for (auto const &from_sb : from_set) {
-        from->add_edge(from_sb, to, wire_delay);
-    }
-
-    for (auto const &to_sb : to_set) {
-        to->add_edge(from, to_sb, wire_delay);
-    }
-
+    n1->add_edge(n2, wire_delay);
 }
 
 std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {

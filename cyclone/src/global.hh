@@ -17,7 +17,6 @@ protected:
 
     virtual void compute_slack_ratio(uint32_t current_iter);
     virtual std::function<uint32_t(const std::shared_ptr<Node> &,
-                                   const std::shared_ptr<Node> &,
                                    const std::shared_ptr<Node> &)>
     create_cost_function(const std::shared_ptr<Node> &node1,
                          const std::shared_ptr<Node> &node2,
