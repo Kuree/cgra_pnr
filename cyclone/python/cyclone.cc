@@ -10,6 +10,9 @@
 namespace py = pybind11;
 using std::to_string;
 
+const int Switch::SIDES;
+const int Switch::IOS;
+
 // just to be lazy with meta programming
 template<class T, class D>
 void init_node_class(py::class_<T, D> &class_) {
@@ -25,9 +28,7 @@ void init_node_class(py::class_<T, D> &class_) {
         .def("add_edge",
            py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
         .def("get_edge_cost", &T::get_edge_cost)
-        .def("__repr__", [](const T &node) -> std::string {
-            std::ostringstream os; os << node; return os.str();
-        })
+        .def("__repr__", &T::to_string)
         .def("__iter__", [](const T &node) {
             return py::make_iterator(node.begin(), node.end());
         }, py::keep_alive<0, 1>());
@@ -55,6 +56,10 @@ void init_graph(py::module &m) {
         .value("Right", SwitchBoxSide::Right)
         .value("Top", SwitchBoxSide::Top);
 
+    py::enum_<SwitchBoxIO>(m, "SwitchBoxIO")
+        .value("SB_IN", SwitchBoxIO::SB_IN)
+        .value("SB_OUT", SwitchBoxIO::SB_OUT);
+
     // the generic node type
     py::class_<Node, std::shared_ptr<Node>> node(m, "Node");
     // init_node_class<Node>(node);
@@ -77,30 +82,37 @@ void init_graph(py::module &m) {
     sb_node(m, "SwitchBoxNode", node);
     init_node_class<SwitchBoxNode, std::shared_ptr<SwitchBoxNode>>(sb_node);
     sb_node
-        .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
-        .def("add_side_info", &SwitchBoxNode::add_side_info)
-        .def("get_side", &SwitchBoxNode::get_side)
-        .def("add_edge",
-             py::overload_cast<const std::shared_ptr<Node> &,
-                               SwitchBoxSide >(&SwitchBoxNode::add_edge));
+        .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t, SwitchBoxSide,
+                      SwitchBoxIO>())
+        .def_readwrite("side", &SwitchBoxNode::side)
+        .def_readwrite("io", &SwitchBoxNode::io);
+
+    py::class_<Switch>(m, "Switch")
+        .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
+                      const std::set<std::tuple<uint32_t, SwitchBoxSide,
+                                                uint32_t, SwitchBoxSide>> &>())
+        .def_readwrite("x", &Switch::x)
+        .def_readwrite("y", &Switch::y)
+        .def_readwrite("num_track", &Switch::num_track)
+        .def("internal_wires", &Switch::internal_wires)
+        .def("get_sbs_by_side", &Switch::get_sbs_by_side)
+        .def_readonly_static("SIDES", &Switch::SIDES)
+        .def_readonly_static("IOS", &Switch::IOS);
 
     py::class_<Tile>(m, "Tile")
-        .def(py::init<>())
-        .def(py::init<uint32_t, uint32_t, uint32_t>())
-        .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
+        .def(py::init<uint32_t, uint32_t, const Switch &>())
+        .def(py::init<uint32_t, uint32_t, uint32_t, const Switch &>())
         .def_readwrite("x", &Tile::x)
         .def_readwrite("y", &Tile::y)
         .def_readwrite("height", &Tile::height)
         .def("num_tracks", &Tile::num_tracks)
-        .def_readwrite("sbs", &Tile::sbs)
+        .def_readwrite("switchbox", &Tile::switchbox)
         .def_readwrite("registers", &Tile::registers)
         .def_readwrite("ports", &Tile::ports);
 
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())
-        .def(py::init<uint32_t, uint32_t, uint32_t, const SwitchBoxNode &>())
-        .def(py::init<uint32_t, uint32_t, uint32_t,
-                      const std::vector<SwitchBoxNode> &>())
+        .def(py::init<uint32_t, uint32_t, const Switch &>())
         .def("add_tile", &RoutingGraph::add_tile)
         .def("remove_tile", &RoutingGraph::remove_tile)
         .def("add_edge",
@@ -110,26 +122,7 @@ void init_graph(py::module &m) {
              py::overload_cast<const Node &,
                                const Node &,
                                uint32_t>(&RoutingGraph::add_edge))
-        .def("add_edge",
-             py::overload_cast<const Node &,
-                               const Node &,
-                               SwitchBoxSide>(&RoutingGraph::add_edge))
-        .def("add_edge",
-             py::overload_cast<const Node &,
-                               const Node &,
-                               SwitchBoxSide,
-                               uint32_t>(&RoutingGraph::add_edge))
-        .def("add_edge",
-             py::overload_cast<const SwitchBoxNode &,
-                               const SwitchBoxNode &,
-                               SwitchBoxSide,
-                               SwitchBoxSide>(&RoutingGraph::add_edge))
-        .def("add_edge",
-             py::overload_cast<const SwitchBoxNode &,
-                               const SwitchBoxNode &,
-                               SwitchBoxSide,
-                               SwitchBoxSide,
-                               uint32_t>(&RoutingGraph::add_edge))
+
         .def("get_sb", &RoutingGraph::get_sb)
         .def("get_port", &RoutingGraph::get_port)
         .def("__getitem__", &RoutingGraph::operator[])
@@ -159,7 +152,12 @@ void init_util(py::module &m) {
           .def("get_opposite_side",
                py::overload_cast<SwitchBoxSide>(&get_opposite_side))
           .def("get_opposite_side",
-               py::overload_cast<uint32_t>(&get_opposite_side));
+               py::overload_cast<uint32_t>(&get_opposite_side))
+          .def("get_uniform_sb_wires", &get_uniform_sb_wires)
+          .def("get_io_value", &get_io_value)
+          .def("giv", &get_io_value)
+          .def("get_io_int", &get_io_int)
+          .def("gii", &get_io_int);
 }
 
 void init_io(py::module &m) {

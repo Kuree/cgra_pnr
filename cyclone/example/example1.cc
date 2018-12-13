@@ -19,25 +19,17 @@ constexpr auto gsi = get_side_int;
 constexpr auto gii = get_io_int;
 
 int main(int, char **) {
-    // just some example on how to use it
     // 1. construct routing graph with standard switch box
     Switch switchbox(0, 0, NUM_TRACK, WIDTH, SWITCH_ID,
                      get_uniform_sb_wires(NUM_TRACK));
     // 2 x 2 board with 2 routing tracks
     RoutingGraph g(SIZE, SIZE, switchbox);
     // each tile has 2 ports, "in" and "out"
-    // notice that we need to be careful about side
-    // side illustration
-    //      3
-    //    -----
-    //  2 |   | 0
-    //    |   |
-    //    -----
-    //      1
     PortNode in_port("in", 0, 0, WIDTH);
     PortNode out_port("out", 0, 0, WIDTH);
     // placeholder for sb
-    SwitchBoxNode sb(0, 0, WIDTH, 0, SwitchBoxSide::Bottom, SwitchBoxIO::SB_IN);
+    SwitchBoxNode sb(0, 0, WIDTH, 0, SwitchBoxSide::Bottom,
+                     SwitchBoxIO::SB_IN);
     for (auto const &it : g) {
         const auto &tile = it.second;
         // point to that tile's sb
@@ -72,7 +64,8 @@ int main(int, char **) {
         // connect from top to bottom and bottom to top
         for (uint32_t x = 0; x < SIZE; x++) {
             for (uint32_t track = 0; track < NUM_TRACK; track++) {
-                SwitchBoxNode sb_top(x, y, WIDTH, track, SwitchBoxSide::Bottom,
+                SwitchBoxNode sb_top(x, y, WIDTH, track,
+                                     SwitchBoxSide::Bottom,
                                      SwitchBoxIO::SB_OUT);
                 SwitchBoxNode sb_bottom(x, y + 1, WIDTH, track,
                                         SwitchBoxSide::Top,
@@ -87,10 +80,11 @@ int main(int, char **) {
     }
 
     for (uint32_t y = 0; y < SIZE; y++) {
-        // connect from top to bottom and bottom to top
+        // connect from left to right and right to left
         for (uint32_t x = 0; x < SIZE - 1; x++) {
             for (uint32_t track = 0; track < NUM_TRACK; track++) {
-                SwitchBoxNode sb_left(x, y, WIDTH, track, SwitchBoxSide::Right,
+                SwitchBoxNode sb_left(x, y, WIDTH, track,
+                                      SwitchBoxSide::Right,
                                       SwitchBoxIO::SB_OUT);
                 SwitchBoxNode sb_right(x + 1, y, WIDTH, track,
                                        SwitchBoxSide::Left,
