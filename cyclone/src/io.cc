@@ -175,8 +175,11 @@ load_placement(const std::string &filename) {
 
 void print_conn(std::ofstream &out, const std::string &pad,
                 const std::shared_ptr<Node> &node) {
-    for (auto const &n : *node) {
-        out << pad << pad << node_to_string(pad, n) << endl;
+    for (auto const &iter : *node) {
+        for (auto const &edge : iter.second) {
+            out << pad << pad << node_to_string(pad, edge) << endl;
+        }
+        //out << pad << pad << node_to_string(pad, n) << endl;
     }
 }
 
@@ -203,8 +206,6 @@ void dump_routing_graph(RoutingGraph &graph,
             // Note
             // This is to compress the output graph since it will be referenced
             // by other tile that's connected to
-            if (port_iter.second->size() == 0)
-                continue;
             out << PAD << port_iter.second->to_string() << endl;
             out << PAD << "CONN BEGIN" << endl;
             print_conn(out, PAD, port_iter.second);
