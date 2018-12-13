@@ -20,6 +20,11 @@ enum class SwitchBoxSide {
     Top = 3
 };
 
+enum class SwitchBoxIO {
+    SB_IN = 0,
+    SB_OUT = 1
+};
+
 class Node {
 public:
     Node() = default;
@@ -82,7 +87,7 @@ public:
              uint32_t width) : Node(NodeType::Port, name, x, y, width) {}
     PortNode(const std::string &name, uint32_t x, uint32_t y)
         : Node(NodeType::Port, name, x, y) {}
-    virtual std::string to_string() const override;
+    std::string to_string() const override;
 };
 
 class RegisterNode : public Node {
@@ -91,7 +96,7 @@ public:
                  uint32_t width, uint32_t track)
         : Node(NodeType::Register, name, x, y, width, track) { }
 
-    virtual std::string to_string() const override;
+    std::string to_string() const override;
 };
 
 // side illustration
@@ -104,14 +109,12 @@ public:
 class SwitchBoxNode : public Node {
 public:
     SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width, uint32_t track,
-                  SwitchBoxSide side = SwitchBoxSide::Bottom);
+                  SwitchBoxSide side, SwitchBoxIO io);
 
-    SwitchBoxNode(const SwitchBoxNode &node);
-
-    virtual std::string to_string() const override;
+    std::string to_string() const override;
 
     SwitchBoxSide side;
-
+    SwitchBoxIO io;
 };
 
 // operators
@@ -128,8 +131,6 @@ public:
                           SwitchBoxSide, uint32_t,
                           SwitchBoxSide>> &internal_wires);
 
-    Switch(const Switch &switchbox);
-
     uint32_t x;
     uint32_t y;
     uint32_t num_track;
@@ -140,20 +141,29 @@ public:
     uint32_t id;
 
     const static int SIDES = 4;
+    const static int IOS = 2;
 
     const std::shared_ptr<SwitchBoxNode> &
-    operator[](const std::pair<uint32_t, SwitchBoxSide> &track_side) const;
+    operator[](const std::tuple<uint32_t,
+                                SwitchBoxSide,
+                                SwitchBoxIO> &track_side) const;
     const std::shared_ptr<SwitchBoxNode> &
-    operator[](const std::pair<SwitchBoxSide, uint32_t> &track_side) const;
-    const std::vector<std::shared_ptr<SwitchBoxNode>>&
-    operator[](const SwitchBoxSide &side) const;
+    operator[](const std::tuple<SwitchBoxSide,
+                               uint32_t,
+                               SwitchBoxIO> &track_side) const;
+
+    const std::vector<std::shared_ptr<SwitchBoxNode>>
+    get_sbs_by_side(const SwitchBoxSide &side) const;
+
+    const std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+    internal_wires() const { return internal_wires_; }
 
 private:
     // this is used to construct internal connection of switch boxes
-    std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide >>
+    std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
     internal_wires_;
 
-    std::vector<std::shared_ptr<SwitchBoxNode>> sbs_[SIDES];
+    std::vector<std::shared_ptr<SwitchBoxNode>> sbs_[SIDES][IOS];
 };
 
 struct Tile {
@@ -203,7 +213,8 @@ public:
 
     std::shared_ptr<SwitchBoxNode> get_sb(const uint32_t &x, const uint32_t &y,
                                           const uint32_t &track,
-                                          const SwitchBoxSide &side);
+                                          const SwitchBoxSide &side,
+                                          const SwitchBoxIO &io);
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);

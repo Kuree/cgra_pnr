@@ -6,6 +6,7 @@
 #define NUM_TRACK 2
 #define SIDES 4
 #define SIZE 2
+#define SWITCH_ID 0
 
 using std::map;
 using std::pair;
@@ -15,13 +16,15 @@ using std::cout;
 using std::endl;
 
 constexpr auto gsi = get_side_int;
+constexpr auto gii = get_io_int;
 
 int main(int, char **) {
     // just some example on how to use it
     // 1. construct routing graph with standard switch box
-    SwitchBoxNode sb(0, 0, WIDTH, 0);
+    Switch switchbox(0, 0, NUM_TRACK, WIDTH, SWITCH_ID,
+                     get_uniform_sb_wires(NUM_TRACK));
     // 2 x 2 board with 2 routing tracks
-    RoutingGraph g(SIZE, SIZE, NUM_TRACK, sb);
+    RoutingGraph g(SIZE, SIZE, switchbox);
     // each tile has 2 ports, "in" and "out"
     // notice that we need to be careful about side
     // side illustration
@@ -33,6 +36,8 @@ int main(int, char **) {
     //      1
     PortNode in_port("in", 0, 0, WIDTH);
     PortNode out_port("out", 0, 0, WIDTH);
+    // placeholder for sb
+    SwitchBoxNode sb(0, 0, WIDTH, 0, SwitchBoxSide::Bottom, SwitchBoxIO::SB_IN);
     for (auto const &it : g) {
         const auto &tile = it.second;
         // point to that tile's sb
@@ -47,32 +52,56 @@ int main(int, char **) {
 
             // out can go any sides
             for (uint32_t side = 0; side < SIDES; side++) {
-                g.add_edge(out_port, sb, gsi(side));
+                sb.side = gsi(side);
+                sb.io = SwitchBoxIO::SB_OUT;
+                g.add_edge(out_port, sb);
             }
             // only left or right can come in
-            g.add_edge(sb, in_port, SwitchBoxSide::Left);
-            g.add_edge(sb, in_port, SwitchBoxSide::Right);
+            for (uint32_t io = 0; io < Switch::IOS; io++) {
+                sb.io = gii(io);
+                sb.side = SwitchBoxSide::Left;
+                g.add_edge(sb, in_port);
+                sb.side = SwitchBoxSide::Right;
+                g.add_edge(sb, in_port);
+            }
         }
     }
 
     // wire these switch boxes together
-    for (uint32_t chan = 0; chan < NUM_TRACK; chan++) {
-        auto sb0 = g[{0, 0}].sbs[chan];
-        auto sb1 = g[{0, 1}].sbs[chan];
-        auto sb2 = g[{1, 0}].sbs[chan];
-        auto sb3 = g[{1, 1}].sbs[chan];
+    for (uint32_t y = 0; y < SIZE - 1; y++) {
+        // connect from top to bottom and bottom to top
+        for (uint32_t x = 0; x < SIZE; x++) {
+            for (uint32_t track = 0; track < NUM_TRACK; track++) {
+                SwitchBoxNode sb_top(x, y, WIDTH, track, SwitchBoxSide::Bottom,
+                                     SwitchBoxIO::SB_OUT);
+                SwitchBoxNode sb_bottom(x, y + 1, WIDTH, track,
+                                        SwitchBoxSide::Top,
+                                        SwitchBoxIO::SB_IN);
+                g.add_edge(sb_top, sb_bottom);
 
-        g.add_edge(*sb0, *sb1, SwitchBoxSide::Left);
-        g.add_edge(*sb1, *sb0, SwitchBoxSide::Right);
+                sb_bottom.io = SwitchBoxIO::SB_OUT;
+                sb_top.io = SwitchBoxIO::SB_IN;
+                g.add_edge(sb_bottom, sb_top);
+            }
+        }
+    }
 
-        g.add_edge(*sb0, *sb2, SwitchBoxSide::Bottom);
-        g.add_edge(*sb2, *sb0, SwitchBoxSide::Top);
+    for (uint32_t y = 0; y < SIZE; y++) {
+        // connect from top to bottom and bottom to top
+        for (uint32_t x = 0; x < SIZE - 1; x++) {
+            for (uint32_t track = 0; track < NUM_TRACK; track++) {
+                SwitchBoxNode sb_left(x, y, WIDTH, track, SwitchBoxSide::Right,
+                                      SwitchBoxIO::SB_OUT);
+                SwitchBoxNode sb_right(x + 1, y, WIDTH, track,
+                                       SwitchBoxSide::Left,
+                                       SwitchBoxIO::SB_IN);
+                g.add_edge(sb_left, sb_right);
 
-        g.add_edge(*sb3, *sb1, SwitchBoxSide::Top);
-        g.add_edge(*sb1, *sb3, SwitchBoxSide::Bottom);
-
-        g.add_edge(*sb3, *sb2, SwitchBoxSide::Right);
-        g.add_edge(*sb2, *sb3, SwitchBoxSide::Left);
+                sb_right.io = SwitchBoxIO::SB_OUT;
+                sb_left.io = SwitchBoxIO::SB_IN;
+                g.add_edge(sb_right, sb_left);
+            }
+        }
     }
 
     // 2. create a global router and do the configuration in order

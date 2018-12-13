@@ -17,15 +17,12 @@ using std::move;
 using std::unordered_map;
 
 
-constexpr auto gsv = get_side_value;
-constexpr auto gsi = get_side_int;
-
 Router::Router(const RoutingGraph &g) : graph_(g) {
     // create the look up table for cost analysis
     for (const auto &tile_iter : graph_) {
         const auto &tile = tile_iter.second;
         for (uint32_t side = 0; side < Switch::SIDES; side++) {
-            auto &side_sbs = tile.switchbox[get_side_int(side)];
+            auto &side_sbs = tile.switchbox.get_sbs_by_side(get_side_int(side));
             for (const auto &sb : side_sbs) {
                 for (uint32_t io = 0; io < Node::IO; io++) {
                     node_connections_[io].insert({sb, {}});

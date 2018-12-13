@@ -56,3 +56,20 @@ SwitchBoxSide get_opposite_side(SwitchBoxSide side) {
     uint32_t new_side = (side_i + 2) % 4;
     return static_cast<SwitchBoxSide>(new_side);
 }
+
+std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+get_uniform_sb_wires(uint32_t num_tracks) {
+    std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+    result;
+    for (uint32_t track = 0; track < num_tracks; track++) {
+        for (uint32_t from = 0; from < Switch::SIDES; from++) {
+            for (uint32_t to = 0; to < Switch::SIDES; to++) {
+                if (from == to)
+                    continue;
+                result.insert({track, get_side_int(from),
+                               track, get_side_int(to)});
+            }
+        }
+    }
+    return result;
+}
