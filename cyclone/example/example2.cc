@@ -64,7 +64,5 @@ int main(int argc, char *argv[]) {
         cout << endl;
     }
 
-    dump_routing_graph(g, "test.graph");
-
     return 0;
 }

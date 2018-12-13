@@ -18,8 +18,6 @@ using std::function;
 using std::move;
 using std::setw;
 
-constexpr auto gsv = get_side_value;
-
 // routing strategy
 enum class RoutingStrategy {
     DelayDriven,

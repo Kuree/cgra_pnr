@@ -5,8 +5,8 @@ from argparse import ArgumentParser
 import pycyclone
 from pycyclone import RoutingGraph, SwitchBoxNode, PortNode, SwitchBoxSide
 from pycyclone import Tile, RegisterNode, NodeType
-from pycyclone import GlobalRouter
-from pycyclone.util import get_side_int as gsi
+from pycyclone import GlobalRouter, SwitchBoxIO, Switch
+from pycyclone.util import get_side_int as gsi, get_uniform_sb_wires
 from pycyclone.util import get_opposite_side as gos
 
 from arch import parse_cgra, load_packed_file, parse_placement
@@ -30,84 +30,118 @@ def get_new_coord(x, y, side):
     else:
         raise Exception(str(side) + " is not a valid side")
 
+def is_fu_tile(layout, x, y):
+    return layout[y][x] != ' ' and layout[y][x] is not None
 
 def build_routing_graph(routing_resource, layout):
     # FIXME:
     # read the number of track width from the graph
     g_1 = RoutingGraph()
     g_16 = RoutingGraph()
+
+    # just made some assumptions here. since this will
+    # go away once fully integrate into garnet
+    NUM_TRACK = 5
+    SWITCH_ID = 0
+    SIZE = len(layout)
+
+    sb_16 = Switch(0, 0, NUM_TRACK, 16, SWITCH_ID,
+                   get_uniform_sb_wires(NUM_TRACK))
+    sb_1 = Switch(0, 0, NUM_TRACK, 1, SWITCH_ID,
+                  get_uniform_sb_wires(NUM_TRACK))
     for x, y in routing_resource:
-        t = Tile()
-        t.x = x
-        t.y = y
-        g_1.add_tile(t)
-        g_16.add_tile(t)
+        t1 = Tile(x, y, sb_1)
+        t16 = Tile(x, y, sb_16)
+        g_1.add_tile(t1)
+        g_16.add_tile(t16)
+
+    reg_count = 0
+    for y in range(SIZE - 1):
+        for x in range(SIZE):
+            if (not is_fu_tile(layout, x, y)) or \
+                    (not is_fu_tile(layout, x, y + 1)):
+                continue
+            for width in [1, 16]:
+                if width == 1:
+                    g = g_1
+                else:
+                    g = g_16
+                for track in range(NUM_TRACK):
+                    sb_top = SwitchBoxNode(x, y, width, track,
+                                           SwitchBoxSide.Bottom,
+                                           SwitchBoxIO.SB_OUT)
+                    sb_bottom = SwitchBoxNode(x, y + 1, width, track,
+                                              SwitchBoxSide.Top,
+                                              SwitchBoxIO.SB_IN)
+                    g.add_edge(sb_top, sb_bottom)
+                    # also add reg as well
+                    if width == 16:
+                        reg1 = RegisterNode("reg" + str(reg_count), x, y, 16,
+                                            track)
+                        reg_count += 1
+                        g.add_edge(sb_top, reg1)
+                        g.add_edge(reg1, sb_bottom)
+
+                    sb_bottom.io = SwitchBoxIO.SB_OUT
+                    sb_top.io = SwitchBoxIO.SB_IN
+                    g.add_edge(sb_bottom, sb_top)
+                    if width == 16:
+                        reg2 = RegisterNode("reg" + str(reg_count), x, y, 16,
+                                            track)
+                        reg_count += 1
+                        g.add_edge(sb_bottom, reg2)
+                        g.add_edge(reg2, sb_bottom)
+
+    for y in range(SIZE):
+        # connect from left to right and right to left
+        for x in range(SIZE - 1):
+            if (not is_fu_tile(layout, x, y)) or \
+                    (not is_fu_tile(layout, x + 1, y)):
+                continue
+            for width in [1, 16]:
+                if width == 1:
+                    g = g_1
+                else:
+                    g = g_16
+                for track in range(NUM_TRACK):
+                    sb_left = SwitchBoxNode(x, y, width, track,
+                                            SwitchBoxSide.Right,
+                                            SwitchBoxIO.SB_OUT)
+                    sb_right = SwitchBoxNode(x + 1, y, width, track,
+                                             SwitchBoxSide.Left,
+                                             SwitchBoxIO.SB_IN)
+                    g.add_edge(sb_left, sb_right)
+                    # also add reg as well
+                    if width == 16:
+                        reg1 = RegisterNode("reg" + str(reg_count), x, y, 16,
+                                            track)
+                        reg_count += 1
+                        g.add_edge(sb_left, reg1)
+                        g.add_edge(reg1, sb_right)
+
+                    sb_right.io = SwitchBoxIO.SB_OUT
+                    sb_left.io = SwitchBoxIO.SB_IN
+                    g.add_edge(sb_right, sb_left)
+                    # also add reg as well
+                    if width == 16:
+                        reg2 = RegisterNode("reg" + str(reg_count), x, y, 16,
+                                            track)
+                        reg_count += 1
+                        g.add_edge(sb_right, reg2)
+                        g.add_edge(reg2, sb_left)
 
     for x, y in routing_resource:
-        res = routing_resource[(x, y)]["route_resource"]
         ports = routing_resource[(x, y)]["port"]
         port_io = routing_resource[(x, y)]["port_io"]
-        # adding switch boxes
-        sb = SwitchBoxNode(x, y, 0, 0)
-        sb1 = SwitchBoxNode(0, 0, 0, 0)
-        sb2 = SwitchBoxNode(0, 0, 0, 0)
-        reg_count = 0
-        for conn1, conn2 in res:
-            width1, io1, side1, track1 = conn1
-            width2, io2, side2, track2 = conn2
-
-            assert io1 ^ io2 == 1  # always one in one out
-            assert width1 == width2
-            sb.width = width1
-            sb1.width = width1
-            sb2.width = width2
-
-            sb.track = track1
-            sb1.track = track1
-            sb2.track = track2
-
-            if width1 == 16:
-                g = g_16
-            else:
-                g = g_1
-
-            # FIXME
-            # change this once a new interconnect is designed
-            sb1.x, sb1.y = get_new_coord(x, y, side1)
-            sb2.x, sb2.y = get_new_coord(x, y, side2)
-
-            # side_1 = gos(side1)
-            # side_2 = gsi(side1)
-            # side_3 = gsi(side2)
-            # side_4 = gos(side2)
-
-            g.add_edge(sb1, sb, gos(side1), gsi(side1))
-            g.add_edge(sb, sb2, gsi(side2), gos(side2))
 
         current_tile = g_16[(x, y)]
         tile_type = layout[y][x]
-        if tile_type != ' ' and tile_type != None and tile_type != "i" \
-           and tile_type != "I":
-            for sb in current_tile.sbs:
-                reg = RegisterNode("", x, y, sb.width,
-                                   sb.track)
-                for node in sb:
-                    # FIXME
-                    # hack to get registers in
-                    # insert reg connection here
-                    if node.type != NodeType.SwitchBox:
-                        continue
-                    reg.name = "reg" + str(reg_count)
-                    reg_count += 1
-                    side = sb.get_side(node)
-                    g_16.add_edge(sb, reg, side)
-                    # node.add_side_info(reg, gos(side))
-                    g_16.add_edge(reg, node, gos(side))
 
         # handling ports
         for port_name in ports:
             port = PortNode(port_name, x, y, 0)
-            sb = SwitchBoxNode(0, 0, 0, 0)
+            sb = SwitchBoxNode(0, 0, 0, 0, SwitchBoxSide.Bottom,
+                               SwitchBoxIO.SB_OUT)
             for width, io, side, track in ports[port_name]:
                 if width == 16:
                     g = g_16
@@ -127,14 +161,16 @@ def build_routing_graph(routing_resource, layout):
                         # coordinates to see where the connection comes from
                         sb.x, sb.y = get_new_coord(x, y, side)
                         new_side = gos(side)
-                        g.add_edge(sb, port, new_side)
+                        sb.side = new_side
+                        g.add_edge(sb, port)
                     else:
                         sb.x, sb.y = x, y
-                        g.add_edge(sb, port, gsi(side))
+                        sb.side = gsi(side)
+                        g.add_edge(sb, port)
                 else:
-                    sb.x, sb.y = get_new_coord(x, y, side)
-                    new_side = gos(side)
-                    g.add_edge(port, sb, new_side)
+                    sb.x, sb.y = x, y
+                    sb.side = gsi(side)
+                    g.add_edge(port, sb)
 
     return g_1, g_16
 
@@ -191,7 +227,7 @@ def main():
     r_16 = GlobalRouter(40, g_16)
     assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)
 
-    pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
+    pycyclone.io.dump_routing_graph(g_1, "1bit.graph")
 
     # route these nets
     # r_1.route()
