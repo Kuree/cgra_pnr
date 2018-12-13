@@ -1,13 +1,16 @@
 from __future__ import print_function
+import sys
 from pycyclone import RoutingGraph, SwitchBoxNode, PortNode, SwitchBoxSide
 from pycyclone import GlobalRouter, SwitchBoxIO, Switch
 from pycyclone.util import gsi, gii, get_uniform_sb_wires
+from pycyclone.io import dump_routing_graph
 
 WIDTH = 1
 NUM_TRACK = 2
 SIDES = 4
 SIZE = 2
 SWITCH_ID = 0
+
 
 def main():
     # constructing the routing graph
@@ -34,17 +37,17 @@ def main():
 
             # out can go any sides
             for side in range(SIDES):
-                sb.side = gsi(side);
-                sb.io = SwitchBoxIO.SB_OUT;
-                g.add_edge(out_port, sb);
+                sb.side = gsi(side)
+                sb.io = SwitchBoxIO.SB_OUT
+                g.add_edge(out_port, sb)
 
             # only left or right can come in
             for io in range(Switch.IOS):
-                sb.io = gii(io);
-                sb.side = SwitchBoxSide.Left;
-                g.add_edge(sb, in_port);
-                sb.side = SwitchBoxSide.Right;
-                g.add_edge(sb, in_port);
+                sb.io = gii(io)
+                sb.side = SwitchBoxSide.Left
+                g.add_edge(sb, in_port)
+                sb.side = SwitchBoxSide.Right
+                g.add_edge(sb, in_port)
 
     # wire these switch boxes together
     for y in range(SIZE - 1):
@@ -53,15 +56,15 @@ def main():
             for track in range(NUM_TRACK):
                 sb_top = SwitchBoxNode(x, y, WIDTH, track,
                                        SwitchBoxSide.Bottom,
-                                       SwitchBoxIO.SB_OUT);
+                                       SwitchBoxIO.SB_OUT)
                 sb_bottom = SwitchBoxNode(x, y + 1, WIDTH, track,
                                           SwitchBoxSide.Top,
-                                          SwitchBoxIO.SB_IN);
-                g.add_edge(sb_top, sb_bottom);
+                                          SwitchBoxIO.SB_IN)
+                g.add_edge(sb_top, sb_bottom)
 
-                sb_bottom.io = SwitchBoxIO.SB_OUT;
-                sb_top.io = SwitchBoxIO.SB_IN;
-                g.add_edge(sb_bottom, sb_top);
+                sb_bottom.io = SwitchBoxIO.SB_OUT
+                sb_top.io = SwitchBoxIO.SB_IN
+                g.add_edge(sb_bottom, sb_top)
 
     for y in range(SIZE):
         # connect from left to right and right to left
@@ -69,15 +72,15 @@ def main():
             for track in range(NUM_TRACK):
                 sb_left = SwitchBoxNode(x, y, WIDTH, track,
                                         SwitchBoxSide.Right,
-                                        SwitchBoxIO.SB_OUT);
+                                        SwitchBoxIO.SB_OUT)
                 sb_right = SwitchBoxNode(x + 1, y, WIDTH, track,
                                          SwitchBoxSide.Left,
-                                         SwitchBoxIO.SB_IN);
-                g.add_edge(sb_left, sb_right);
+                                         SwitchBoxIO.SB_IN)
+                g.add_edge(sb_left, sb_right)
 
-                sb_right.io = SwitchBoxIO.SB_OUT;
-                sb_left.io = SwitchBoxIO.SB_IN;
-                g.add_edge(sb_right, sb_left);
+                sb_right.io = SwitchBoxIO.SB_OUT
+                sb_left.io = SwitchBoxIO.SB_IN
+                g.add_edge(sb_right, sb_left)
 
     # create a global router and do the configuration in order
     r = GlobalRouter(20, g)
@@ -107,6 +110,10 @@ def main():
             seg_list = [str(x) for x in seg]
             print(" -> ".join(seg_list))
         print()
+
+    if len(sys.argv) > 1:
+        print("dump routing graph to", sys.argv[1])
+        dump_routing_graph(g, sys.argv[1])
 
 
 if __name__ == "__main__":

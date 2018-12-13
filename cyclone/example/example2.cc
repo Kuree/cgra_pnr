@@ -1,43 +1,70 @@
 #include <iostream>
-#include "../src/graph.hh"
-#include "../src/io.hh"
 #include "../src/global.hh"
+#include "../src/util.hh"
+#include "../src/io.hh"
 
-using namespace std;
+#define WIDTH 1
+#define NUM_TRACK 2
+#define SIDES 4
+#define SIZE 2
+#define SWITCH_ID 0
 
-void print_help(const string &program_name) {
-    cerr << "Usage: " << endl;
-    cerr << "    " << program_name << " <packed_file>"
-         << " <placement_file> <routing_graph_file>" << endl;
-}
+using std::map;
+using std::pair;
+using std::string;
+using std::vector;
+using std::cout;
+using std::cerr;
+using std::endl;
+
 
 int main(int argc, char *argv[]) {
-    if (argc != 4) {
-        print_help(argv[0]);
+    // load the graph from command line
+    if (argc < 1) {
+        cerr << "Usage: " << argv[0] << " <routing.graph>" << endl;
         return EXIT_FAILURE;
     }
-    string packed_filename = argv[1];
-    string placement_filename = argv[2];
-    string graph_filename = argv[3];
-    auto [netlist, track_mode] = load_netlist(packed_filename);
-    auto placement = load_placement(placement_filename);
-    auto graph = load_routing_graph(graph_filename);
 
-    // set up the router
-    GlobalRouter r(100, graph);
+    cout << "load routing graph from " << argv[1] << endl;
+    auto g = load_routing_graph(argv[1]);
+
+    // 2. create a global router and do the configuration in order
+    GlobalRouter r(20, g);
+    // add placement
+    map<string, pair<uint32_t, uint32_t >> placement =
+            {{"p0", {0, 0}}, {"p1", {0, 1}}, {"p2", {1, 0}}, {"p3", {1, 1}} };
     for (auto const &it : placement) {
         auto [x, y] = it.second;
         r.add_placement(x, y, it.first);
     }
 
+    map<string, vector<pair<string, string>>> netlist =
+            {
+            {"n1", {{"p0", "out"}, {"p3", "in"}}},
+            {"n2", {{"p1", "out"}, {"p0", "in"}}},
+            {"n3", {{"p3", "out"}, {"p2", "in"}}},
+            };
+
     for (const auto &iter: netlist) {
-        // Note
-        // we only route 1bit at this time
-        if (track_mode.at(iter.first) == 16)
-            r.add_net(iter.first, iter.second);
+        r.add_net(iter.first, iter.second);
     }
 
+    // route!
     r.route();
 
-    return EXIT_SUCCESS;
+    auto result = r.realize();
+    for (auto const &iter: result) {
+        cout << "Net: " << iter.first << endl;
+        for (auto const &seg : iter.second) {
+            for (uint32_t i = 0; i < seg.size(); i++) {
+                cout << *seg[i] << (i == seg.size() - 1 ? "" : " -> ");
+            }
+            cout << endl;
+        }
+        cout << endl;
+    }
+
+    dump_routing_graph(g, "test.graph");
+
+    return 0;
 }

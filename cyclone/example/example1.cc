@@ -19,7 +19,7 @@ using std::endl;
 constexpr auto gsi = get_side_int;
 constexpr auto gii = get_io_int;
 
-int main(int, char **) {
+int main(int argc, char *argv[]) {
     // 1. construct routing graph with standard switch box
     Switch switchbox(0, 0, NUM_TRACK, WIDTH, SWITCH_ID,
                      get_uniform_sb_wires(NUM_TRACK));
@@ -135,7 +135,11 @@ int main(int, char **) {
         cout << endl;
     }
 
-    dump_routing_graph(g, "test.graph");
+    // save the routing graph
+    if (argc > 1) {
+        cout << "dump routing graph to " << argv[1] << endl;
+        dump_routing_graph(g, argv[1]);
+    }
 
     return 0;
 }

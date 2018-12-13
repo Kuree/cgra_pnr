@@ -11,6 +11,7 @@ using std::vector;
 using std::runtime_error;
 using std::set;
 using std::ostringstream;
+using std::to_string;
 
 constexpr auto gsi = get_side_int;
 constexpr auto gsv = get_side_value;
@@ -49,8 +50,9 @@ uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
 }
 
 std::string Node::to_string() const {
-    return "NODE " + name + " (" + std::to_string(track) + ", " +
-           std::to_string(x) + ", " + std::to_string(y) + ")";
+    return "NODE " + name + " (" + ::to_string(track) + ", " +
+           ::to_string(x) + ", " + ::to_string(y)  + ", " +
+           ::to_string(width) + ")";
 }
 
 bool operator==(const Node &node1, const Node &node2) {
@@ -64,14 +66,15 @@ bool operator==(const std::shared_ptr<Node> &ptr, const Node &node) {
 }
 
 std::string PortNode::to_string() const {
-    return "PORT " + name + " (" + std::to_string(track) + ", " +
-           std::to_string(x) + ", " + std::to_string(y) + ")";
+    return "PORT " + name + " (" + ::to_string(x) + ", " + ::to_string(y) +
+           ", " + ::to_string(width) + ")";
 }
 
 
 std::string RegisterNode::to_string() const {
-    return "REG " + name + " (" + std::to_string(track) + ", " +
-           std::to_string(x) + ", " + std::to_string(y) + ")";
+    return "REG " + name + " (" + ::to_string(track) + ", " +
+           ::to_string(x) + ", " + ::to_string(y) + ", " +
+           ::to_string(width) + ")";
 }
 
 SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
@@ -82,9 +85,10 @@ SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
 
 
 std::string SwitchBoxNode::to_string() const {
-    return "SB (" + std::to_string(track) + ", " +
-           std::to_string(x) + ", " + std::to_string(y) + ", " +
-           std::to_string(gsv(side)) + ", " + std::to_string(giv(io)) + ")";
+    return "SB (" + ::to_string(track) + ", " +
+           ::to_string(x) + ", " + ::to_string(y) + ", " +
+           ::to_string(gsv(side)) + ", " + ::to_string(giv(io)) + ", " +
+           ::to_string(width) + ")";
 }
 
 Switch::Switch(uint32_t x, uint32_t y, uint32_t num_track,

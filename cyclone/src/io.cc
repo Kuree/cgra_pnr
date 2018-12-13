@@ -19,6 +19,7 @@ using std::to_string;
 //constexpr auto gsv = get_side_value;
 constexpr auto gsi = get_side_int;
 constexpr auto gsv = get_side_value;
+constexpr auto gii = get_io_int;
 
 #define DELIMITER ": \t,()"
 
@@ -171,7 +172,7 @@ load_placement(const std::string &filename) {
 ::string node_to_string(const ::string &pad,
                         const std::shared_ptr<Node> &node) {
     std::ostringstream oss;
-    oss << pad << node->to_string() << " " << node->width;
+    oss << pad << node->to_string();
     return oss.str();
 }
 
@@ -183,7 +184,7 @@ void print_conn(std::ofstream &out, const std::string &pad,
 }
 
 void print_sb(std::ofstream &out, const std::string &pad, const Switch &sb) {
-    out << "SWITCH " << sb.id << " " << sb.num_track << endl;
+    out << "SWITCH " << sb.width << " " << sb.id << " " << sb.num_track << endl;
     out << "BEGIN" << endl;
     const auto wires = sb.internal_wires();
     for (auto const iter : wires) {
@@ -220,7 +221,7 @@ void dump_routing_graph(RoutingGraph &graph,
         for (uint32_t side = 0; side < Switch::SIDES; side++) {
             for (auto const &sb : tile.switchbox.get_sbs_by_side(gsi(side))) {
                 // skip in since it's connected internationally
-                if (sb->io != SwitchBoxIO::SB_OUT)
+                if (sb->io != SwitchBoxIO::SB_OUT || sb->size() == 0)
                     continue;
                 out << PAD << sb->to_string() << endl;
                 out << PAD << "BEGIN" << endl;
@@ -253,41 +254,41 @@ inline uint32_t stou(const std::string &str) {
     return static_cast<uint32_t>(std::stoi(str));
 }
 
-::pair<Node, uint32_t>
-create_node_from_tokens_sb(const ::vector<::string> &tokens) {
+PortNode create_port_from_tokens(const ::vector<::string> &tokens) {
+    if (tokens[0] != "PORT")
+        throw ::runtime_error("expect PORT, got " + tokens[0]);
+    if (tokens.size() < 4)
+        throw ::runtime_error("expect at least 6 entries for port");
+    ::vector<uint32_t> values(3);
+    // x, y, width
+    for (uint32_t i = 0; i < 3; i++)
+        values[i] = stou(tokens[i + 2]);
+    return PortNode(tokens[1], values[0], values[1], values[2]);
+}
+
+RegisterNode create_reg_from_tokens(const ::vector<::string> &tokens) {
+    if (tokens[0] != "REG")
+        throw ::runtime_error("expect REG, got " + tokens[0]);
     if (tokens.size() < 6)
-        throw ::runtime_error("expect at least 6 entries");
-    const auto &type_token = tokens[0];
-    if (type_token == "SB") {
-        ::vector<uint32_t> values(5);
-        for (uint32_t i = 0; i < 5; i++)
-            values[i] = stou(tokens[i + 1]);
-        // track, x, y, width, side
-        SwitchBoxNode node(values[1], values[2], values[3], values[0], SwitchBoxSide::Bottom, SwitchBoxIO::SB_IN);
-        uint32_t side = values[4];
-        return {node, side};
-    } else if (type_token == "PORT") {
-        if (tokens.size() < 7)
-            throw ::runtime_error("expect at least 7 entries for port");
-        ::vector<uint32_t> values(5);
-        for (uint32_t i = 0; i < 5; i++)
-            values[i] = stou(tokens[i + 2]);
-        PortNode node(tokens[1], values[1], values[2], values[3]);
-        uint32_t side = values[4];
-        return {node, side};
-    } else if (type_token == "REG") {
-        if (tokens.size() < 7)
-            throw ::runtime_error("expect at least 7 entries for port");
-        ::vector<uint32_t> values(5);
-        for (uint32_t i = 0; i < 5; i++)
-            values[i] = stou(tokens[i + 2]);
-        RegisterNode node(tokens[1], values[1], values[2], values[3],
-                          values[0]);
-        uint32_t side = values[4];
-        return {node, side};
-    } else {
-        throw ::runtime_error("unknown type " + type_token);
-    }
+        throw ::runtime_error("expect at least 6 entries for reg");
+    ::vector<uint32_t> values(4);
+    // track, x, y, width
+    for (uint32_t i = 0; i < 4; i++)
+        values[i] = stou(tokens[i + 2]);
+    return RegisterNode(tokens[1], values[1], values[2], values[3], values[0]);
+}
+
+SwitchBoxNode create_sb_from_tokens(const ::vector<::string> &tokens) {
+    if (tokens[0] != "SB")
+        throw ::runtime_error("expect SB, got " + tokens[0]);
+    if (tokens.size() < 6)
+        throw ::runtime_error("expect at least 6 entries for sb");
+    ::vector<uint32_t> values(6);
+    // track, x, y, side, io, width
+    for (uint32_t i = 0; i < 6; i++)
+        values[i] = stou(tokens[i + 1]);
+    return SwitchBoxNode(values[1], values[2], values[5], values[0],
+                         gsi(values[3]), gii(values[4]));
 }
 
 void get_line_tokens(vector<string> &line_tokens, ifstream &in, string &line) {
@@ -299,27 +300,87 @@ void get_line_tokens(vector<string> &line_tokens, ifstream &in, string &line) {
     line_tokens = get_tokens(line);
 }
 
+void connect_nodes(Node &from, std::ifstream &in, RoutingGraph &g) {
+    // the next line has to be SB
+    ::vector<::string> line_tokens;
+    ::string line;
+    get_line_tokens(line_tokens, in, line);
+    if (line_tokens.empty() || line_tokens[0] != "BEGIN")
+        throw ::runtime_error("expect BEGIN, got " + line);
+    while (std::getline(in, line)) {
+        trim(line);
+        line_tokens = get_tokens(line);
+        if (line_tokens[0] == "END")
+            break;
+        if (line_tokens[0] == "SB") {
+            auto sb = create_sb_from_tokens(line_tokens);
+            g.add_edge(from, sb);
+        } else if (line_tokens[0] == "REG") {
+            auto reg = create_reg_from_tokens(line_tokens);
+            g.add_edge(from, reg);
+        } else if (line_tokens[0] == "PORT") {
+            auto port = create_port_from_tokens(line_tokens);
+            g.add_edge(from, port);
+        } else {
+            throw ::runtime_error("unknown node type " + line_tokens[0]);
+        }
+    }
+}
+
 RoutingGraph load_routing_graph(const std::string &filename) {
     std::ifstream in;
     in.open(filename);
 
     RoutingGraph g;
     ::string line;
+    ::map<int, Switch> switch_map;
+
     // reading per tile
     while(std::getline(in, line)) {
         trim(line);
         if (line.empty())
             continue;
         auto line_tokens = get_tokens(line);
-        if (line_tokens[0] == "TILE") {
+        if (line_tokens[0] == "SWITCH") {
+            // create a switch based on its index
+            if (line_tokens.size() != 4)
+                throw ::runtime_error("unable to process line " + line);
+            uint32_t width = stou(line_tokens[1]);
+            uint32_t id = stou(line_tokens[2]);
+            uint32_t num_track = stou(line_tokens[3]);
+            // loop through the lines until we hit end
+            // this will be the internal wiring
+            std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t,
+                                SwitchBoxSide>> wires;
+            std::getline(in, line);
+            trim(line);
+            if (line != "BEGIN")
+                throw ::runtime_error("unable to process line " + line);
+            while (std::getline(in, line)) {
+                trim(line);
+                if (line == "END")
+                    break;
+                line_tokens = get_tokens(line);
+                if (line_tokens.size() != 4)
+                    throw ::runtime_error("unable to process line" + line);
+                uint32_t track_from = stou(line_tokens[0]);
+                SwitchBoxSide side_from = gsi(stou(line_tokens[1]));
+                uint32_t track_to = stou(line_tokens[2]);
+                SwitchBoxSide side_to = gsi(stou(line_tokens[3]));
+                wires.insert({track_from, side_from, track_to, side_to});
+            }
+            Switch switchbox(0, 0, num_track, width, id, wires);
+            switch_map.insert({id, switchbox});
+        }
+        else if (line_tokens[0] == "TILE") {
             if (line_tokens.size() != 5)
                 throw ::runtime_error("unable to process line " + line);
             uint32_t x = stou(line_tokens[1]);
             uint32_t y = stou(line_tokens[2]);
             uint32_t height = stou(line_tokens[3]);
-            //uint32_t num_track = stou(line_tokens[4]);
-            // TODO FIX THIS
-            Switch switchbox(0, 0, 0, 0, 0, {});
+            uint32_t switch_id = stou(line_tokens[4]);
+
+            auto switchbox = switch_map.at(switch_id);
             Tile tile(x, y, height, switchbox);
             g.add_tile(tile);
         }
@@ -328,67 +389,21 @@ RoutingGraph load_routing_graph(const std::string &filename) {
     // so we rewind and start to process the graph nodes
     in.clear();
     in.seekg(0, std::ios::beg);
-    uint32_t x = 0;
-    uint32_t y = 0;
     while(std::getline(in, line)) {
         trim(line);
         if (line.empty() || line[0] == '#')
             continue;
 
         auto line_tokens = get_tokens(line);
-        if (line_tokens[0] == "TILE") {
-            if (line_tokens.size() != 5)
-                throw ::runtime_error("unable to process line " + line);
-            x = stou(line_tokens[1]);
-            y = stou(line_tokens[2]);
-        } else if (line_tokens[0] == "SB") {
-            uint32_t track = stou(line_tokens[1]);
-            uint32_t width = stou(line_tokens[2]);
-            SwitchBoxNode sb(x, y, width, track, SwitchBoxSide::Bottom, SwitchBoxIO::SB_IN);
-            // the next line has to be SB
-            get_line_tokens(line_tokens, in, line);
-            if (line_tokens[0] != "SB" && line_tokens[1] != "BEGIN")
-                throw ::runtime_error("expect SB BEGIN, got " + line);
-            while (std::getline(in, line)) {
-                trim(line);
-                line_tokens = get_tokens(line);
-                if (line_tokens[0] == "SB" && line_tokens[1] == "END")
-                    break;
-                //auto[node, side] = create_node_from_tokens_sb(
-                //        line_tokens);
-                //g.add_edge(sb, node, gsi(side));
-            }
-        } else if (line_tokens[0] == "PORT" || line_tokens[0] == "REG") {
-            uint32_t track = stou(line_tokens[2]);
-            // TODO: verify the x/y
-            const ::string &name = line_tokens[1];
-            Node src_node;
-            if (line_tokens[0] == "PORT") {
-                src_node = PortNode(name, x, y, 0);
-                src_node.track = track;
-            } else {
-                src_node = RegisterNode(name, x, y, 0, track);
-            }
-            // assign width later
-            get_line_tokens(line_tokens, in, line);
-            if (line_tokens[0] != "CONN" && line_tokens[1] != "BEGIN")
-                throw ::runtime_error("expect CONN BEGIN, got " + line);
-            while (std::getline(in, line)) {
-                trim(line);
-                line_tokens = get_tokens(line);
-                if (line_tokens[0] == "CONN" && line_tokens[1] == "END")
-                    break;
-                //auto[node, side] = create_node_from_tokens_sb(
-                //        line_tokens);
-                //if (src_node.width == 0) {
-                //    src_node.width = node.width;
-                //} else {
-                //    if (src_node.width != node.width)
-                //        throw::runtime_error("src node width doesn't equal to "
-                //                             "linked nodes");
-                //}
-                //g.add_edge(src_node, node, gsi(side));
-            }
+        if (line_tokens[0] == "SB") {
+            auto sb = create_sb_from_tokens(line_tokens);
+            connect_nodes(sb, in, g);
+        } else if (line_tokens[0] == "PORT") {
+            auto port = create_port_from_tokens(line_tokens);
+            connect_nodes(port, in, g);
+        } else if (line_tokens[0] == "REG") {
+            auto reg = create_port_from_tokens(line_tokens);
+            connect_nodes(reg, in, g);
         }
     }
     in.close();
