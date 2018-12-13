@@ -6,6 +6,8 @@
 #include <map>
 #include <vector>
 #include <iostream>
+#include <unordered_set>
+#include <unordered_map>
 
 enum NodeType {
     SwitchBox,
@@ -41,21 +43,25 @@ public:
     // used for delay calculation routing
     uint32_t delay = 1;
 
-    virtual void add_edge(const std::shared_ptr<Node> &node)
-    { add_edge(node, DEFAULT_WIRE_DELAY); }
-    virtual void add_edge(const std::shared_ptr<Node> &node,
+    virtual void add_edge(const std::shared_ptr<Node> &from,
+                          const std::shared_ptr<Node> &to)
+    { add_edge(from, to, DEFAULT_WIRE_DELAY); }
+    virtual void add_edge(const std::shared_ptr<Node> &from,
+                          const std::shared_ptr<Node> &to,
                           uint32_t wire_delay);
 
-    uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
+    uint32_t get_edge_cost(const std::shared_ptr<Node> &from,
+                           const std::shared_ptr<Node> &to);
 
-    // helper function to allow iteration
-    std::set<std::shared_ptr<Node>>::iterator begin() const
-    { return neighbors_.begin(); }
-    std::set<std::shared_ptr<Node>>::iterator end() const
-    { return neighbors_.end(); }
-    std::set<std::shared_ptr<Node>>::iterator
-    find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
-    uint64_t size() { return neighbors_.size(); }
+    std::unordered_map<std::shared_ptr<Node>,
+                       std::unordered_set<std::shared_ptr<Node>>>::iterator
+    begin() { return edges_.begin(); }
+    std::unordered_map<std::shared_ptr<Node>,
+            std::unordered_set<std::shared_ptr<Node>>>::iterator
+    end() { return edges_.end(); }
+
+    const std::unordered_set<std::shared_ptr<Node>>
+    get_neighbor(std::shared_ptr<Node> pre_node) const;
 
     virtual std::string to_string() const;
     friend std::ostream& operator<<(std::ostream &s, const Node &node) {
@@ -71,8 +77,11 @@ protected:
          uint32_t width);
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
          uint32_t width, uint32_t track);
-    std::set<std::shared_ptr<Node>> neighbors_;
-    std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
+    std::unordered_map<std::shared_ptr<Node>,
+                       std::unordered_set<std::shared_ptr<Node>>> edges_;
+
+    std::map<std::pair<std::shared_ptr<Node>, std::shared_ptr<Node>>,
+             uint32_t> edge_cost_;
 
 };
 
@@ -82,7 +91,7 @@ public:
              uint32_t width) : Node(NodeType::Port, name, x, y, width) {}
     PortNode(const std::string &name, uint32_t x, uint32_t y)
         : Node(NodeType::Port, name, x, y) {}
-    virtual std::string to_string() const override;
+    std::string to_string() const override;
 };
 
 class RegisterNode : public Node {
@@ -91,7 +100,7 @@ public:
                  uint32_t width, uint32_t track)
         : Node(NodeType::Register, name, x, y, width, track) { }
 
-    virtual std::string to_string() const override;
+    std::string to_string() const override;
 };
 
 // side illustration
@@ -104,11 +113,11 @@ public:
 class SwitchBoxNode : public Node {
 public:
     SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width, uint32_t track,
-                  SwitchBoxSide side = SwitchBoxSide::Bottom);
+                  SwitchBoxSide side);
 
     SwitchBoxNode(const SwitchBoxNode &node);
 
-    virtual std::string to_string() const override;
+    std::string to_string() const override;
 
     SwitchBoxSide side;
 
@@ -136,7 +145,7 @@ public:
     uint32_t width;
 
     // it's the programmer's responsibility to ensure that each switch type
-    // has unique ID
+    // has a unique ID
     uint32_t id;
 
     const static int SIDES = 4;
@@ -148,12 +157,38 @@ public:
     const std::vector<std::shared_ptr<SwitchBoxNode>>&
     operator[](const SwitchBoxSide &side) const;
 
+    // heavy lifting methods to construct from_to pair based on it's internal
+    // connections
+    void add_edge(const SwitchBoxNode &from,
+                  const std::shared_ptr<PortNode> &to,
+                  uint32_t wire_delay);
+    void add_edge(const std::shared_ptr<PortNode> &from,
+                  const SwitchBoxNode &to,
+                  uint32_t wire_delay);
+
+    void add_edge(const SwitchBoxNode &from,
+                  const std::shared_ptr<RegisterNode> &to,
+                  uint32_t wire_delay);
+    void add_edge(const std::shared_ptr<RegisterNode> &from,
+                  const SwitchBoxNode &to,
+                  uint32_t wire_delay);
+
+    const std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+    get_internal_wires() const { return internal_wires_; }
+
+    std::set<std::shared_ptr<SwitchBoxNode>>
+    get_from_sbs(SwitchBoxSide side, uint32_t track);
+    std::set<std::shared_ptr<SwitchBoxNode>>
+    get_to_sbs(SwitchBoxSide side, uint32_t track);
+
 private:
     // this is used to construct internal connection of switch boxes
-    std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide >>
+    std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
     internal_wires_;
 
     std::vector<std::shared_ptr<SwitchBoxNode>> sbs_[SIDES];
+
+
 };
 
 struct Tile {
@@ -225,6 +260,10 @@ private:
     std::map<std::pair<uint32_t, uint32_t>, Tile> grid_;
 
     std::shared_ptr<Node> search_create_node(const Node &node);
+
+    void add_edge(std::shared_ptr<SwitchBoxNode> &from,
+                  std::shared_ptr<SwitchBoxNode> &to,
+                  uint32_t wire_delay);
 };
 
 #endif //CYCLONE_GRAPH_H

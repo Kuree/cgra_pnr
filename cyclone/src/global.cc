@@ -222,18 +222,20 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
     }
 }
 
-::function<uint32_t(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
+::function<uint32_t(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &,
+                    const ::shared_ptr<Node> &)>
 GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
                                    const ::shared_ptr<Node> &n2,
                                    int net_id,
                                    uint32_t seg_index) {
-    return [&, net_id, seg_index](const ::shared_ptr<Node> &node1,
-               const ::shared_ptr<Node> &node2) -> uint32_t {
+    return [&, net_id, seg_index](const ::shared_ptr<Node> &from,
+                                  const ::shared_ptr<Node> &node,
+                                  const ::shared_ptr<Node> &to) -> uint32_t {
         // based of the PathFinder paper
-        auto pn = get_presence_cost(node2, OUT, net_id);
+        auto pn = get_presence_cost(to, OUT, net_id);
         pn *= pn_factor_;
-        auto dn = node1->get_edge_cost(node2);
-        auto hn = get_history_cost(node1, node2) * 2;
+        auto dn = node->get_edge_cost(from, to);
+        auto hn = get_history_cost(node, to) * 2;
         auto slack_entry = std::make_pair(n1, n2);
         double an = slack_ratio_.at({net_id, seg_index});
 
@@ -257,13 +259,8 @@ GlobalRouter::get_free_register(const std::pair<uint32_t, uint32_t> &p) {
             // see it's been used or not
             if (!node_connections_[IN].at(node).empty())
                 return false;
-            // one of it's connections has to be free
-            for (auto const &n : *node) {
-                if (node_connections_[IN].at(n).empty())
-                    return true;
-            }
 
-            return false;
+            return true;
         }
     };;
 }

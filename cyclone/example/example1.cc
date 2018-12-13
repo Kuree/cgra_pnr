@@ -19,7 +19,7 @@ constexpr auto gsi = get_side_int;
 int main(int, char **) {
     // just some example on how to use it
     // 1. construct routing graph with standard switch box
-    SwitchBoxNode sb(0, 0, WIDTH, 0);
+    SwitchBoxNode sb(0, 0, WIDTH, 0, SwitchBoxSide::Bottom);
     // 2 x 2 board with 2 routing tracks
     RoutingGraph g(SIZE, SIZE, NUM_TRACK, sb);
     // each tile has 2 ports, "in" and "out"

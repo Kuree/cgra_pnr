@@ -78,11 +78,6 @@ void init_graph(py::module &m) {
     init_node_class<SwitchBoxNode, std::shared_ptr<SwitchBoxNode>>(sb_node);
     sb_node
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t>())
-        .def("add_side_info", &SwitchBoxNode::add_side_info)
-        .def("get_side", &SwitchBoxNode::get_side)
-        .def("add_edge",
-             py::overload_cast<const std::shared_ptr<Node> &,
-                               SwitchBoxSide >(&SwitchBoxNode::add_edge));
 
     py::class_<Tile>(m, "Tile")
         .def(py::init<>())
@@ -92,7 +87,7 @@ void init_graph(py::module &m) {
         .def_readwrite("y", &Tile::y)
         .def_readwrite("height", &Tile::height)
         .def("num_tracks", &Tile::num_tracks)
-        .def_readwrite("sbs", &Tile::sbs)
+        .def_readwrite("switchbox", &Tile::switchbox)
         .def_readwrite("registers", &Tile::registers)
         .def_readwrite("ports", &Tile::ports);
 
@@ -109,26 +104,6 @@ void init_graph(py::module &m) {
         .def("add_edge",
              py::overload_cast<const Node &,
                                const Node &,
-                               uint32_t>(&RoutingGraph::add_edge))
-        .def("add_edge",
-             py::overload_cast<const Node &,
-                               const Node &,
-                               SwitchBoxSide>(&RoutingGraph::add_edge))
-        .def("add_edge",
-             py::overload_cast<const Node &,
-                               const Node &,
-                               SwitchBoxSide,
-                               uint32_t>(&RoutingGraph::add_edge))
-        .def("add_edge",
-             py::overload_cast<const SwitchBoxNode &,
-                               const SwitchBoxNode &,
-                               SwitchBoxSide,
-                               SwitchBoxSide>(&RoutingGraph::add_edge))
-        .def("add_edge",
-             py::overload_cast<const SwitchBoxNode &,
-                               const SwitchBoxNode &,
-                               SwitchBoxSide,
-                               SwitchBoxSide,
                                uint32_t>(&RoutingGraph::add_edge))
         .def("get_sb", &RoutingGraph::get_sb)
         .def("get_port", &RoutingGraph::get_port)
