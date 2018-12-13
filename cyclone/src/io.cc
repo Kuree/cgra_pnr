@@ -14,9 +14,11 @@ using std::vector;
 using std::runtime_error;
 using std::make_pair;
 using std::endl;
+using std::to_string;
 
 //constexpr auto gsv = get_side_value;
 constexpr auto gsi = get_side_int;
+constexpr auto gsv = get_side_value;
 
 #define DELIMITER ": \t,()"
 
@@ -180,6 +182,18 @@ void print_conn(std::ofstream &out, const std::string &pad,
     }
 }
 
+void print_sb(std::ofstream &out, const std::string &pad, const Switch &sb) {
+    out << "SWITCH " << sb.id << " " << sb.num_track << endl;
+    out << "BEGIN" << endl;
+    const auto wires = sb.internal_wires();
+    for (auto const iter : wires) {
+        auto [track_from, side_from, track_to, side_to] = iter;
+        out << pad << track_from << " " << gsv(side_from) << " "
+            << track_to << " " << gsv(side_to) << endl;
+    }
+    out << "END" << endl;
+}
+
 void dump_routing_graph(RoutingGraph &graph,
                         const std::string &filename) {
     // TODO:
@@ -187,16 +201,31 @@ void dump_routing_graph(RoutingGraph &graph,
     std::ofstream out;
     out.open(filename);
     static const ::string PAD = "  ";
+    // first, prints out the switch box
+    ::map<uint32_t, Switch> switch_boxes;
+    for (const auto &iter : graph) {
+        auto const &switch_box = iter.second.switchbox;
+        if (switch_boxes.find(switch_box.id) == switch_boxes.end())
+            switch_boxes.insert({switch_box.id, switch_box});
+    }
+
+    for (const auto &iter : switch_boxes) {
+        print_sb(out, PAD, iter.second);
+    }
+
     for (const auto &iter : graph) {
         auto tile = iter.second;
         out << "TILE (" << tile.x << ", " << tile.y << ", "
-            << tile.height << ", )" << endl;
+            << tile.height << ", " << tile.switchbox.id << ")" << endl;
         for (uint32_t side = 0; side < Switch::SIDES; side++) {
             for (auto const &sb : tile.switchbox.get_sbs_by_side(gsi(side))) {
+                // skip in since it's connected internationally
+                if (sb->io != SwitchBoxIO::SB_OUT)
+                    continue;
                 out << PAD << sb->to_string() << endl;
-                out << PAD << "CONN BEGIN" << endl;
+                out << PAD << "BEGIN" << endl;
                 print_conn(out, PAD, sb);
-                out << PAD << "CONN END" << endl;
+                out << PAD << "END" << endl;
             }
         }
         for (auto const &port_iter : tile.ports) {
@@ -206,16 +235,16 @@ void dump_routing_graph(RoutingGraph &graph,
             if (port_iter.second->size() == 0)
                 continue;
             out << PAD << port_iter.second->to_string() << endl;
-            out << PAD << "CONN BEGIN" << endl;
+            out << PAD << "BEGIN" << endl;
             print_conn(out, PAD, port_iter.second);
-            out << PAD << "CONN END" << endl;
+            out << PAD << "END" << endl;
         }
 
         for (auto const &reg_tier : tile.registers) {
             out << PAD << reg_tier.second->to_string() << endl;
-            out << PAD << "CONN BEGIN" << endl;
+            out << PAD << "BEGIN" << endl;
             print_conn(out, PAD, reg_tier.second);
-            out << PAD << "CONN END" << endl;
+            out << PAD << "END" << endl;
         }
     }
 }

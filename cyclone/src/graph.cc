@@ -49,7 +49,7 @@ uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
 }
 
 std::string Node::to_string() const {
-    return "NODE (" + std::to_string(track) + ", " +
+    return "NODE " + name + " (" + std::to_string(track) + ", " +
            std::to_string(x) + ", " + std::to_string(y) + ")";
 }
 
@@ -64,13 +64,13 @@ bool operator==(const std::shared_ptr<Node> &ptr, const Node &node) {
 }
 
 std::string PortNode::to_string() const {
-    return "PORT (" + std::to_string(track) + ", " +
+    return "PORT " + name + " (" + std::to_string(track) + ", " +
            std::to_string(x) + ", " + std::to_string(y) + ")";
 }
 
 
 std::string RegisterNode::to_string() const {
-    return "REG (" + std::to_string(track) + ", " +
+    return "REG " + name + " (" + std::to_string(track) + ", " +
            std::to_string(x) + ", " + std::to_string(y) + ")";
 }
 
@@ -82,9 +82,9 @@ SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
 
 
 std::string SwitchBoxNode::to_string() const {
-    return "REG (" + std::to_string(track) + ", " +
-           std::to_string(x) + ", " + std::to_string(y) + " " +
-           std::to_string(gsv(side)) + " )";
+    return "SB (" + std::to_string(track) + ", " +
+           std::to_string(x) + ", " + std::to_string(y) + ", " +
+           std::to_string(gsv(side)) + ", " + std::to_string(giv(io)) + " )";
 }
 
 Switch::Switch(uint32_t x, uint32_t y, uint32_t num_track,
@@ -144,7 +144,12 @@ Switch::get_sbs_by_side(const SwitchBoxSide &side) const {
 }
 
 Tile::Tile(uint32_t x, uint32_t y, uint32_t height, const Switch &switchbox)
-        : x(x), y(y), height(height), switchbox(switchbox) {
+        : x(x), y(y), height(height), switchbox(switchbox.x,
+                                                switchbox.y,
+                                                switchbox.num_track,
+                                                switchbox.width,
+                                                switchbox.id,
+                                                switchbox.internal_wires()) {
 
 }
 

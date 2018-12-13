@@ -1,6 +1,7 @@
 #include <iostream>
 #include "../src/global.hh"
 #include "../src/util.hh"
+#include "../src/io.hh"
 
 #define WIDTH 1
 #define NUM_TRACK 2
@@ -133,6 +134,8 @@ int main(int, char **) {
         }
         cout << endl;
     }
+
+    dump_routing_graph(g, "test.graph");
 
     return 0;
 }
