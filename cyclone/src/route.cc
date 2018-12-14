@@ -135,7 +135,7 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         std::function<bool(const std::shared_ptr<Node> &)> end_f,
         std::function<uint32_t(const std::shared_ptr<Node> &,
                                const std::shared_ptr<Node> &)> cost_f,
-        std::function<double(const ::shared_ptr<Node> &)>) {
+        std::function<double(const ::shared_ptr<Node> &)> h_f) {
     ::set<::shared_ptr<Node>> visited;
     ::unordered_map<::shared_ptr<Node>, double> g_score = {{start, 0}};
 
@@ -144,13 +144,13 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
     // use cost as a comparator
     auto cost_comp = [&](const ::shared_ptr<Node> &a,
                          const ::shared_ptr<Node> &b) -> bool {
-        return f_score[a] > f_score[b];
+        return f_score.at(a) > f_score.at(b);
     };
 
     ::priority_queue<::shared_ptr<Node>,
             ::vector<::shared_ptr<Node>>,
             decltype(cost_comp)> working_set(cost_comp);
-    working_set.emplace(start);
+    working_set.push(start);
     ::unordered_set<::shared_ptr<Node>> open_set;
     open_set.insert(start);
 
@@ -177,16 +177,19 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
                                      + head->get_edge_cost(node)
                                      + cost_f(head, node);
             if (open_set.find(node) == open_set.end()) {
+                g_score[node] = tentative_score;
+                f_score[node] = g_score.at(node) + h_f(node);
                 working_set.push(node);
                 open_set.insert(node);
             } else if (g_score.find(node) != g_score.end() &&
                        tentative_score >= g_score.at(node)) {
                 continue;
+            } else {
+                g_score[node] = tentative_score;
+                f_score[node] = g_score.at(node) + h_f(node);
             }
 
             trace.insert({node, head});
-            g_score[node] = tentative_score;
-            f_score[node] = g_score.at(node) + h_f(node);
         }
 
     }
@@ -199,8 +202,6 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
     // head is the end
     while (head != start) {
         routed_path.emplace_back(head);
-        if (trace.find(head) == trace.end())
-            throw ::runtime_error("unexpected error in tracing back route");
         head = trace.at(head);
     }
     routed_path.emplace_back(head);
@@ -380,6 +381,7 @@ void Router::clear_connections() {
     for (auto &iter : node_connections_) {
         iter.second.clear();
     }
+    current_routes.clear();
 }
 
 uint32_t Router::get_history_cost(const std::shared_ptr<Node> &node) {
@@ -391,7 +393,7 @@ double Router::get_presence_cost(const std::shared_ptr<Node> &node,
                                    int net_id,
                                    uint32_t it) {
     auto const &start_connection = node_connections_.at(node);
-    auto pn_factor = (it + 1) * 300;
+    auto pn_factor = (it + 1) * 300000;
     if (start_connection.find(net_id) == start_connection.end())
         return start_connection.size() * pn_factor;
     else
