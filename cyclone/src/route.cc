@@ -24,23 +24,18 @@ Router::Router(const RoutingGraph &g) : graph_(g) {
         for (uint32_t side = 0; side < Switch::SIDES; side++) {
             auto &side_sbs = tile.switchbox.get_sbs_by_side(get_side_int(side));
             for (const auto &sb : side_sbs) {
-                for (uint32_t io = 0; io < Node::IO; io++) {
-                    node_connections_[io].insert({sb, {}});
-                    node_history_[io].insert({sb, {}});
-                }
+                node_connections_.insert({sb, {}});
+                node_history_.insert({sb, {}});
+
             }
         }
         for (auto const &port : tile.ports) {
-            for (uint32_t io = 0; io < Node::IO; io++) {
-                node_connections_[io].insert({port.second, {}});
-                node_history_[io].insert({port.second, {}});
-            }
+            node_connections_.insert({port.second, {}});
+            node_history_.insert({port.second, {}});
         }
         for (auto const &reg : tile.registers) {
-            for (uint32_t io = 0; io < Node::IO; io++) {
-                node_connections_[io].insert({reg.second, {}});
-                node_history_[io].insert({reg.second, {}});
-            }
+            node_connections_.insert({reg.second, {}});
+            node_history_.insert({reg.second, {}});
         }
     }
 }
@@ -205,7 +200,7 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
             if (visited.find(node) != visited.end())
                 continue;
             uint32_t edge_cost = head->get_edge_cost(node) + cost_f(head, node);
-            uint32_t real_cost = edge_cost + current_cost;
+            uint32_t real_cost = edge_cost + current_cost+ cost.at(head);
             if (cost.find(node) == cost.end()) {
                 cost[node] = real_cost;
                 working_set.emplace(node);
@@ -335,11 +330,9 @@ void Router::assign_net(int net_id) {
     auto segments = current_routes[net_id];
     for (auto &seg_it : segments) {
         auto &segment = seg_it.second;
-        for (uint32_t i = 0; i < segment.size() - 1; i++) {
-            auto &node1 = segment[i];
-            auto &node2 = segment[i + 1];
-            assign_connection(node1, OUT, net_id);
-            assign_connection(node2, IN, net_id);
+        for (uint32_t i = 1; i < segment.size(); i++) {
+            auto &node = segment[i];
+            assign_connection(node, net_id);
         }
     }
 }
@@ -349,11 +342,9 @@ void Router::assign_history() {
         auto segments = current_routes[net.id];
         for (auto &seg_it : segments) {
             auto &segment = seg_it.second;
-            for (uint32_t i = 0; i < segment.size() - 1; i++) {
-                auto &node1 = segment[i];
-                auto &node2 = segment[i + 1];
-                assign_history(node1, OUT);
-                assign_history(node2, IN);
+            for (uint32_t i = 0; i < segment.size(); i++) {
+                auto &node = segment[i];
+                assign_history(node);
             }
         }
     }
@@ -373,41 +364,32 @@ Router::realize() {
     return result;
 }
 
-void Router::assign_connection(const std::shared_ptr<Node> &node, uint32_t io,
+void Router::assign_connection(const std::shared_ptr<Node> &node,
                                int net_id) {
-    node_connections_[io].at(node).insert(net_id);
-    if (!overflowed_ && node_connections_[io].at(node).size() > 1)
+    node_connections_.at(node).insert(net_id);
+    if (!overflowed_ && node_connections_[node].size() > 1)
         overflowed_ = true;
 
 }
 
-void Router::assign_history(std::shared_ptr<Node> &end,
-                            uint32_t io) {
-    node_history_[io].at(end)++;
+void Router::assign_history(std::shared_ptr<Node> &end) {
+    node_history_.at(end)++;
 }
 
 void Router::clear_connections() {
-    for (auto &io : node_connections_) {
-        for (auto &iter : io) {
-            iter.second.clear();
-        }
+    for (auto &iter : node_connections_) {
+        iter.second.clear();
     }
 }
 
-uint32_t Router::get_history_cost(const std::shared_ptr<Node> &,
-                                  const std::shared_ptr<Node> &end) {
-    uint32_t result = 0;
-
-    for (auto &io : node_history_) {
-        result += io.at(end);
-    }
+uint32_t Router::get_history_cost(const std::shared_ptr<Node> &node) {
+    uint32_t result = node_history_.at(node);
     return result;
 }
 
 uint32_t Router::get_presence_cost(const std::shared_ptr<Node> &node,
-                                   uint32_t io,
                                    int net_id) {
-    ::set<int> start_connection = node_connections_[io].at(node);
+    ::set<int> start_connection = node_connections_.at(node);
 
     if (start_connection.find(net_id) == start_connection.end())
         return static_cast<uint32_t>(start_connection.size());

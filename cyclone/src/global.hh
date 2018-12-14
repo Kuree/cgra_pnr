@@ -32,6 +32,7 @@ private:
     std::map<std::pair<int, uint32_t>,
              double> slack_ratio_;
     uint32_t pn_factor_ = 10;
+    uint32_t hn_factor_ = 1;
 };
 
 

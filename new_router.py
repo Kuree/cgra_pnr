@@ -162,6 +162,7 @@ def build_routing_graph(routing_resource, layout):
                 # a lot of complications
                 io_dir = port_io[port_name]
                 if io_dir == 0:
+                    sb.io = SwitchBoxIO.SB_OUT
                     if io == 0:
                         # this is coming in, so we need to recalculate the
                         # coordinates to see where the connection comes from
@@ -174,8 +175,10 @@ def build_routing_graph(routing_resource, layout):
                         sb.side = gsi(side)
                         g.add_edge(sb, port)
                 else:
-                    sb.x, sb.y = x, y
-                    sb.side = gsi(side)
+                    sb.x, sb.y = get_new_coord(x, y, side)
+                    new_side = gos(side)
+                    sb.side = new_side
+                    sb.io = SwitchBoxIO.SB_IN
                     g.add_edge(port, sb)
 
     return g_1, g_16

@@ -41,10 +41,9 @@ protected:
                     std::vector<std::shared_ptr<Node>>>> current_routes;
 
     // graph independent look tables for computing routing cost
-    std::map<std::shared_ptr<Node>, std::set<int>>
-    node_connections_[Node::IO];
+    std::map<std::shared_ptr<Node>, std::set<int>> node_connections_;
 
-    std::map<std::shared_ptr<Node>, uint32_t> node_history_[Node::IO];
+    std::map<std::shared_ptr<Node>, uint32_t> node_history_;
 
     bool overflowed_ = false;
 
@@ -138,16 +137,12 @@ protected:
 
 
     void assign_connection(const std::shared_ptr<Node> &node,
-                           uint32_t io,
                            int net_id);
-    void assign_history(std::shared_ptr<Node> &node,
-                        uint32_t io);
+    void assign_history(std::shared_ptr<Node> &node);
 
-    uint32_t get_history_cost(const std::shared_ptr<Node> &start,
-                              const std::shared_ptr<Node> &end);
+    uint32_t get_history_cost(const std::shared_ptr<Node> &node);
 
     uint32_t get_presence_cost(const std::shared_ptr<Node> &node,
-                               uint32_t io,
                                int net_id);
 
 private:
