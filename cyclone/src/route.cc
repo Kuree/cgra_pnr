@@ -283,42 +283,90 @@ void Router::group_reg_nets() {
         }
     }
 
-    // a similar algorithm to topological sort to assure the orders
-    // we don't care about the lowest level of the reg tree.
-    // it is because by ensuring routing the nets that has reg sinks first,
-    // the leaves regs will automatically be routed last, hence ensure its
-    // legality
     for (const auto &iter : driven_by) {
-        uint32_t level = 0;
         ::string name = iter.first;
+        int src_id = iter.second;
         while (driven_by.find(name) != driven_by.end()) {
+            src_id = driven_by.at(name);
             name = netlist_[driven_by.at(name)][0].name;
-            level++;
         }
-        reg_net_order_.insert({iter.first, level});
-        reg_net_order_.insert({name, 0});
+        auto squashed = squash_net(src_id);
+
+        reg_net_order_.insert({src_id, squashed});
     }
+}
+
+std::vector<int> Router::squash_net(int src_id) {
+    // an algorithm to group the register nets in order
+    // using an recursive lambda function, originally written in Python
+    ::vector<int> result = {src_id};
+    auto &net = netlist_[src_id];
+    for (uint32_t index = 1; index < net.size(); index++) {
+        auto const &pin = net[index];
+        if (pin.name[0] == 'r') {
+            // found another one
+            auto next_id = reg_net_src_.at(pin.name);
+            auto next_result = squash_net(next_id);
+            result.insert(result.end(), next_result.begin(), next_result.end());
+        }
+    }
+
+    return result;
 }
 
 std::vector<uint32_t>
 Router::reorder_reg_nets() {
-    ::vector<uint32_t> result(netlist_.size());
+    ::vector<uint32_t> result;
+    ::set<int32_t> working_set;
     for (uint32_t i = 0; i < netlist_.size(); i++)
-        result[i] = i;
-    std::sort(result.begin(), result.end(),
-              [&](uint32_t n1, uint32_t n2) -> bool {
-        auto &net1 = netlist_[n1];
-        auto &net2 = netlist_[n2];
-        uint32_t net1_value = reg_net_order_.find(net1[0].name)
-                                  != reg_net_order_.end()?
-                              reg_net_order_.at(net1[0].name)
-                              : std::numeric_limits<uint32_t>::max();
-        uint32_t net2_value = reg_net_order_.find(net2[0].name)
-                                  != reg_net_order_.end()?
-                              reg_net_order_.at(net2[0].name)
-                              : std::numeric_limits<uint32_t>::max();
-        return net1_value < net2_value;
+        working_set.emplace(i);
+
+    // we will first sort out the order of reg nets
+    // it is ordered by the total number of fan-outs in linked reg lists
+    ::vector<uint32_t> reg_nets;
+    for (auto const &iter : reg_net_order_) {
+        reg_nets.emplace_back(iter.first);
+    }
+
+    // partial sort to ensure the deterministic result
+    std::stable_sort(reg_nets.begin(), reg_nets.end(),
+                     [&](uint32_t id1, uint32_t id2) -> bool {
+        uint32_t fan_out_count1 = 0;
+        for (auto const &ids : reg_net_order_.at(id1)) {
+            auto const & net = netlist_[ids];
+            fan_out_count1 += net.size() - 1;
+        }
+        uint32_t fan_out_count2 = 0;
+        for (auto const &ids : reg_net_order_.at(id2)) {
+            auto const & net = netlist_[ids];
+            fan_out_count2 += net.size() - 1;
+        }
+        return fan_out_count1 > fan_out_count2;
     });
+
+    // put them into result, in order
+    for (auto const &src_id : reg_nets) {
+        result.emplace_back(src_id);
+        for (auto const &reg_net_id : reg_net_order_.at(src_id)) {
+            result.emplace_back(reg_net_id);
+        }
+    }
+
+    // remove all the added nets
+    for (auto const &id : result)
+        working_set.erase(id);
+
+    // change working set into a vector so that we can sort
+    ::vector<uint32_t> normal_nets(working_set.begin(), working_set.end());
+    std::stable_sort(normal_nets.begin(), normal_nets.end(),
+                     [&](uint32_t id1, uint32_t id2) -> bool {
+        uint64_t fan_out_count1 = netlist_[id1].size() - 1;
+        uint64_t fan_out_count2 = netlist_[id2].size() - 1;
+        return fan_out_count1 > fan_out_count2;
+    });
+
+    result.insert(result.end(), normal_nets.begin(), normal_nets.end());
+
     return result;
 }
 

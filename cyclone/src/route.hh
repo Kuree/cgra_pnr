@@ -33,8 +33,8 @@ protected:
     RoutingGraph graph_;
     std::vector<Net> netlist_;
     std::map<std::string, std::pair<uint32_t, uint32_t>> placement_;
-    std::map<std::string, uint32_t> reg_net_order_;
-    std::map<std::string, uint32_t> reg_net_src_;
+    std::map<int, std::vector<int>> reg_net_order_;
+    std::map<std::string, int> reg_net_src_;
     // a list of routing segments indexed by net id
     std::map<int,
             std::map<std::shared_ptr<Node>,
@@ -149,6 +149,8 @@ private:
     // TODO: fix the usage of "reg" in the packed netlist
     static constexpr char REG_IN[] = "in";
     static constexpr char REG_OUT[] = "out";
+
+    std::vector<int> squash_net(int src_id);
 };
 
 #endif //CYCLONE_ROUTE_HH
