@@ -53,17 +53,6 @@ protected:
     static constexpr char REG[] = "reg";
 
     std::vector<std::shared_ptr<Node>>
-    route_dijkstra(const std::shared_ptr<Node> &start,
-                   const std::shared_ptr<Node> &end);
-
-    std::vector<std::shared_ptr<Node>>
-    route_dijkstra(const std::shared_ptr<Node> &start,
-                   const std::shared_ptr<Node> &end,
-                   std::function<uint32_t(const std::shared_ptr<Node> &,
-                                          const std::shared_ptr<Node> &)>
-                                          cost_f);
-
-    std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::shared_ptr<Node> &end);
 
@@ -75,17 +64,7 @@ protected:
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
-                 const std::pair<uint32_t, uint32_t> &end);
-
-    std::vector<std::shared_ptr<Node>>
-    route_a_star(const std::shared_ptr<Node> &start,
                  const std::pair<uint32_t, uint32_t> &end,
-                 std::function<uint32_t(const std::shared_ptr<Node> &,
-                                        const std::shared_ptr<Node> &)> cost_f);
-
-    std::vector<std::shared_ptr<Node>>
-    route_a_star(const std::shared_ptr<Node> &start,
-                 std::function<bool(const std::shared_ptr<Node> &)> end_f,
                  std::function<uint32_t(const std::shared_ptr<Node> &,
                                         const std::shared_ptr<Node> &)> cost_f);
 
@@ -94,27 +73,14 @@ protected:
                  const std::pair<uint32_t, uint32_t> &end,
                  std::function<uint32_t(const std::shared_ptr<Node> &,
                                         const std::shared_ptr<Node> &)> cost_f,
-                 std::function<uint32_t(const std::shared_ptr<Node> &,
-                                        const std::shared_ptr<Node>)> h_f);
+                 std::function<double(const std::shared_ptr<Node> &)> h_f);
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::shared_ptr<Node> &end,
                  std::function<uint32_t(const std::shared_ptr<Node> &,
                                         const std::shared_ptr<Node> &)> cost_f,
-                 std::function<uint32_t(const std::shared_ptr<Node> &,
-                                        const std::shared_ptr<Node>)> h_f);
-
-    // tries its best to route an L shape based on a_star routing
-    // it's theoretically a little bit slower than directly wiring a L shape
-    std::vector<std::shared_ptr<Node>>
-    route_l(const std::shared_ptr<Node> &start,
-            const std::shared_ptr<Node> &end,
-            const std::pair<uint32_t, uint32_t> &steiner_p,
-            std::function<uint32_t(const std::shared_ptr<Node> &,
-                                   const std::shared_ptr<Node> &)> cost_f,
-            std::function<uint32_t(const std::shared_ptr<Node> &,
-                                   const std::shared_ptr<Node>)> h_f);
+                 std::function<double(const std::shared_ptr<Node> &)> h_f);
 
     // this is the actual routing engine shared by Dijkstra and A*
     // it's designed to be flexible
@@ -123,8 +89,7 @@ protected:
                  std::function<bool(const std::shared_ptr<Node> &)> end_f,
                  std::function<uint32_t(const std::shared_ptr<Node> &,
                                         const std::shared_ptr<Node> &)> cost_f,
-                 std::function<uint32_t(const std::shared_ptr<Node> &,
-                                        const std::shared_ptr<Node>)> h_f);
+                 std::function<double(const std::shared_ptr<Node> &)> h_f);
 
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
@@ -142,8 +107,8 @@ protected:
 
     uint32_t get_history_cost(const std::shared_ptr<Node> &node);
 
-    uint32_t get_presence_cost(const std::shared_ptr<Node> &node,
-                               int net_id);
+    double get_presence_cost(const std::shared_ptr<Node> &node,
+                               int net_id, uint32_t it);
 
 private:
     // TODO: fix the usage of "reg" in the packed netlist

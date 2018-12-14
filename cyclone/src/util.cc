@@ -3,6 +3,27 @@
 
 using std::shared_ptr;
 
+std::function<double(const std::shared_ptr<Node> &)>
+manhattan_distance(const std::shared_ptr<Node> &end) {
+    return [&](const std::shared_ptr<Node> &node) {
+        int dx = node->x - end->x;
+        int dy = node->y - end->y;
+
+        return static_cast<uint32_t>(abs(dx) + abs(dy));
+    };
+}
+
+std::function<double(const std::shared_ptr<Node> &)>
+manhattan_distance(const std::pair<uint32_t, uint32_t> &end) {
+    return [&](const std::shared_ptr<Node> &node) {
+        auto [x, y] = end;
+        int dx = node->x - x;
+        int dy = node->y - y;
+
+        return static_cast<uint32_t>(abs(dx) + abs(dy));
+    };
+}
+
 uint32_t manhattan_distance(const std::shared_ptr<Node> &node1,
                             const std::shared_ptr<Node> &node2) {
     int dx = node1->x - node2->x;

@@ -171,8 +171,8 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                 }
             }
         }
-        auto cost_f = create_cost_function(src, sink_node.node, net.id,
-                                           seg_index);
+        auto an = slack * slack_factor_;
+        auto cost_f = create_cost_function(net.id, an, it);
         // find the routes
         if (sink_node.name[0] == 'r') {
             ::pair<uint32_t, uint32_t> end = {sink_node.x, sink_node.y};
@@ -181,7 +181,8 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             }
             // based on the slack ratio, we choose which one to start
             auto end_f = get_free_register(end);
-            auto segment = route_a_star(src_node, end_f, cost_f);
+            auto h_f = manhattan_distance(end);
+            auto segment = route_a_star(src_node, end_f, cost_f, h_f);
 
             if (segment.back()->type != NodeType::Register) {
                 throw ::runtime_error("the beginning of a reg search has to be "
@@ -198,7 +199,7 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             net[seg_index].node = reg_node;
 
             // assign pins to the downstream
-            uint32_t reg_net_id = reg_net_src_.at(sink_node.name);
+            int reg_net_id = reg_net_src_.at(sink_node.name);
             netlist_[reg_net_id][0].node = reg_node;
 
             // store the segment
@@ -220,29 +221,23 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
     }
 }
 
-::function<uint32_t(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
-GlobalRouter::create_cost_function(const ::shared_ptr<Node> &n1,
-                                   const ::shared_ptr<Node> &n2,
-                                   int net_id,
-                                   uint32_t seg_index) {
-    return [&, net_id, seg_index](const ::shared_ptr<Node> &node1,
-               const ::shared_ptr<Node> &node2) -> uint32_t {
+::function<double(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
+GlobalRouter::create_cost_function(int net_id,
+                                   double an,
+                                   uint32_t it) {
+    return [&, net_id, an, it](const ::shared_ptr<Node> &node1,
+               const ::shared_ptr<Node> &node2) -> double {
         // based of the PathFinder paper
-        auto pn = get_presence_cost(node2, net_id);
-        pn *= pn_factor_;
+        auto pn = get_presence_cost(node2, net_id, it);
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node2) * hn_factor_;
-        auto slack_entry = std::make_pair(n1, n2);
-        double an = slack_ratio_.at({net_id, seg_index});
 
-        return static_cast<uint32_t>(an * dn + (1 - an) * (dn + hn) * pn);
+        return an * dn + (1 - an) * (dn + hn) * pn;
     };
 }
 
 GlobalRouter::GlobalRouter(uint32_t num_iteration, const RoutingGraph &g) :
-    Router(g), num_iteration_(num_iteration), slack_ratio_()  {
-    reg_fix_iteration_ = std::min(10u, num_iteration / 4);
-}
+    Router(g), num_iteration_(num_iteration), slack_ratio_()  {}
 
 std::function<bool(const std::shared_ptr<Node> &)>
 GlobalRouter::get_free_register(const std::pair<uint32_t, uint32_t> &p) {

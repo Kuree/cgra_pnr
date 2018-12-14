@@ -5,6 +5,12 @@
 #include "graph.hh"
 
 
+std::function<double(const std::shared_ptr<Node> &)>
+manhattan_distance(const std::shared_ptr<Node> &end);
+
+std::function<double(const std::shared_ptr<Node> &)>
+manhattan_distance(const std::pair<uint32_t, uint32_t> &end);
+
 uint32_t manhattan_distance(const std::shared_ptr<Node> &node1,
                             const std::shared_ptr<Node> &node2);
 
