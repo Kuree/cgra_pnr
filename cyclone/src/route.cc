@@ -172,6 +172,9 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         for (auto const &node : *head) {
             if (visited.find(node) != visited.end())
                 continue;
+            // disallow the reserved switch box until it's freed
+            if (reserved_switch_box_.find(node) != reserved_switch_box_.end())
+                continue;
 
             double tentative_score = g_score.at(head)
                                      + head->get_edge_cost(node)
@@ -195,7 +198,8 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
     }
 
     if (!end_f(head))
-        throw ::runtime_error("unable to route from " + start->to_string());
+        throw UnableRouteException("unable to route from "
+                                   + start->to_string());
 
     ::vector<::shared_ptr<Node>> routed_path;
     // back trace the route
@@ -299,7 +303,6 @@ Router::reorder_reg_nets() {
 
     // put them into result, in order
     for (auto const &src_id : reg_nets) {
-        result.emplace_back(src_id);
         for (auto const &reg_net_id : reg_net_order_.at(src_id)) {
             result.emplace_back(reg_net_id);
         }
@@ -393,7 +396,7 @@ double Router::get_presence_cost(const std::shared_ptr<Node> &node,
                                    int net_id,
                                    uint32_t it) {
     auto const &start_connection = node_connections_.at(node);
-    auto pn_factor = (it + 1) * 300000;
+    auto pn_factor = (it + 1) * pn_factor_;
     if (start_connection.find(net_id) == start_connection.end())
         return start_connection.size() * pn_factor;
     else

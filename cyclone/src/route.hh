@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <map>
+#include <unordered_set>
 #include "graph.hh"
 #include "net.hh"
 
@@ -45,12 +46,16 @@ protected:
 
     std::map<std::shared_ptr<Node>, uint32_t> node_history_;
 
+    std::unordered_set<std::shared_ptr<Node>> reserved_switch_box_;
+
     bool overflowed_ = false;
 
     const static uint32_t IN = 0;
     const static uint32_t OUT = 1;
 
     static constexpr char REG[] = "reg";
+
+    double pn_factor_ = 1.5;
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
@@ -117,5 +122,12 @@ private:
 
     std::vector<int> squash_net(int src_id);
 };
+
+class UnableRouteException : public std::runtime_error {
+public:
+    explicit UnableRouteException(const std::string &msg)
+        : std::runtime_error(msg) {}
+};
+
 
 #endif //CYCLONE_ROUTE_HH

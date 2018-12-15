@@ -92,7 +92,7 @@ def build_routing_graph(routing_resource, layout):
                                             track)
                         reg_count += 1
                         g.add_edge(sb_bottom, reg2)
-                        g.add_edge(reg2, sb_bottom)
+                        g.add_edge(reg2, sb_top)
 
     for y in range(SIZE):
         # connect from left to right and right to left
