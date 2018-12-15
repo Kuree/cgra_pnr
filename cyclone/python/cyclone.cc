@@ -41,7 +41,12 @@ void init_router_class(py::class_<T> &class_) {
         .def("add_placement", &T::add_placement)
         .def("overflow", &T::overflow)
         .def("route", &T::route)
-        .def("realize", &T::realize);
+        .def("realize", &T::realize)
+        // getter & setter
+        .def("get_init_pn", &T::get_init_pn)
+        .def("set_init_pn", &T::set_init_pn)
+        .def("get_pn_factor", &T::get_pn_factor)
+        .def("set_pn_factor", &T::set_pn_factor);
 }
 
 void init_graph(py::module &m) {

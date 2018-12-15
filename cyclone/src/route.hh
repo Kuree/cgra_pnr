@@ -24,11 +24,19 @@ public:
     // routing related function
     virtual void route() { };
     // assign nets
-    void assign_net(int net_id);
+    void assign_net_segment(const std::vector<std::shared_ptr<Node>> &segment,
+                            int net_id);
     void assign_history();
     void clear_connections();
     std::map<std::string, std::vector<std::vector<std::shared_ptr<Node>>>>
     realize();
+
+    // getter & setter
+    double get_init_pn() const { return init_pn_; }
+    void set_init_pn(double init_pn) { init_pn_ = init_pn; }
+    double get_pn_factor() const  { return pn_factor_; }
+    void set_pn_factor(double pn_factor) { pn_factor_ = pn_factor; }
+
 
 protected:
     RoutingGraph graph_;
@@ -46,8 +54,6 @@ protected:
 
     std::map<std::shared_ptr<Node>, uint32_t> node_history_;
 
-    std::unordered_set<std::shared_ptr<Node>> reserved_switch_box_;
-
     bool overflowed_ = false;
 
     const static uint32_t IN = 0;
@@ -55,6 +61,7 @@ protected:
 
     static constexpr char REG[] = "reg";
 
+    double init_pn_ = 1;
     double pn_factor_ = 1.5;
 
     std::vector<std::shared_ptr<Node>>
@@ -116,10 +123,6 @@ protected:
                                int net_id, uint32_t it);
 
 private:
-    // TODO: fix the usage of "reg" in the packed netlist
-    static constexpr char REG_IN[] = "in";
-    static constexpr char REG_OUT[] = "out";
-
     std::vector<int> squash_net(int src_id);
 };
 

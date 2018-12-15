@@ -2,6 +2,7 @@
 #include <queue>
 #include <algorithm>
 #include <unordered_set>
+#include <cmath>
 #include "route.hh"
 #include "util.hh"
 
@@ -172,9 +173,6 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         for (auto const &node : *head) {
             if (visited.find(node) != visited.end())
                 continue;
-            // disallow the reserved switch box until it's freed
-            if (reserved_switch_box_.find(node) != reserved_switch_box_.end())
-                continue;
 
             double tentative_score = g_score.at(head)
                                      + head->get_edge_cost(node)
@@ -330,14 +328,11 @@ bool Router::overflow() {
     return overflowed_;
 }
 
-void Router::assign_net(int net_id) {
-    auto segments = current_routes[net_id];
-    for (auto &seg_it : segments) {
-        auto &segment = seg_it.second;
-        for (uint32_t i = 1; i < segment.size(); i++) {
-            auto &node = segment[i];
-            assign_connection(node, net_id);
-        }
+void Router::assign_net_segment(const ::vector<::shared_ptr<Node>> &segment,
+                                int net_id) {
+    for (uint32_t i = 1; i < segment.size(); i++) {
+        auto &node = segment[i];
+        assign_connection(node, net_id);
     }
 }
 
@@ -396,7 +391,7 @@ double Router::get_presence_cost(const std::shared_ptr<Node> &node,
                                    int net_id,
                                    uint32_t it) {
     auto const &start_connection = node_connections_.at(node);
-    auto pn_factor = (it + 1) * pn_factor_;
+    auto pn_factor = init_pn_ * pow(pn_factor_, it + 1);
     if (start_connection.find(net_id) == start_connection.end())
         return start_connection.size() * pn_factor;
     else

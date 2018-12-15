@@ -53,28 +53,9 @@ void GlobalRouter::route() {
         // clear the routing resources, i.e. rip up all the nets
         clear_connections();
 
-        // use for flow control
-        bool has_exception = false;
-
         for (const auto &net_id : reordered_netlist) {
-            try {
-                route_net(netlist_[net_id], it);
-
-                // assign to the routing resource
-                assign_net(net_id);
-            } catch (const UnableRouteException &) {
-                pn_factor_ *= 2;
-                std::cerr << "unable to route with current pn_factor. "
-                             "increased to " << pn_factor_ <<
-                             " and restart" << std::endl;
-                it = static_cast<uint32_t>(0 - 1);
-                has_exception = true;
-                break;
-            }
+            route_net(netlist_[net_id], it);
         }
-
-        if (has_exception)
-            continue;
 
         // assign history table
         assign_history();
@@ -181,9 +162,23 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             uint32_t min_dist = manhattan_distance(src_node, sink_node.node);
             for (uint32_t p = 1; p < current_path.size(); p++) {
                 const auto &node = current_path[p];
+                const auto &conn = node_connections_.at(node);
                 if (node->type != NodeType::SwitchBox
-                    || reserved_switch_box_.find(node)
-                       != reserved_switch_box_.end())
+                    || (!conn.empty() && conn.find(net.id) == conn.end()))
+                    continue;
+                // also there exists one empty switch box it's connected
+                bool empty = false;
+                for (auto const &n : *node) {
+                    const auto &conn_n = node_connections_.at(n);
+                    if (n->type == NodeType::SwitchBox &&
+                        (conn_n.empty() ||
+                         (conn_n.size() == 1 &&
+                          conn_n.find(net.id) != conn_n.end()))) {
+                        empty = true;
+                        break;
+                    }
+                }
+                if (!empty)
                     continue;
                 if (manhattan_distance(node, sink_node.node)
                     < min_dist) {
@@ -193,16 +188,6 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
         }
         auto an = slack * slack_factor_;
         auto cost_f = create_cost_function(net.id, an, it);
-
-        // if it's a register src, unlock the reserved switch box
-        if (src_node->type == NodeType::Register) {
-            for (auto const &node : *src_node) {
-                if (node->type == NodeType::SwitchBox
-                    && reserved_switch_box_.find(node) !=
-                       reserved_switch_box_.end())
-                    reserved_switch_box_.erase(node);
-            }
-        }
 
         // find the routes
         if (sink_node.name[0] == 'r') {
@@ -240,7 +225,7 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             // connected to
             for (const auto &sb : *reg_node) {
                 if (sb->type == NodeType::SwitchBox) {
-                    reserved_switch_box_.insert(sb);
+                    node_connections_.at(sb).insert(reg_net_id);
                     break;
                 }
             }
@@ -258,6 +243,8 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
         // also put segment into the current path
         const auto &segment = current_routes[net.id][sink_node.node];
         current_path.insert(current_path.end(), segment.begin(), segment.end());
+        // assign it to the node_connections
+        assign_net_segment(segment, net.id);
     }
 }
 
