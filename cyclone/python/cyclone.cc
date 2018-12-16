@@ -46,7 +46,8 @@ void init_router_class(py::class_<T> &class_) {
         .def("get_init_pn", &T::get_init_pn)
         .def("set_init_pn", &T::set_init_pn)
         .def("get_pn_factor", &T::get_pn_factor)
-        .def("set_pn_factor", &T::set_pn_factor);
+        .def("set_pn_factor", &T::set_pn_factor)
+        .def("get_netlist", &T::get_netlist);
 }
 
 void init_graph(py::module &m) {
@@ -168,7 +169,9 @@ void init_util(py::module &m) {
 void init_io(py::module &m) {
     auto io_m = m.def_submodule("io");
     io_m.def("dump_routing_graph", &dump_routing_graph)
-        .def("load_routing_graph", &load_routing_graph);
+        .def("load_routing_graph", &load_routing_graph)
+        .def("load_placement", &load_placement)
+        .def("load_netlist", &load_netlist);
 }
 
 PYBIND11_MODULE(pycyclone, m) {

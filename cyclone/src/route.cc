@@ -1,7 +1,6 @@
 #include <map>
 #include <queue>
 #include <algorithm>
-#include <unordered_set>
 #include <cmath>
 #include "route.hh"
 #include "util.hh"
@@ -17,7 +16,6 @@ using std::string;
 using std::function;
 using std::move;
 using std::unordered_map;
-using std::unordered_set;
 
 
 Router::Router(const RoutingGraph &g) : graph_(g) {
@@ -152,7 +150,7 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
             ::vector<::shared_ptr<Node>>,
             decltype(cost_comp)> working_set(cost_comp);
     working_set.push(start);
-    ::unordered_set<::shared_ptr<Node>> open_set;
+    ::set<::shared_ptr<Node>> open_set;
     open_set.insert(start);
 
     ::map<::shared_ptr<Node>, ::shared_ptr<Node>> trace;

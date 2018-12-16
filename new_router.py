@@ -8,8 +8,9 @@ from pycyclone import Tile, RegisterNode, NodeType
 from pycyclone import GlobalRouter, SwitchBoxIO, Switch
 from pycyclone.util import get_side_int as gsi, get_uniform_sb_wires
 from pycyclone.util import get_opposite_side as gos
+from pycyclone.io import load_placement, load_netlist
 
-from arch import parse_cgra, load_packed_file, parse_placement
+from arch import parse_cgra
 from arch.cgra_route import parse_routing_resource, build_routing_resource
 
 REG_DELAY = 10
@@ -225,10 +226,9 @@ def main():
     meta = parse_cgra(arch_filename)["CGRA"]
     layout = meta[0]
 
-    netlists, _, id_to_name, _, track_mode = load_packed_file(
-        packed_filename, load_track_mode=True)
+    netlists, track_mode = load_netlist(packed_filename)
 
-    placement, _ = parse_placement(placement_filename)
+    placement = load_placement(placement_filename)
     raw_routing_resource = parse_routing_resource(arch_filename)
     routing_resource = build_routing_resource(raw_routing_resource)
     g_1, g_16 = build_routing_graph(routing_resource, layout)
@@ -236,11 +236,11 @@ def main():
     r_16 = GlobalRouter(40, g_16)
     assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)
 
-    pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
+    # pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
 
     # route these nets
-    # r_1.route()
-    # r_16.route()
+    r_1.route()
+    r_16.route()
 
 
 if __name__ == "__main__":

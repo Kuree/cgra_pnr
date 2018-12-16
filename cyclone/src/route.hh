@@ -3,7 +3,6 @@
 
 #include <functional>
 #include <map>
-#include <unordered_set>
 #include "graph.hh"
 #include "net.hh"
 
@@ -36,6 +35,7 @@ public:
     void set_init_pn(double init_pn) { init_pn_ = init_pn; }
     double get_pn_factor() const  { return pn_factor_; }
     void set_pn_factor(double pn_factor) { pn_factor_ = pn_factor; }
+    const std::vector<Net>& get_netlist() const { return netlist_; }
 
 
 protected:
@@ -61,7 +61,7 @@ protected:
 
     static constexpr char REG[] = "reg";
 
-    double init_pn_ = 1;
+    double init_pn_ = 2;
     double pn_factor_ = 1.5;
 
     std::vector<std::shared_ptr<Node>>
