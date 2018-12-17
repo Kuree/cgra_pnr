@@ -222,6 +222,7 @@ def main():
     packed_filename = args.packed_filename
     route_file = args.route_file
 
+    print("reading input files and constructing routing graph")
     placement_filename = args.placement_filename
     meta = parse_cgra(arch_filename)["CGRA"]
     layout = meta[0]
@@ -239,9 +240,16 @@ def main():
     # pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
 
     # route these nets
+    print("start routing")
     r_1.route()
     r_16.route()
 
+    if os.path.isfile(route_file):
+        print("removing existing", route_file)
+        os.remove(route_file)
+    print("saving result to", route_file)
+    pycyclone.io.dump_routing_result(r_1, route_file)
+    pycyclone.io.dump_routing_result(r_16, route_file)
 
 if __name__ == "__main__":
     main()

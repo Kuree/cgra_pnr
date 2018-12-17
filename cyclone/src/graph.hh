@@ -76,6 +76,8 @@ protected:
          uint32_t width);
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
          uint32_t width, uint32_t track);
+    // TODO: change this to std::weak_ptr to avoid memory leak due to circular
+    // TODO: reference.
     std::set<std::shared_ptr<Node>> neighbors_;
     std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
 

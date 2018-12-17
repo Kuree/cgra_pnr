@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <functional>
 #include <sstream>
+#include <unordered_set>
 
 using std::ifstream;
 using std::map;
@@ -408,4 +409,39 @@ RoutingGraph load_routing_graph(const std::string &filename) {
     }
     in.close();
     return g;
+}
+
+void dump_routing_result(const Router &r, const std::string &filename) {
+    std::ofstream out;
+    out.open(filename, std::ofstream::out | std::ofstream::app);
+
+    auto routes = r.realize();
+    const auto &netlist = r.get_netlist();
+    for (const auto &net : netlist) {
+        const auto &net_id = net.name;
+        auto const segments = routes.at(net.name);
+        out << "Net ID: " << net_id << " Segment Size: "
+            << segments.size() << endl;
+        std::unordered_set<std::shared_ptr<Node>> visited;
+        auto const &src = net[0].node;
+        for (uint32_t seg_index = 0; seg_index < segments.size(); seg_index++) {
+            out << "Segment: " << seg_index << endl;
+            auto const segment = segments[seg_index];
+            for (uint32_t node_index = 0; node_index < segment.size();
+                 node_index++) {
+                auto const &node = segment[node_index];
+                if (seg_index == 0 && node_index == 0 && node != src) {
+                    // it has to be the src
+                    throw ::runtime_error("unexpected state: src has to be"
+                                          "the beginning of the net "
+                                          "segments");
+                }
+                // just output plain sequence
+                out << node->to_string() << endl;
+            }
+        }
+        out << endl;
+    }
+
+    out.close();
 }

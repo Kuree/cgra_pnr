@@ -348,14 +348,18 @@ void Router::assign_history() {
 }
 
 ::map<::string, ::vector<::vector<::shared_ptr<Node>>>>
-Router::realize() {
+Router::realize() const {
     ::map<::string, ::vector<::vector<::shared_ptr<Node>>>>
     result;
-    for (const auto &iter : current_routes) {
-        const auto &name = netlist_[iter.first].name;
+    for (const auto &net : netlist_) {
+        const auto &name = net.name;
         ::vector<::vector<shared_ptr<Node>>> segments;
-        for (const auto &seg_iter : iter.second)
-            segments.emplace_back(seg_iter.second);
+        auto const &route = current_routes.at(net.id);
+        // realize them in the pin order
+        for (uint32_t seg_index = 1; seg_index< net.size(); seg_index++) {
+            auto const &seg = route.at(net[seg_index].node);
+            segments.emplace_back(seg);
+        }
         result.insert({name, segments});
     }
     return result;

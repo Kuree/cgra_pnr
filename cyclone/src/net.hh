@@ -34,6 +34,8 @@ public:
     inline void add_pin(const Pin &pin) { pins_.emplace_back(pin); }
     inline uint64_t size() const { return pins_.size(); }
     inline Pin& operator[](const uint64_t &index) { return pins_[index]; }
+    inline const Pin& operator[](const uint64_t &index) const
+    { return pins_[index]; }
 private:
     std::vector<Pin> pins_;
 };

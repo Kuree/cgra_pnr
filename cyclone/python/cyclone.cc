@@ -50,6 +50,30 @@ void init_router_class(py::class_<T> &class_) {
         .def("get_netlist", &T::get_netlist);
 }
 
+void init_netlist(py::module &m) {
+    py::class_<Net>(m, "Net")
+        .def(py::init<>())
+        .def(py::init<const std::string &,
+                      std::vector<std::pair<std::pair<uint32_t, uint32_t>,
+                                                      std::pair<std::string,
+                                            std::string>>>>())
+        .def("", &Net::size)
+        .def_readwrite("name", &Net::name)
+        .def_readwrite("fixed", &Net::fixed)
+        .def_readwrite("id", &Net::id)
+        .def("add_pin", &Net::add_pin)
+        .def("__iter__", [](Net &net) {
+            return py::make_iterator(net.begin(), net.end());
+        }, py::keep_alive<0, 1>());
+
+    py::class_<Pin>(m, "Pin")
+        .def_readwrite("name", &Pin::name)
+        .def_readwrite("node", &Pin::node)
+        .def_readwrite("port", &Pin::port)
+        .def_readwrite("x", &Pin::x)
+        .def_readwrite("y", &Pin::y);
+}
+
 void init_graph(py::module &m) {
     py::enum_<NodeType>(m, "NodeType")
         .value("SwitchBox", NodeType::SwitchBox)
@@ -171,7 +195,8 @@ void init_io(py::module &m) {
     io_m.def("dump_routing_graph", &dump_routing_graph)
         .def("load_routing_graph", &load_routing_graph)
         .def("load_placement", &load_placement)
-        .def("load_netlist", &load_netlist);
+        .def("load_netlist", &load_netlist)
+        .def("dump_routing_result", &dump_routing_result);
 }
 
 PYBIND11_MODULE(pycyclone, m) {
@@ -180,4 +205,5 @@ PYBIND11_MODULE(pycyclone, m) {
     init_router(m);
     init_util(m);
     init_io(m);
+    init_netlist(m);
 }

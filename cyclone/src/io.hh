@@ -5,6 +5,7 @@
 #include <map>
 #include <vector>
 #include "graph.hh"
+#include "route.hh"
 
 std::pair<std::map<std::string, std::vector<std::pair<std::string,
                                                       std::string>>>,
@@ -17,5 +18,7 @@ load_placement(const std::string &filename);
 void dump_routing_graph(RoutingGraph &graph, const std::string &filename);
 
 RoutingGraph load_routing_graph(const std::string &filename);
+
+void dump_routing_result(const Router &r, const std::string &filename);
 
 #endif //CYCLONE_IO_HH

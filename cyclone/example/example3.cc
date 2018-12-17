@@ -8,11 +8,12 @@ using namespace std;
 void print_help(const string &program_name) {
     cerr << "Usage: " << endl;
     cerr << "    " << program_name << " <packed_file>"
-         << " <placement_file> <routing_graph_file>" << endl;
+         << " <placement_file> <routing_graph_file> "
+            "[routing_result.route]" << endl;
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 4) {
+    if (argc < 4) {
         print_help(argv[0]);
         return EXIT_FAILURE;
     }
@@ -38,6 +39,11 @@ int main(int argc, char *argv[]) {
     }
 
     r.route();
+
+    if (argc > 4) {
+        cout << "saving routing result to " << argv[4] << endl;
+        dump_routing_result(r, argv[4]);
+    }
 
     return EXIT_SUCCESS;
 }

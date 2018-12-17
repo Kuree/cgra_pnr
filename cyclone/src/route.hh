@@ -28,7 +28,7 @@ public:
     void assign_history();
     void clear_connections();
     std::map<std::string, std::vector<std::vector<std::shared_ptr<Node>>>>
-    realize();
+    realize() const;
 
     // getter & setter
     double get_init_pn() const { return init_pn_; }
