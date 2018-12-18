@@ -6,7 +6,7 @@ import pycyclone
 from pycyclone import RoutingGraph, SwitchBoxNode, PortNode, SwitchBoxSide
 from pycyclone import Tile, RegisterNode, NodeType
 from pycyclone import GlobalRouter, SwitchBoxIO, Switch
-from pycyclone.util import get_side_int as gsi, get_uniform_sb_wires
+from pycyclone.util import get_side_int as gsi, get_uniform_sb_wires, gsv
 from pycyclone.util import get_opposite_side as gos
 from pycyclone.io import load_placement, load_netlist
 
@@ -58,7 +58,6 @@ def build_routing_graph(routing_resource, layout):
         g_1.add_tile(t1)
         g_16.add_tile(t16)
 
-    reg_count = 0
     for y in range(SIZE - 1):
         for x in range(SIZE):
             if (not is_fu_tile(layout, x, y)) or \
@@ -79,9 +78,10 @@ def build_routing_graph(routing_resource, layout):
                     g.add_edge(sb_top, sb_bottom)
                     # also add reg as well
                     if width == 16:
-                        reg1 = RegisterNode("reg" + str(reg_count), x, y, 16,
+                        reg1 = RegisterNode("reg_" + str(track) + "_"
+                                            + str(gsv(SwitchBoxSide.Bottom)), x, y,
+                                            16,
                                             track)
-                        reg_count += 1
                         g.add_edge(sb_top, reg1)
                         g.add_edge(reg1, sb_bottom)
 
@@ -89,9 +89,11 @@ def build_routing_graph(routing_resource, layout):
                     sb_top.io = SwitchBoxIO.SB_IN
                     g.add_edge(sb_bottom, sb_top)
                     if width == 16:
-                        reg2 = RegisterNode("reg" + str(reg_count), x, y, 16,
+                        reg2 = RegisterNode("reg_" + str(track) + "_"
+                                            + str(gsv(SwitchBoxSide.Top)),
+                                            x, y + 1,
+                                            16,
                                             track)
-                        reg_count += 1
                         g.add_edge(sb_bottom, reg2)
                         g.add_edge(reg2, sb_top)
 
@@ -116,9 +118,11 @@ def build_routing_graph(routing_resource, layout):
                     g.add_edge(sb_left, sb_right)
                     # also add reg as well
                     if width == 16:
-                        reg1 = RegisterNode("reg" + str(reg_count), x, y, 16,
+                        reg1 = RegisterNode("reg_" + str(track) + "_"
+                                            + str(gsv(SwitchBoxSide.Right)),
+                                            x, y,
+                                            16,
                                             track)
-                        reg_count += 1
                         g.add_edge(sb_left, reg1)
                         g.add_edge(reg1, sb_right)
 
@@ -127,9 +131,11 @@ def build_routing_graph(routing_resource, layout):
                     g.add_edge(sb_right, sb_left)
                     # also add reg as well
                     if width == 16:
-                        reg2 = RegisterNode("reg" + str(reg_count), x, y, 16,
+                        reg2 = RegisterNode("reg_" + str(track) + "_"
+                                            + str(gsv(SwitchBoxSide.Left)),
+                                            x + 1, y,
+                                            16,
                                             track)
-                        reg_count += 1
                         g.add_edge(sb_right, reg2)
                         g.add_edge(reg2, sb_left)
 
@@ -141,8 +147,6 @@ def build_routing_graph(routing_resource, layout):
             for port in ports:
                 assert len(ports[port]) == 0
             continue
-        current_tile = g_16[(x, y)]
-        tile_type = layout[y][x]
 
         # handling ports
         for port_name in ports:
@@ -176,10 +180,9 @@ def build_routing_graph(routing_resource, layout):
                         sb.side = gsi(side)
                         g.add_edge(sb, port)
                 else:
-                    sb.x, sb.y = get_new_coord(x, y, side)
-                    new_side = gos(side)
-                    sb.side = new_side
-                    sb.io = SwitchBoxIO.SB_IN
+                    sb.x, sb.y = x, y
+                    sb.side = gsi(side)
+                    sb.io = SwitchBoxIO.SB_OUT
                     g.add_edge(port, sb)
 
     return g_1, g_16
@@ -237,7 +240,7 @@ def main():
     r_16 = GlobalRouter(40, g_16)
     assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)
 
-    # pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
+    pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
 
     # route these nets
     print("start routing")
@@ -250,6 +253,7 @@ def main():
     print("saving result to", route_file)
     pycyclone.io.dump_routing_result(r_1, route_file)
     pycyclone.io.dump_routing_result(r_16, route_file)
+
 
 if __name__ == "__main__":
     main()

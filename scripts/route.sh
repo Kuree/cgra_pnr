@@ -35,4 +35,4 @@ if ! [ -f "$place" ] ; then
 fi
 
 route="${packed%.packed}.route"
-python ${root_dir}/router.py ${option} -c ${cgra} -i ${packed} -p ${place} -o ${route} --no-vis
+python ${root_dir}/new_router.py ${option} -c ${cgra} -i ${packed} -p ${place} -o ${route} --no-vis

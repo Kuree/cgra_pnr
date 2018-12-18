@@ -2,9 +2,9 @@
 from __future__ import print_function, division
 import sys
 import os
-from arch import find_latency_path, compute_routing_usage
-from arch import parse_routing_result, find_critical_path_delay
-from arch import compute_latency, compute_total_wire
+from arch import compute_routing_usage
+from arch import parse_routing
+from arch import compute_total_wire
 from arch import parse_placement, parse_cgra, compute_area_usage
 from arch.cgra_route import parse_routing_resource, build_routing_resource
 
@@ -21,7 +21,7 @@ def main():
     packed_file = route_file.replace(".route", ".packed")
     placement_file = route_file.replace(".route", ".place")
     board_meta = parse_cgra(cgra_file)["CGRA"]
-    routing_result = parse_routing_result(route_file)
+    routing_result = parse_routing(route_file)
     placement, _ = parse_placement(placement_file)
 
     if hasattr(sys.stdout, 'isatty') and sys.stdout.isatty():
@@ -32,19 +32,6 @@ def main():
     else:
         scale = 68
         cols = 80
-
-    # print("Latency:")
-    # print("Total:", total_time)
-    # latency_info = compute_latency(net_path, routing_result, placement)
-    # total_time = sum([latency_info[key] for key in latency_info])
-    # for entry in latency_info:
-    #     time = latency_info[entry]
-    #     percentage = int(time / total_time * 100)
-    #     num_bar = int(percentage / (100 / scale))
-    #     s = "{0:4s} {1} {2} {3}".format(entry.upper(),
-    #                                    num_bar * '█', ' ' * (scale - num_bar),
-    #                                     time)
-    # print(s)
 
     print("-" * cols)
     print("Area Usage:")
@@ -62,25 +49,7 @@ def main():
     total_wire = sum([net_wire[x] for x in net_wire])
     print("Total wire:", total_wire)
 
-    print("-" * cols)
-    total_delay, detailed_delay = find_critical_path_delay(netlist,
-                                                           packed_file,
-                                                           routing_result,
-                                                           placement)
-    print("Critical Path:")
-    clock_speed = 1e6 / total_delay
-    total_delay_formatted = "{:.2f} ns".format(total_delay / 1000)
-    print("Delay:", total_delay_formatted, "Max Clock Speed:",
-          "{0:.2f} MHz".format(clock_speed))
-    delay_keys = list(detailed_delay.keys())
-    delay_keys.sort(key=lambda x: detailed_delay[x], reverse=True)
-    for entry in delay_keys:
-        percentage = detailed_delay[entry] / total_delay * 100
-        num_bar = int(percentage / 100 * scale)
-        print("{0:4s} {1} {2} {3:.2f}%".format(entry.upper(),
-                                               num_bar * '█',
-                                               ' ' * (scale - num_bar - 2),
-                                               percentage))
+    # timing removed for future development
 
     print("-" * cols)
     r = parse_routing_resource(cgra_file)
@@ -90,11 +59,7 @@ def main():
     for bus in resource_usage:
         print("BUS:", bus)
         for track in resource_usage[bus]:
-            left = 0
-            total = 0
-            for _, l, t in resource_usage[bus][track]:
-                left += l
-                total += t
+            total, left = resource_usage[bus][track]
             percentage = (total - left) / total * 100
             num_bar = int(percentage / 100 * scale)
             print("TRACK {0} {1} {2} {3:.2f}%".format(track,

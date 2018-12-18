@@ -20,3 +20,35 @@ def parse_emb(filename, filter_hyperedge=True):
         inputs = [float(x) for x in raw_data[1:]]
         input_data[net_id] = inputs
     return num_dim, input_data
+
+
+def parse_routing(filename):
+    with open(filename) as f:
+        lines = f.readlines()
+
+    routes = {}
+    line_index = 0
+    while line_index < len(lines):
+        line = lines[line_index].strip()
+        line_index += 1
+        if line[:3] == "Net":
+            tokens = line.split(" ")
+            net_id = tokens[2]
+            routes[net_id] = []
+            num_seg = int(tokens[-1])
+            for seg_index in range(num_seg):
+                segment = []
+                line = lines[line_index].strip()
+                line_index += 1
+                assert line[:len("Segment")] == "Segment"
+                tokens = line.split()
+                seg_size = int(tokens[-1])
+                for i in range(seg_size):
+                    line = lines[line_index].strip()
+                    line_index += 1
+                    line = "".join([x for x in line if x not in ",()"])
+                    tokens = line.split()
+                    tokens = [int(x) if x.isdigit() else x for x in tokens]
+                    segment.append(tokens)
+                routes[net_id].append(segment)
+    return routes

@@ -5,6 +5,7 @@ import json
 import six
 
 from . import load_packed_file, read_netlist_json
+from .parser import parse_routing
 
 
 def save_placement(board_pos, id_to_name, _, place_file):
@@ -94,195 +95,15 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
             raise Exception("Unknown block type", blk_id)
 
 
-def save_routing_result(route_result, output_file):
-    with open(output_file, "w+") as f:
-        # write header
-        f.write("# Path format:\n")
-        f.write("# (BUS, IN (0) | OUT(1), SIDE, TRACK)\n\n")
-        net_id_list = list(route_result.keys())
-        net_id_list.sort(key=lambda x: int(x[1:]))
-        for net_id in net_id_list:
-            f.write("Net ID: {}\n".format(net_id))
-            path = route_result[net_id]
-            node_index = 0
-            for index, conn in enumerate(path):
-                if len(conn) == 1:
-                    # src
-                    p, port, dir_out, dir_in = conn[0]
-                    f.write("Node {}: SOURCE {}::{} -> {} -> {}\n".format(
-                        node_index,
-                        p,
-                        port,
-                        dir_out,
-                        dir_in))
-                elif len(conn) == 2:
-                    # passing through
-                    p1, dir_out = conn[0]
-                    p2, dir_in = conn[1]
-                    f.write("Node {}: {} -> {}\t{} -> {}\n".format(node_index,
-                                                                   p1,
-                                                                   p2,
-                                                                   dir_out,
-                                                                   dir_in))
-                elif len(conn) == 3:
-                    # direct sink
-                    conn, pos, port = conn
-                    if isinstance(port, str):
-                        f.write("Node {}: SINK {}::{} <- {}\n".format(
-                            node_index,
-                            pos,
-                            port,
-                            conn))
-                    else:
-                        assert (isinstance(port, tuple))
-                        f.write(
-                            "Node {}: SINK {}::{}\t{} <- {}\n".format(
-                                node_index,
-                                pos,
-                                "reg",
-                                port,
-                                conn))
-                elif len(conn) == 4:
-                    # self-connection sink
-                    # [dir_in, conn, current_point, port]
-                    dir_in, conn, pos, port = conn
-                    f.write("Node {}: {} -> {}\t{} -> {}\n".format(node_index,
-                                                                   pos,
-                                                                   pos,
-                                                                   dir_in,
-                                                                   conn))
-                    f.write("Node {}: SINK {}::{} <- {}\n".format(node_index,
-                                                                  pos,
-                                                                  port,
-                                                                  conn))
-                node_index += 1
-
-            f.write("\n")
-
-
-def parse_routing_result(routing_file):
-    with open(routing_file) as f:
-        lines = f.readlines()
-    result = {}
-    total_lines = len(lines)
-    line_num = 0
-
-    def remove_comment(str_val):
-        if "#" in str_val:
-            return str_val[:str_val.index("#")]
-        return str_val
-
-    def parse_conn(str_val):
-        str_val = str_val.strip()
-        assert str_val[0] == "("
-        assert str_val[-1] == ")"
-        str_val = str_val[1:len(str_val) - 1]
-        return tuple([int(x) for x in str_val.split(",") if x])
-
-    while line_num < total_lines:
-        line = lines[line_num].strip()
-        line_num += 1
-        line = remove_comment(line)
-        if len(line) < 7:
-            # don't care
-            continue
-        if line[:7] == "Net ID:":
-            net_id = line[8:]
-            assert net_id[1:].isdigit()
-            # read through the net
-            conns = []
-            # sanity check
-            has_sink = False
-            node_index = 0
-            while True:
-                line = lines[line_num].strip()
-                if len(line) == 0:
-                    break
-                line = remove_comment(line)
-                line_num += 1
-                if len(line) == 0:
-                    continue    # don't care about comments
-                node_id = "Node {}:".format(node_index)
-                pre_node_id = "Node {}:".format(node_index - 1)
-                # make sure it exists
-                if pre_node_id in line:
-                    start_index = line.index(pre_node_id)
-                    self_connected_sink = True
-                else:
-                    start_index = line.index(node_id)
-                    self_connected_sink = False
-                    node_index += 1
-                line = line[start_index + len(node_id):].strip()
-
-                if line[:6] == "SOURCE":
-                    # source
-                    line = line[6:].strip()
-                    assert ("->" in line)
-                    assert (not self_connected_sink)
-                    src, conn_in, conn_out = line.split("->")
-                    src_pos, src_port = src.split("::")
-                    src_pos = parse_conn(src_pos)
-                    src_port = src_port.strip()
-                    conn_in, conn_out = parse_conn(conn_in),\
-                        parse_conn(conn_out)
-                    conns.append(("src", (src_pos, src_port),
-                                  (conn_in, conn_out)))
-                elif line[:4] == "SINK":
-                    # sink
-                    has_sink = True
-                    line = line[4:].strip()
-                    assert ("<-" in line)
-                    if "\t" in line:
-                        pos_port, link = line.split("\t")
-                        dst_pos, dst_port = pos_port.split("::")
-                        dst_pos = parse_conn(dst_pos)
-                        assert (dst_port == "reg")
-                        conn_in, conn_out = link.split("<-")
-                        conn_in, conn_out = parse_conn(conn_in),\
-                            parse_conn(conn_out)
-                        conns.append(("sink", (conn_in, conn_out),
-                                      (dst_pos, dst_port)))
-                        pass
-                    else:
-                        dst, conn = line.split("<-")
-                        dst_pos, dst_port = dst.split("::")
-                        dst_pos = parse_conn(dst_pos)
-                        dst_port = dst_port.strip()
-                        conn = parse_conn(conn)
-                        if self_connected_sink:
-                            conns[-1] = ("sink", conns[-1][1:], conn,
-                                         (dst_pos, dst_port))
-                        else:
-                            conns.append(("sink", conn, (dst_pos, dst_port)))
-                else:
-                    # links
-                    assert ("\t" in line)
-                    assert (not self_connected_sink)
-                    positions, chan_connection = line.split("\t")
-                    src_pos, dst_pos = positions.split("->")
-                    src_pos, dst_pos = parse_conn(src_pos), parse_conn(dst_pos)
-                    conn1, conn2 = chan_connection.split("->")
-                    conn1, conn2 = parse_conn(conn1), parse_conn(conn2)
-                    conns.append(("link", (src_pos, dst_pos), (conn1, conn2)))
-
-            # make sure it's an actual net
-            assert has_sink
-            result[net_id] = conns
-
-    return result
-
-
 def generate_bitstream(board_filename, netlist_filename,
                        packed_filename, placement_filename,
                        routing_filename, output_filename,
-                       io_json,
-                       fold_reg=True):
+                       io_json):
     netlists, folded_blocks, id_to_name, changed_pe =\
         load_packed_file(packed_filename)
     g = build_graph(netlists)
     board_meta = arch.parse_cgra(board_filename, True)["CGRA"]
     placement, _ = parse_placement(placement_filename)
-    route_result = parse_routing_result(routing_filename)
     tile_mapping = board_meta[-1]
     board_layout = board_meta[0]
     io_pad_name = board_meta[-2]["io_pad_name"]
@@ -354,60 +175,18 @@ def generate_bitstream(board_filename, netlist_filename,
     output_string += "\n".join(io_strings)
 
     output_string += "\n\n#ROUTING\n"
-    net_id_list = list(route_result.keys())
+
+    routes = generate_routing(routing_filename, tile_mapping, board_layout)
+    net_id_list = list(routes.keys())
     net_id_list.sort(key=lambda x: int(x[1:]))
+
     for net_id in net_id_list:
-        path = route_result[net_id]
         output_string += "\n# net id: {}\n".format(net_id)
         netlist = netlists[net_id]
         for p in netlist:
             output_string += "# {}: {}::{}\n".format(p[0], id_to_name[p[0]],
                                                      p[1])
-
-        for index, entry in enumerate(path):
-            path_type = entry[0]
-            if index == 0:
-                assert (path_type == "src")
-                s = handle_src(entry[1], entry[2], tile_mapping,
-                               board_layout,
-                               fold_reg=fold_reg)
-                output_string += s
-            else:
-                if path_type == "src":
-                    s = handle_src(entry[1], entry[2], tile_mapping,
-                                   board_layout,
-                                   fold_reg=fold_reg)
-                    output_string += s
-                elif path_type == "link":
-                    track_out = entry[2][0]
-                    assert (track_out[1] == 1)
-                    track_in = find_track_in(entry[1][0], track_out,
-                                             path[:index + 1])
-                    s = handle_link(entry[1], entry[2],
-                                    track_in,
-                                    tile_mapping,
-                                    board_layout)
-                    if s not in output_string:
-                        # Keyi:
-                        # sometimes it will produce legal duplicated routing
-                        # tracks.
-                        output_string += s
-                elif path_type == "sink":
-                    if len(entry) == 4:
-                        track_out = entry[-2]
-                        assert len(track_out) == 4 and track_out[1] == 1
-                    else:
-                        assert len(entry) == 3
-                        track_out = None
-                    track_in = find_track_in(entry[-1][0], track_out,
-                                             path[:index + 1])
-                    s = handle_sink_entry(entry, track_in,
-                                          tile_mapping, board_layout,
-                                          folded_blocks, placement,
-                                          fold_reg=fold_reg)
-                    output_string += s
-                else:
-                    raise Exception("Unknown stage: " + path_type)
+        output_string += routes[net_id]
 
         output_string += "\n"
 
@@ -416,6 +195,97 @@ def generate_bitstream(board_filename, netlist_filename,
 
     with open(io_json, "w+") as f:
         json.dump(io_pad_info, f, indent=2, separators=(',', ': '))
+
+
+def generate_routing(routing_file, tile_mapping, board_layout):
+    routes = parse_routing(routing_file)
+    result = {}
+    for net_id in routes:
+        s = ""
+        for segment in routes[net_id]:
+            last_node = ""
+            seg_index = 0
+            while seg_index < len(segment):
+                seg = segment[seg_index]
+                node_type = seg[0]
+                if node_type == "PORT" and seg_index == 0:
+                    port_name = seg[1]
+                    if port_name == "out" or port_name == "outb":
+                        port_name = "pe_" + port_name
+                    x, y = seg[2], seg[3]
+                    pos = (x, y)
+                    if board_layout[y][x] == "i" or board_layout[y][x] == "I":
+                        seg_index += 2
+                        continue
+                    last_node = "Tx{:04X}".format(tile_mapping[pos]) \
+                                + "_" + port_name
+
+                    s += last_node + " -> "
+                elif node_type == "REG" and seg_index != 0:
+                    # in BSB we actually don't care about the reg input
+                    # since it's implicit
+                    assert seg_index == len(segment) - 1
+                    reg_name = seg[1]
+                    reg_tokens = reg_name[1:].split("_")
+                    side = int(reg_tokens[-1])
+                    track = seg[2]
+                    pos = (seg[3], seg[4])
+                    s += last_node + " -> "
+                    last_node = "Tx{:04X}".format(tile_mapping[pos]) \
+                                + "_out_" + "s{}t{} (r)".format(side, track)
+                    s += last_node + "\n"
+                elif node_type == "SB" and seg_index != 0:
+                    track = seg[1]
+                    pos = (seg[2], seg[3])
+                    side = seg[4]
+                    io = seg[5]
+                    one_bit = seg[6] != 16
+                    last_node = "Tx{:04X}".format(tile_mapping[pos]) \
+                                + "_{}_".format("out" if io else "in") \
+                                + "s{}t{}{}".format(side, track,
+                                                    "b" if one_bit else "")
+                    s += last_node
+                    if io == 0:
+                        # coming in
+                        s += " -> "
+                    else:
+                        s += "\n"
+                elif node_type == "PORT" and seg_index != 0:
+                    # this is sink
+                    # we need to double check if the previous one is coming
+                    # in or out
+                    # FIXME:
+                    # fix this hack
+                    pre_node = segment[seg_index - 1]
+                    port_name = seg[1]
+                    one_bit = seg[-1] != 16
+                    x, y = seg[2], seg[3]
+                    pos = (x, y)
+                    if board_layout[y][x] == "i" or board_layout[y][x] == "I":
+                        seg_index += 1
+                        continue
+                    assert pre_node[0] == "SB"
+                    if pre_node[2] != seg[2] or pre_node[3] != seg[3]:
+                        # we need to produce a fake one
+                        side = (pre_node[4] + 2) % 4
+                        track = pre_node[1]
+                        last_node = "Tx{:04X}".format(tile_mapping[pos]) \
+                                    + "_in_" \
+                                    + "s{}t{}{}".format(side, track,
+                                                        "b" if one_bit
+                                                        else "")
+                        s += last_node + " -> "
+                    else:
+                        s += last_node + " -> "
+                    s += "Tx{:04X}".format(tile_mapping[pos]) \
+                         + "_" + port_name + "\n"
+                elif node_type == "SB" and seg_index == 0:
+                    s += "\n"   # indicate the jump
+
+                seg_index += 1
+        result[net_id] = s
+
+    return result
 
 
 def generate_io(id_to_name, io16_tile, io_pad_bit, io_pad_name, placement,
@@ -462,178 +332,6 @@ def generate_io(id_to_name, io16_tile, io_pad_bit, io_pad_name, placement,
             # get bus pad name
             io_pad_info[id_to_name[blk_id]]["pad_bus"] = pad_name
     return io_pad_info, io_strings
-
-
-def find_track_in(src_pos, track_out, path):
-    if track_out is None:
-        track_out = (None, None, None)
-    # similar logic used in the router
-    for i in range(len(path)):
-        entry = path[i]
-        if entry[0] == "src":
-            continue
-        elif entry[0] == "link":
-            (_, pos), (_, src_conn) = entry[1:]
-            if pos == src_pos and src_conn[2] != track_out[2]:
-                assert src_conn[1] == 0
-                return src_conn
-        else:
-            if len(entry) == 3:
-                if entry[-1][-1] == "reg":
-                    _, (_, src_conn), (pos, _) = entry
-                else:
-                    _, src_conn, (pos, _) = entry
-                if pos == src_pos and src_conn[2] != track_out[2]:
-                    assert src_conn[1] == 0
-                    return src_conn
-            elif len(entry) == 4:
-                (pos, _), (src_conn, _) = entry[1]
-                if pos == src_pos and src_conn[2] != track_out[2]:
-                    assert src_conn[1] == 0
-                    return src_conn
-
-    # second pass if it comes directly from a port
-    for i in range(len(path) - 1):
-        entry = path[i]
-        if entry[0] == "src":
-            next_pos = path[i + 1][1][0]
-            if next_pos == src_pos:
-                src_conn = entry[-1][-1]
-                assert src_conn[1] == 0
-                return src_conn
-
-    raise Exception("Unknown path")
-
-
-def make_track_string(pos, track, tile_mapping, _, track_str=""):
-    bus, is_out, side, chan = track
-    # if board_layout[pos[1]][pos[0]] is None:
-    #     # TODO: USE MEM CAPACITY
-    #    assert(board_layout[pos[1] - 1][pos[0]] == "m")
-    #    pos = pos[0], pos[1] - 1
-    tile = tile_mapping[pos]
-    result = "Tx{:04X}_{}_s{}t{}{}{}".format(
-        tile,
-        "out" if is_out else "in",
-        side,
-        chan,
-        "" if bus == 16 else "b",
-        track_str
-    )
-    return result
-
-
-def handle_sink_entry(entry, track_in, tile_mapping, board_layout,
-                      folded_blocks, placement, fold_reg=True):
-    if len(entry) == 4:
-        s = handle_sink(entry[1], entry[2], entry[3],
-                        track_in,
-                        tile_mapping,
-                        board_layout,
-                        folded_blocks,
-                        placement)
-    elif len(entry) == 3:
-        if entry[-1][-1] == "reg":
-            assert fold_reg
-            s = handle_reg_sink(entry[1:], tile_mapping, board_layout)
-        else:
-            s = handle_sink(None, entry[1], entry[2],
-                            track_in,
-                            tile_mapping,
-                            board_layout,
-                            folded_blocks,
-                            placement)
-    else:
-        raise Exception("Unknown entry " + str(entry))
-    return s
-
-
-def handle_reg_sink(entry, tile_mapping, board_layout):
-    (dir_out, dir_in), (pos, port) = entry
-    assert (port == "reg")
-    result = handle_link((pos, pos), (dir_out, dir_in), dir_in, tile_mapping,
-                            board_layout, track_str=" (r)")
-    return result
-
-
-def handle_sink(self_conn, conn, dst, track_in,
-                tile_mapping, board_layout, folded_blocks, placement,
-                track_str=""):
-    result = ""
-    dst_pos, dst_port = dst
-    if self_conn is not None:
-        # most of them
-        start = make_track_string(dst_pos, track_in, tile_mapping, board_layout)
-        end = make_track_string(dst_pos, conn, tile_mapping, board_layout)
-        result = start + " -> " + end + "\n"
-    start = make_track_string(dst_pos, conn, tile_mapping, board_layout)
-
-    # need to find out if it's a folded register or not
-    pos_to_id = {}
-    for blk_id in placement:
-        if blk_id[0] == "r":
-            continue
-        pos = placement[blk_id]
-        assert (pos not in pos_to_id)
-        pos_to_id[pos] = blk_id
-
-    pos_port_set = set()
-    for entry in folded_blocks:
-        info = folded_blocks[entry]
-        if len(info) == 2:
-            blk_id, port = info
-            pos = placement[blk_id]
-            pos_port_set.add((pos, port))
-    # if dst in pos_port_set:
-    #     track_str = " (r)"
-    # else:
-    #    track_str = ""
-    tile = tile_mapping[dst_pos]
-    track = "" if (conn[0] == 16 or dst_port[-1] == "b")  else "b"
-    end = "Tx{:04X}_{}{}{}\n".format(tile,
-                                    dst_port,
-                                    track,
-                                    track_str)
-
-    result += start + " -> " + end
-
-    # Keyi:
-    # current bsbuilder doesn't like IO stuff
-    if board_layout[dst_pos[1]][dst_pos[0]] == "i":
-        result = ""
-    return result
-
-
-def handle_link(conn1, conn2, pre_in, tile_mapping, board_layout, track_str=""):
-    src_pos, dst_pos = conn1
-    track_out, track_in = conn2
-    start = make_track_string(src_pos, pre_in, tile_mapping, board_layout)
-    end = make_track_string(src_pos, track_out, tile_mapping, board_layout)
-    result = start + " -> " + end + track_str + "\n"
-    return result
-
-
-def handle_src(src, conn, tile_mapping, board_layout, fold_reg=True):
-    src_pos = src[0]
-    src_port = src[1]
-    tile = tile_mapping[src_pos]
-    if src_port == "out":
-        src_port = "pe_out"
-    elif src_port == "outb":
-        src_port = "pe_outb"
-    elif src_port == "reg":
-        assert fold_reg
-        return ""
-    track = "" if (conn[0][0] == 16 or src_port[-1] == "b") else "b"
-    start = "Tx{:04X}_{}{}".format(tile, src_port, track)
-    end = make_track_string(src_pos, conn[0], tile_mapping, board_layout)
-    result = start + " -> " + end + "\n"
-    # Keyi:
-    # the bsbuilder doesn't like IO tiles
-    # use board_layout to leave that black
-    if board_layout[src_pos[1]][src_pos[0]] == "i":
-        result = ""
-    return result
 
 
 def get_const_value(instance):

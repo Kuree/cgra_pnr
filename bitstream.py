@@ -57,8 +57,7 @@ def main():
     generate_bitstream(arch_filename, netlist_file, packed_filename,
                        placement_file,
                        routing_file,
-                       output_filename, io_json,
-                       fold_reg=fold_reg)
+                       output_filename, io_json)
 
 
 if __name__ == "__main__":

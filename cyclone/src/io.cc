@@ -425,8 +425,8 @@ void dump_routing_result(const Router &r, const std::string &filename) {
         std::unordered_set<std::shared_ptr<Node>> visited;
         auto const &src = net[0].node;
         for (uint32_t seg_index = 0; seg_index < segments.size(); seg_index++) {
-            out << "Segment: " << seg_index << endl;
             auto const segment = segments[seg_index];
+            out << "Segment: " << seg_index << " Size: " << segment.size() << endl;
             for (uint32_t node_index = 0; node_index < segment.size();
                  node_index++) {
                 auto const &node = segment[node_index];
