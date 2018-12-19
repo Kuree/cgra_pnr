@@ -21,4 +21,8 @@ RoutingGraph load_routing_graph(const std::string &filename);
 
 void dump_routing_result(const Router &r, const std::string &filename);
 
+void setup_router_input(Router &r, const std::string &packed_filename,
+                        const std::string &placement_filename,
+                        uint32_t bus_width);
+
 #endif //CYCLONE_IO_HH

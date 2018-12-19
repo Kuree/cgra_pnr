@@ -8,7 +8,7 @@ from pycyclone import Tile, RegisterNode, NodeType
 from pycyclone import GlobalRouter, SwitchBoxIO, Switch
 from pycyclone.util import get_side_int as gsi, get_uniform_sb_wires, gsv
 from pycyclone.util import get_opposite_side as gos
-from pycyclone.io import load_placement, load_netlist
+from pycyclone.io import load_placement, load_netlist, setup_router_input
 
 from arch import parse_cgra
 from arch.cgra_route import parse_routing_resource, build_routing_resource
@@ -31,8 +31,10 @@ def get_new_coord(x, y, side):
     else:
         raise Exception(str(side) + " is not a valid side")
 
+
 def is_fu_tile(layout, x, y):
     return layout[y][x] != ' ' and layout[y][x] is not None
+
 
 def build_routing_graph(routing_resource, layout):
     # FIXME:
@@ -50,8 +52,17 @@ def build_routing_graph(routing_resource, layout):
                    get_uniform_sb_wires(NUM_TRACK))
     sb_1 = Switch(0, 0, NUM_TRACK, 1, SWITCH_ID,
                   get_uniform_sb_wires(NUM_TRACK))
+    sb_empty_1 = Switch(0, 0, NUM_TRACK, 1, SWITCH_ID + 1, set())
+    sb_empty_16 = Switch(0, 0, NUM_TRACK, 16, SWITCH_ID + 2, set())
     for x, y in routing_resource:
         if not is_fu_tile(layout, x, y):
+            continue
+        if len(routing_resource[(x, y)]["route_resource"]) == 0:
+            # FIXME: hack around so that 1bit IO doesn't routing resource tile
+            t1 = Tile(x, y, sb_empty_1)
+            t2 = Tile(x, y, sb_empty_16)
+            g_1.add_tile(t1)
+            g_16.add_tile(t2)
             continue
         t1 = Tile(x, y, sb_1)
         t16 = Tile(x, y, sb_16)
@@ -79,7 +90,8 @@ def build_routing_graph(routing_resource, layout):
                     # also add reg as well
                     if width == 16:
                         reg1 = RegisterNode("reg_" + str(track) + "_"
-                                            + str(gsv(SwitchBoxSide.Bottom)), x, y,
+                                            + str(gsv(SwitchBoxSide.Bottom)),
+                                            x, y,
                                             16,
                                             track)
                         g.add_edge(sb_top, reg1)
@@ -188,19 +200,6 @@ def build_routing_graph(routing_resource, layout):
     return g_1, g_16
 
 
-def assign_placement_nets(routers, placement, netlists, track_mode):
-    for width in routers:
-        r = routers[width]
-        for blk_id in placement:
-            x, y = placement[blk_id]
-            r.add_placement(x, y, blk_id)
-    for net_id in netlists:
-        width = track_mode[net_id]
-        r = routers[width]
-        net = netlists[net_id]
-        r.add_net(net_id, net)
-
-
 def main():
     parser = ArgumentParser("CGRA Router")
     parser.add_argument("-i", "--input", help="Packed netlist file, " +
@@ -230,17 +229,22 @@ def main():
     meta = parse_cgra(arch_filename)["CGRA"]
     layout = meta[0]
 
-    netlists, track_mode = load_netlist(packed_filename)
-
-    placement = load_placement(placement_filename)
     raw_routing_resource = parse_routing_resource(arch_filename)
     routing_resource = build_routing_resource(raw_routing_resource)
     g_1, g_16 = build_routing_graph(routing_resource, layout)
     r_1 = GlobalRouter(40, g_1)
     r_16 = GlobalRouter(40, g_16)
-    assign_placement_nets({1: r_1, 16: r_16}, placement, netlists, track_mode)
 
-    pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
+    # a little bit slow, but should be consistent with the C++ results
+    setup_router_input(r_1, packed_filename, placement_filename, 1)
+    setup_router_input(r_16, packed_filename, placement_filename, 16)
+
+    # parameter settings
+    r_1.set_init_pn(10000)
+    r_16.set_init_pn(10000)
+
+    pycyclone.io.dump_routing_graph(g_1, "1bit.graph")
+    exit()
 
     # route these nets
     print("start routing")

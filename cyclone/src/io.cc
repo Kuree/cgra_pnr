@@ -179,7 +179,61 @@ load_placement(const std::string &filename) {
 
 void print_conn(std::ofstream &out, const std::string &pad,
                 const std::shared_ptr<Node> &node) {
-    for (auto const &n : *node) {
+    // need to sort them to make the dump process deterministic
+    ::vector<std::shared_ptr<Node>> nodes;
+    for (const auto &n : *node)
+        nodes.emplace_back(n);
+
+    // ordering for sides and ios
+    std::stable_sort(nodes.begin(), nodes.end(),
+                     [](const std::shared_ptr<Node> &n1,
+                        const std::shared_ptr<Node> &n2) {
+                         if (n1->type == NodeType::SwitchBox &&
+                             n2->type == NodeType::SwitchBox) {
+                             auto sb1 =
+                                     std::reinterpret_pointer_cast
+                                             <SwitchBoxNode>(n1);
+                             auto sb2 =
+                                     std::reinterpret_pointer_cast
+                                             <SwitchBoxNode>(n2);
+                             return sb1->side > sb2->side;
+                         } else {
+                             return n1->name > n2->name;
+                         }
+                     });
+    std::stable_sort(nodes.begin(), nodes.end(),
+                     [](const std::shared_ptr<Node> &n1,
+                        const std::shared_ptr<Node> &n2) {
+                         if (n1->type == NodeType::SwitchBox &&
+                             n2->type == NodeType::SwitchBox) {
+                             auto sb1 =
+                                     std::reinterpret_pointer_cast
+                                             <SwitchBoxNode>(n1);
+                             auto sb2 =
+                                     std::reinterpret_pointer_cast
+                                             <SwitchBoxNode>(n2);
+                             return sb1->io > sb2->io;
+                         } else {
+                             return n1->name > n2->name;
+                         }
+                     });
+    std::stable_sort(nodes.begin(), nodes.end(),
+                     [](const std::shared_ptr<Node> &n1,
+                        const std::shared_ptr<Node> &n2) {
+                         return n1->track > n2->track;
+                     });
+    std::stable_sort(nodes.begin(), nodes.end(),
+                     [](const std::shared_ptr<Node> &n1,
+                        const std::shared_ptr<Node> &n2) {
+                         return n1->x > n2->x;
+                     });
+    std::stable_sort(nodes.begin(), nodes.end(),
+                     [](const std::shared_ptr<Node> &n1,
+                        const std::shared_ptr<Node> &n2) {
+                         return n1->y > n2->y;
+                     });
+
+    for (auto const &n : nodes) {
         out << pad << pad << node_to_string(pad, n) << endl;
     }
 }
@@ -444,4 +498,22 @@ void dump_routing_result(const Router &r, const std::string &filename) {
     }
 
     out.close();
+}
+
+void setup_router_input(Router &r, const std::string &packed_filename,
+                        const std::string &placement_filename,
+                        uint32_t width) {
+    auto [netlist, track_mode] = load_netlist(packed_filename);
+    auto placement = load_placement(placement_filename);
+    for (auto const &it : placement) {
+        auto [x, y] = it.second;
+        r.add_placement(x, y, it.first);
+    }
+
+    for (const auto &iter: netlist) {
+        // Note
+        // we only route 1bit at this time
+        if (track_mode.at(iter.first) == width)
+            r.add_net(iter.first, iter.second);
+    }
 }

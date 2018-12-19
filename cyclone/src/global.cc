@@ -162,9 +162,10 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             uint32_t min_dist = manhattan_distance(src_node, sink_node.node);
             for (uint32_t p = 1; p < current_path.size(); p++) {
                 const auto &node = current_path[p];
+                const auto &pre_node = current_path[p - 1];
                 const auto &conn = node_connections_.at(node);
                 if (node->type != NodeType::SwitchBox
-                    || (!conn.empty() && conn.find(net.id) == conn.end()))
+                    || (!conn.empty() && conn.find(pre_node) == conn.end()))
                     continue;
                 // also there exists one empty switch box it's connected
                 bool empty = false;
@@ -173,7 +174,7 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                     if (n->type == NodeType::SwitchBox &&
                         (conn_n.empty() ||
                          (conn_n.size() == 1 &&
-                          conn_n.find(net.id) != conn_n.end()))) {
+                          conn_n.find(pre_node) != conn_n.end()))) {
                         empty = true;
                         break;
                     }
@@ -187,7 +188,7 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             }
         }
         auto an = slack * slack_factor_;
-        auto cost_f = create_cost_function(net.id, an, it);
+        auto cost_f = create_cost_function(an, it);
 
         // find the routes
         if (sink_node.name[0] == 'r') {
@@ -225,7 +226,7 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             // connected to
             for (const auto &sb : *reg_node) {
                 if (sb->type == NodeType::SwitchBox) {
-                    node_connections_.at(sb).insert(reg_net_id);
+                    node_connections_.at(sb).insert(reg_node);
                     break;
                 }
             }
@@ -244,18 +245,17 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
         const auto &segment = current_routes[net.id][sink_node.node];
         current_path.insert(current_path.end(), segment.begin(), segment.end());
         // assign it to the node_connections
-        assign_net_segment(segment, net.id);
+        assign_net_segment(segment);
     }
 }
 
 ::function<double(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
-GlobalRouter::create_cost_function(int net_id,
-                                   double an,
+GlobalRouter::create_cost_function(double an,
                                    uint32_t it) {
-    return [&, net_id, an, it](const ::shared_ptr<Node> &node1,
+    return [&, an, it](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> double {
         // based of the PathFinder paper
-        auto pn = get_presence_cost(node2, net_id, it);
+        auto pn = get_presence_cost(node2, node1, it);
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node2) * hn_factor_;
 

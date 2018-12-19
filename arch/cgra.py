@@ -201,7 +201,8 @@ def generate_routing(routing_file, tile_mapping, board_layout):
     routes = parse_routing(routing_file)
     result = {}
     for net_id in routes:
-        s = ""
+        lines = []
+        line = ""
         for segment in routes[net_id]:
             last_node = ""
             seg_index = 0
@@ -220,20 +221,15 @@ def generate_routing(routing_file, tile_mapping, board_layout):
                     last_node = "Tx{:04X}".format(tile_mapping[pos]) \
                                 + "_" + port_name
 
-                    s += last_node + " -> "
+                    line += last_node + " -> "
                 elif node_type == "REG" and seg_index != 0:
-                    # in BSB we actually don't care about the reg input
+                    # in BSB we actually don't care about the reg node
                     # since it's implicit
+                    # we rewind the last line and add (r) to it
+                    # FIXME: change it back once steve fixed it
                     assert seg_index == len(segment) - 1
-                    reg_name = seg[1]
-                    reg_tokens = reg_name[1:].split("_")
-                    side = int(reg_tokens[-1])
-                    track = seg[2]
-                    pos = (seg[3], seg[4])
-                    s += last_node + " -> "
-                    last_node = "Tx{:04X}".format(tile_mapping[pos]) \
-                                + "_out_" + "s{}t{} (r)".format(side, track)
-                    s += last_node + "\n"
+                    lines[-1] = lines[-1] + " (r)"
+                    line = ""
                 elif node_type == "SB" and seg_index != 0:
                     track = seg[1]
                     pos = (seg[2], seg[3])
@@ -244,12 +240,13 @@ def generate_routing(routing_file, tile_mapping, board_layout):
                                 + "_{}_".format("out" if io else "in") \
                                 + "s{}t{}{}".format(side, track,
                                                     "b" if one_bit else "")
-                    s += last_node
+                    line += last_node
                     if io == 0:
                         # coming in
-                        s += " -> "
+                        line += " -> "
                     else:
-                        s += "\n"
+                        lines.append(line)
+                        line = ""
                 elif node_type == "PORT" and seg_index != 0:
                     # this is sink
                     # we need to double check if the previous one is coming
@@ -274,16 +271,19 @@ def generate_routing(routing_file, tile_mapping, board_layout):
                                     + "s{}t{}{}".format(side, track,
                                                         "b" if one_bit
                                                         else "")
-                        s += last_node + " -> "
+                        line += last_node + " -> "
                     else:
-                        s += last_node + " -> "
-                    s += "Tx{:04X}".format(tile_mapping[pos]) \
-                         + "_" + port_name + "\n"
+                        line += last_node + " -> "
+                    line += "Tx{:04X}".format(tile_mapping[pos]) \
+                            + "_" + port_name
+                    lines.append(line)
+                    line = ""
                 elif node_type == "SB" and seg_index == 0:
-                    s += "\n"   # indicate the jump
+                    lines.append("")   # indicate the jump
+                    line = ""
 
                 seg_index += 1
-        result[net_id] = s
+        result[net_id] = "\n".join(lines)
 
     return result
 

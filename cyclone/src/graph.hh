@@ -233,6 +233,10 @@ public:
     find(const std::pair<uint32_t, uint32_t> &tile)
     { return grid_.find(tile); }
 
+    bool has_tile(const std::pair<uint32_t, uint32_t> &coord)
+    { return grid_.find(coord) != grid_.end(); }
+    bool has_tile(uint32_t x, uint32_t y) { return has_tile({x, y}); };
+
 private:
     // grid is for fast locating the nodes. no longer used for routing
     std::map<std::pair<uint32_t, uint32_t>, Tile> grid_;

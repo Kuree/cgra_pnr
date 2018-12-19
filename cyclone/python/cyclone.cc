@@ -155,6 +155,13 @@ void init_graph(py::module &m) {
 
         .def("get_sb", &RoutingGraph::get_sb)
         .def("get_port", &RoutingGraph::get_port)
+        .def("has_tile",
+             py::overload_cast<const std::pair<uint32_t,
+                                               uint32_t>&>
+                                               (&RoutingGraph::has_tile))
+        .def("has_tile",
+             py::overload_cast<uint32_t,
+                               uint32_t>(&RoutingGraph::has_tile))
         .def("__getitem__", &RoutingGraph::operator[])
         .def("__iter__", [](RoutingGraph &r) {
             return py::make_key_iterator(r.begin(), r.end());
@@ -196,7 +203,8 @@ void init_io(py::module &m) {
         .def("load_routing_graph", &load_routing_graph)
         .def("load_placement", &load_placement)
         .def("load_netlist", &load_netlist)
-        .def("dump_routing_result", &dump_routing_result);
+        .def("dump_routing_result", &dump_routing_result)
+        .def("setup_router_input", &setup_router_input);
 }
 
 PYBIND11_MODULE(pycyclone, m) {

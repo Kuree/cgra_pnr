@@ -326,11 +326,10 @@ bool Router::overflow() {
     return overflowed_;
 }
 
-void Router::assign_net_segment(const ::vector<::shared_ptr<Node>> &segment,
-                                int net_id) {
+void Router::assign_net_segment(const ::vector<::shared_ptr<Node>> &segment) {
     for (uint32_t i = 1; i < segment.size(); i++) {
         auto &node = segment[i];
-        assign_connection(node, net_id);
+        assign_connection(node, segment[i - 1]);
     }
 }
 
@@ -366,8 +365,8 @@ Router::realize() const {
 }
 
 void Router::assign_connection(const std::shared_ptr<Node> &node,
-                               int net_id) {
-    node_connections_.at(node).insert(net_id);
+                               const std::shared_ptr<Node> &pre_node) {
+    node_connections_.at(node).insert(pre_node);
     if (!overflowed_ && node_connections_[node].size() > 1)
         overflowed_ = true;
 
@@ -390,11 +389,11 @@ uint32_t Router::get_history_cost(const std::shared_ptr<Node> &node) {
 }
 
 double Router::get_presence_cost(const std::shared_ptr<Node> &node,
-                                   int net_id,
+                                 const std::shared_ptr<Node> &pre_node,
                                    uint32_t it) {
     auto const &start_connection = node_connections_.at(node);
     auto pn_factor = init_pn_ * pow(pn_factor_, it + 1);
-    if (start_connection.find(net_id) == start_connection.end())
+    if (start_connection.find(pre_node) == start_connection.end())
         return start_connection.size() * pn_factor;
     else
         return (start_connection.size() - 1) * pn_factor;
