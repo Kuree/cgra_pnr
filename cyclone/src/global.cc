@@ -159,7 +159,8 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
         if (strategy == RoutingStrategy::CongestionDriven
             && !current_path.empty()) {
             // find the closest point
-            uint32_t min_dist = manhattan_distance(src_node, sink_node.node);
+            uint32_t min_dist = manhattan_distance(src_node, {sink_node.x,
+                                                              sink_node.y});
             for (uint32_t p = 1; p < current_path.size(); p++) {
                 const auto &node = current_path[p];
                 const auto &pre_node = current_path[p - 1];
@@ -181,7 +182,7 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                 }
                 if (!empty)
                     continue;
-                if (manhattan_distance(node, sink_node.node)
+                if (manhattan_distance(node, {sink_node.x, sink_node.y})
                     < min_dist) {
                     src_node = node;
                 }
@@ -226,7 +227,12 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             // connected to
             for (const auto &sb : *reg_node) {
                 if (sb->type == NodeType::SwitchBox) {
-                    node_connections_.at(sb).insert(reg_node);
+                    // FIXME
+                    // it is fine if the reg only connects to one node,
+                    // which is the case for pipeline registers. However, it
+                    // may introduce additional congestion if the register node
+                    // connects to more than one switch box node
+                    assign_connection(sb, reg_node);
                     break;
                 }
             }

@@ -9,7 +9,7 @@ public:
 
     void route() override;
 
-    double route_strategy_ratio = 0.5;
+    double route_strategy_ratio = 1;
 
 protected:
     virtual void

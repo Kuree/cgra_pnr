@@ -61,7 +61,7 @@ protected:
 
     static constexpr char REG[] = "reg";
 
-    double init_pn_ = 4;
+    double init_pn_ = 10000;
     double pn_factor_ = 1.5;
 
     std::vector<std::shared_ptr<Node>>

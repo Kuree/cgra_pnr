@@ -213,10 +213,13 @@ def generate_routing(routing_file, tile_mapping, board_layout):
                     port_name = seg[1]
                     if port_name == "out" or port_name == "outb":
                         port_name = "pe_" + port_name
+                    elif port_name == "valid":
+                        port_name = "validb"
                     x, y = seg[2], seg[3]
                     pos = (x, y)
                     if board_layout[y][x] == "i" or board_layout[y][x] == "I":
                         seg_index += 2
+                        line = ""
                         continue
                     last_node = "Tx{:04X}".format(tile_mapping[pos]) \
                                 + "_" + port_name

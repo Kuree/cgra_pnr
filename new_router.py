@@ -54,15 +54,14 @@ def build_routing_graph(routing_resource, layout):
                   get_uniform_sb_wires(NUM_TRACK))
     sb_empty_1 = Switch(0, 0, NUM_TRACK, 1, SWITCH_ID + 1, set())
     sb_empty_16 = Switch(0, 0, NUM_TRACK, 16, SWITCH_ID + 2, set())
-    for x, y in routing_resource:
+    tiles = list(routing_resource.keys())
+    for i in range(2):
+        tiles.sort(key=lambda x: x[i])
+    for x, y in tiles:
         if not is_fu_tile(layout, x, y):
             continue
-        if len(routing_resource[(x, y)]["route_resource"]) == 0:
-            # FIXME: hack around so that 1bit IO doesn't routing resource tile
-            t1 = Tile(x, y, sb_empty_1)
-            t2 = Tile(x, y, sb_empty_16)
-            g_1.add_tile(t1)
-            g_16.add_tile(t2)
+        if len(routing_resource[(x, y)]["route_resource"]) == 0 and\
+            "out" not in routing_resource[(x, y)]["port"]:
             continue
         t1 = Tile(x, y, sb_1)
         t16 = Tile(x, y, sb_16)
@@ -73,6 +72,8 @@ def build_routing_graph(routing_resource, layout):
         for x in range(SIZE):
             if (not is_fu_tile(layout, x, y)) or \
                     (not is_fu_tile(layout, x, y + 1)):
+                continue
+            if not g_16.has_tile(x, y) or not g_16.has_tile(x, y + 1):
                 continue
             for width in [1, 16]:
                 if width == 1:
@@ -115,6 +116,8 @@ def build_routing_graph(routing_resource, layout):
             if (not is_fu_tile(layout, x, y)) or \
                     (not is_fu_tile(layout, x + 1, y)):
                 continue
+            if not g_16.has_tile(x, y) or not g_16.has_tile(x + 1, y):
+                continue
             for width in [1, 16]:
                 if width == 1:
                     g = g_1
@@ -150,8 +153,7 @@ def build_routing_graph(routing_resource, layout):
                                             track)
                         g.add_edge(sb_right, reg2)
                         g.add_edge(reg2, sb_left)
-
-    for x, y in routing_resource:
+    for x, y in tiles:
         ports = routing_resource[(x, y)]["port"]
         port_io = routing_resource[(x, y)]["port_io"]
 
@@ -159,13 +161,22 @@ def build_routing_graph(routing_resource, layout):
             for port in ports:
                 assert len(ports[port]) == 0
             continue
+        if not g_16.has_tile(x, y):
+            continue
 
         # handling ports
-        for port_name in ports:
+        # sort them
+        port_names = list(ports.keys())
+        port_names.sort()
+        for port_name in port_names:
             port = PortNode(port_name, x, y, 0)
             sb = SwitchBoxNode(0, 0, 0, 0, SwitchBoxSide.Bottom,
                                SwitchBoxIO.SB_OUT)
-            for width, io, side, track in ports[port_name]:
+            port_entries = list(ports[port_name])
+            # in-place sort
+            for i in range(4):
+                port_entries.sort(key=lambda x: x[i])
+            for width, io, side, track in port_entries:
                 if width == 16:
                     g = g_16
                 else:
@@ -184,6 +195,8 @@ def build_routing_graph(routing_resource, layout):
                         # this is coming in, so we need to recalculate the
                         # coordinates to see where the connection comes from
                         sb.x, sb.y = get_new_coord(x, y, side)
+                        if not g.has_tile(sb.x, sb.y):
+                            continue
                         new_side = gos(side)
                         sb.side = new_side
                         g.add_edge(sb, port)
@@ -243,8 +256,7 @@ def main():
     r_1.set_init_pn(10000)
     r_16.set_init_pn(10000)
 
-    pycyclone.io.dump_routing_graph(g_1, "1bit.graph")
-    exit()
+    pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
 
     # route these nets
     print("start routing")

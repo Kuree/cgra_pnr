@@ -392,7 +392,7 @@ double Router::get_presence_cost(const std::shared_ptr<Node> &node,
                                  const std::shared_ptr<Node> &pre_node,
                                    uint32_t it) {
     auto const &start_connection = node_connections_.at(node);
-    auto pn_factor = init_pn_ * pow(pn_factor_, it + 1);
+    auto pn_factor = init_pn_ * pow(pn_factor_, it);
     if (start_connection.find(pre_node) == start_connection.end())
         return start_connection.size() * pn_factor;
     else
