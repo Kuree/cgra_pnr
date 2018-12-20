@@ -17,6 +17,9 @@ uint32_t manhattan_distance(const std::shared_ptr<Node> &node1,
 uint32_t manhattan_distance(const std::shared_ptr<Node> &node1,
                             const std::pair<uint32_t, uint32_t> &pos);
 
+uint32_t manhattan_distance(const std::pair<uint32_t, uint32_t> &pos1,
+                            const std::pair<uint32_t, uint32_t> &pos2);
+
 uint32_t zero_cost(const std::shared_ptr<Node> &,
                    const std::shared_ptr<Node> &);
 

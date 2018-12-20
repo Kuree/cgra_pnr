@@ -21,7 +21,7 @@ protected:
     create_cost_function(double an, uint32_t it);
 
     virtual std::function<bool(const std::shared_ptr<Node> &)>
-    get_free_register(const std::pair<uint32_t, uint32_t> &p);
+    get_free_switch(const std::pair<uint32_t, uint32_t> &p);
 
 private:
     uint32_t num_iteration_ = 40;
@@ -30,6 +30,10 @@ private:
              double> slack_ratio_;
     double hn_factor_ = 0.01;
     double slack_factor_ = 0.9;
+    std::map<int, std::pair<int, std::shared_ptr<Node>>> reg_net_table_;
+
+    std::vector<uint32_t> reorder_pins(const Net &net);
+    void fix_register_net(int net_id, Pin &pin);
 };
 
 
