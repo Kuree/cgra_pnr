@@ -71,27 +71,27 @@ protected:
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::shared_ptr<Node> &end,
-                 std::function<uint32_t(const std::shared_ptr<Node> &,
-                                        const std::shared_ptr<Node> &)> cost_f);
+                 std::function<double(const std::shared_ptr<Node> &,
+                                      const std::shared_ptr<Node> &)> cost_f);
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::pair<uint32_t, uint32_t> &end,
-                 std::function<uint32_t(const std::shared_ptr<Node> &,
-                                        const std::shared_ptr<Node> &)> cost_f);
+                 std::function<double(const std::shared_ptr<Node> &,
+                                      const std::shared_ptr<Node> &)> cost_f);
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::pair<uint32_t, uint32_t> &end,
-                 std::function<uint32_t(const std::shared_ptr<Node> &,
-                                        const std::shared_ptr<Node> &)> cost_f,
+                 std::function<double(const std::shared_ptr<Node> &,
+                                      const std::shared_ptr<Node> &)> cost_f,
                  std::function<double(const std::shared_ptr<Node> &)> h_f);
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  const std::shared_ptr<Node> &end,
-                 std::function<uint32_t(const std::shared_ptr<Node> &,
-                                        const std::shared_ptr<Node> &)> cost_f,
+                 std::function<double(const std::shared_ptr<Node> &,
+                                      const std::shared_ptr<Node> &)> cost_f,
                  std::function<double(const std::shared_ptr<Node> &)> h_f);
 
     // this is the actual routing engine shared by Dijkstra and A*
@@ -99,8 +99,8 @@ protected:
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
                  std::function<bool(const std::shared_ptr<Node> &)> end_f,
-                 std::function<uint32_t(const std::shared_ptr<Node> &,
-                                        const std::shared_ptr<Node> &)> cost_f,
+                 std::function<double(const std::shared_ptr<Node> &,
+                                      const std::shared_ptr<Node> &)> cost_f,
                  std::function<double(const std::shared_ptr<Node> &)> h_f);
 
     std::shared_ptr<Node> get_port(const uint32_t &x,

@@ -28,8 +28,8 @@ private:
 
     std::map<std::pair<int, uint32_t>,
              double> slack_ratio_;
-    double hn_factor_ = 0.2;
-    double slack_factor_ = 0.01;
+    double hn_factor_ = 0.01;
+    double slack_factor_ = 0.9;
 };
 
 

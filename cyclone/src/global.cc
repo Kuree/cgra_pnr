@@ -265,7 +265,8 @@ GlobalRouter::create_cost_function(double an,
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node2) * hn_factor_;
 
-        return an * dn + (1 - an) * (dn + hn) * pn;
+        auto result = an * dn + (1 - an) * (dn + hn) * pn;
+        return result;
     };
 }
 
@@ -291,5 +292,5 @@ GlobalRouter::get_free_register(const std::pair<uint32_t, uint32_t> &p) {
 
             return false;
         }
-    };;
+    };
 }

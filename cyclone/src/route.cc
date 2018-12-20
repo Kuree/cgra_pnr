@@ -2,6 +2,7 @@
 #include <queue>
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 #include "route.hh"
 #include "util.hh"
 
@@ -16,6 +17,7 @@ using std::string;
 using std::function;
 using std::move;
 using std::unordered_map;
+using std::unordered_set;
 
 
 Router::Router(const RoutingGraph &g) : graph_(g) {
@@ -94,7 +96,7 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::shared_ptr<Node> &end,
-                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                     ::function<double(const ::shared_ptr<Node> &,
                                          const ::shared_ptr<Node> &)> cost_f) {
     auto end_f = [&](const ::shared_ptr<Node> &node) -> bool {
         return node == end;
@@ -105,7 +107,7 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::pair<uint32_t, uint32_t> &end,
-                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                     ::function<double(const ::shared_ptr<Node> &,
                                          const ::shared_ptr<Node> &)> cost_f) {
     return route_a_star(start, end, ::move(cost_f), manhattan_distance(end));
 }
@@ -113,7 +115,7 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::pair<uint32_t, uint32_t> &end,
-                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                     ::function<double(const ::shared_ptr<Node> &,
                                          const ::shared_ptr<Node> &)> cost_f,
                      ::function<double(const ::shared_ptr<Node> &)> h_f) {
     return route_a_star(start, same_loc(end), ::move(cost_f), ::move(h_f));
@@ -122,7 +124,7 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::shared_ptr<Node> &end,
-                     ::function<uint32_t(const ::shared_ptr<Node> &,
+                     ::function<double(const ::shared_ptr<Node> &,
                                          const ::shared_ptr<Node> &)> cost_f,
                      ::function<double(const ::shared_ptr<Node>&)> h_f) {
     return route_a_star(start, same_node(end), ::move(cost_f), ::move(h_f));
@@ -132,14 +134,14 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 std::vector<std::shared_ptr<Node>> Router::route_a_star(
         const std::shared_ptr<Node> &start,
         std::function<bool(const std::shared_ptr<Node> &)> end_f,
-        std::function<uint32_t(const std::shared_ptr<Node> &,
+        std::function<double(const std::shared_ptr<Node> &,
                                const std::shared_ptr<Node> &)> cost_f,
         std::function<double(const ::shared_ptr<Node> &)> h_f) {
-    ::set<::shared_ptr<Node>> visited;
+    ::unordered_set<::shared_ptr<Node>> visited;
     ::unordered_map<::shared_ptr<Node>, double> g_score = {{start, 0}};
 
     ::unordered_map<::shared_ptr<Node>, double> f_score = {{start,
-                                                           h_f(start)}};
+                                                            h_f(start)}};
     // use cost as a comparator
     auto cost_comp = [&](const ::shared_ptr<Node> &a,
                          const ::shared_ptr<Node> &b) -> bool {
@@ -150,7 +152,7 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
             ::vector<::shared_ptr<Node>>,
             decltype(cost_comp)> working_set(cost_comp);
     working_set.push(start);
-    ::set<::shared_ptr<Node>> open_set;
+    ::unordered_set<::shared_ptr<Node>> open_set;
     open_set.insert(start);
 
     ::map<::shared_ptr<Node>, ::shared_ptr<Node>> trace;
@@ -166,6 +168,10 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
 
         working_set.pop();
         open_set.erase(head);
+
+        if (visited.find(head) != visited.end())
+            continue;
+
         visited.insert(head);
 
         for (auto const &node : *head) {
@@ -186,6 +192,8 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
             } else {
                 g_score[node] = tentative_score;
                 f_score[node] = g_score.at(node) + h_f(node);
+                // a duplicated copy
+                working_set.push(node);
             }
 
             trace.insert({node, head});
@@ -330,6 +338,7 @@ void Router::assign_net_segment(const ::vector<::shared_ptr<Node>> &segment) {
     for (uint32_t i = 1; i < segment.size(); i++) {
         auto &node = segment[i];
         assign_connection(node, segment[i - 1]);
+        printf("%s\n", node->to_string().c_str());
     }
 }
 
