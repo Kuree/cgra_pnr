@@ -149,7 +149,8 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
         throw ::runtime_error("unable to find src when route net");
     ::vector<::shared_ptr<Node>> current_path;
     auto pin_indices = reorder_pins(net);
-    for (auto seg_index : pin_indices) {
+    for (uint32_t pin_index = 0; pin_index < net.size(); pin_index++) {
+        auto seg_index = pin_indices[pin_index];
         auto const &sink_node = net[seg_index];
         auto slack_entry = make_pair(src, sink_node.name);
         auto sink_coord = std::make_pair(sink_node.x, sink_node.y);
@@ -256,9 +257,9 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
 
         // fix the reg net
         if (net[0].name[0] == 'r') {
-            if (seg_index != 1 && src->type != NodeType::SwitchBox) {
+            if (pin_index != 0 && src->type != NodeType::SwitchBox) {
                 throw ::runtime_error("failed to fix register net");
-            } else if (seg_index == 1) {
+            } else if (pin_index == 0) {
                 // we need to find an register along the path and fix it
                 fix_register_net(net.id, net[seg_index]);
             }
@@ -356,12 +357,14 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
      * that points to the same node
      */
     ::shared_ptr<Node> reg_node = nullptr;
+    ::shared_ptr<Node> pre_node = nullptr;
     for (const auto &node : segment) {
         for (const auto &next : *node) {
             if (next->type == NodeType::Register) {
                 if (!node_connections_.at(next).empty()) {
                     continue;
                 } else {
+                    pre_node = node;
                     reg_node = next;
                     break;
                 }
@@ -377,4 +380,52 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
     }
 
 
+    // it has to be a pipeline register! so find where it connected to in the
+    // path
+    auto next_node = *reg_node->begin();
+    if (next_node->type != NodeType::SwitchBox)
+        throw ::runtime_error("the register has to be in the switch box");
+    // that node has to be in the path
+    uint32_t index;
+    for (index = 0; index < segment.size(); index++) {
+        if (segment[index] == next_node) {
+            break;
+        }
+    }
+    if (index == segment.size())
+        throw ::runtime_error("unable to find the connected register in given "
+                              "path");
+    // do a surgery to fix the path
+    ::vector<::shared_ptr<Node>> new_segment = {reg_node};
+    for (uint32_t i = index; i < segment.size(); i++) {
+        // append to the new segment
+        new_segment.emplace_back(segment[i]);
+    }
+    // this will be the new segment
+    // first, remove the wrong entry
+    current_routes[net_id].erase(pin.node);
+    // then assign the new pin node
+    pin.node = reg_node;
+    // update the current_routes
+    current_routes[net_id][pin.node] = new_segment;
+
+    // and we need to fix the old segment by appending to the new ones
+    auto key_entry = reg_net_table_.at(net_id);
+    auto &src_segment = current_routes.at(key_entry.first).at(key_entry.second);
+    auto fix_index = src_segment.size();
+    if (src_segment.back() != segment.front())
+        throw ::runtime_error("reg src net and reg net doesn't match with src");
+    for (uint32_t node_index = 1; node_index < segment.size(); node_index++) {
+        if (segment[node_index - 1] == pre_node) {
+            break;
+        } else {
+            src_segment.emplace_back(segment[node_index]);
+        }
+    }
+    // append the register
+    src_segment.emplace_back(reg_node);
+    // update with the node assignment for the new one and finally we're done
+    for (auto i = fix_index; i < src_segment.size(); i++) {
+        assign_connection(src_segment[i], src_segment[i - 1]);
+    }
 }
