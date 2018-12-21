@@ -29,16 +29,18 @@ Router::Router(const RoutingGraph &g) : graph_(g) {
             for (const auto &sb : side_sbs) {
                 node_connections_.insert({sb, {}});
                 node_history_.insert({sb, {}});
-
+                node_net_ids_.insert({sb, -1});
             }
         }
         for (auto const &port : tile.ports) {
             node_connections_.insert({port.second, {}});
             node_history_.insert({port.second, {}});
+            node_net_ids_.insert({port.second, -1});
         }
         for (auto const &reg : tile.registers) {
             node_connections_.insert({reg.second, {}});
             node_history_.insert({reg.second, {}});
+            node_net_ids_.insert({reg.second, -1});
         }
     }
 }
@@ -334,11 +336,14 @@ bool Router::overflow() {
     return overflowed_;
 }
 
-void Router::assign_net_segment(const ::vector<::shared_ptr<Node>> &segment) {
+void Router::assign_net_segment(const ::vector<::shared_ptr<Node>> &segment,
+                                int net_id) {
     for (uint32_t i = 1; i < segment.size(); i++) {
         auto &node = segment[i];
         assign_connection(node, segment[i - 1]);
-        printf("%s\n", node->to_string().c_str());
+    }
+    for (const auto &node : segment) {
+        node_net_ids_[node] = net_id;
     }
 }
 
@@ -365,7 +370,7 @@ Router::realize() const {
         auto const &route = current_routes.at(net.id);
         // realize them in the pin order
         for (uint32_t seg_index = 1; seg_index< net.size(); seg_index++) {
-            auto const &seg = route.at(net[seg_index].node);
+            auto const &seg = route.at(net[seg_index].id);
             segments.emplace_back(seg);
         }
         result.insert({name, segments});
@@ -389,6 +394,9 @@ void Router::clear_connections() {
     for (auto &iter : node_connections_) {
         iter.second.clear();
     }
+    for (auto &iter: node_net_ids_) {
+        iter.second = -1;
+    }
     current_routes.clear();
 }
 
@@ -398,13 +406,10 @@ uint32_t Router::get_history_cost(const std::shared_ptr<Node> &node) {
 }
 
 double Router::get_presence_cost(const std::shared_ptr<Node> &node,
-                                 const std::shared_ptr<Node> &pre_node,
-                                   uint32_t it) {
+                                 const std::shared_ptr<Node> &pre_node) {
     auto const &start_connection = node_connections_.at(node);
-    auto pn_factor = init_pn_ * pow(pn_factor_, it);
     if (start_connection.find(pre_node) == start_connection.end())
-        return start_connection.size() * pn_factor;
+        return start_connection.size();
     else
-        return (start_connection.size() - 1) * pn_factor;
-
+        return (start_connection.size() - 1);
 }

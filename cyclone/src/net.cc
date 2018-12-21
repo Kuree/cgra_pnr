@@ -10,7 +10,13 @@ Net::Net(const std::string &name,
     for (const auto &pin : net) {
         pins_.emplace_back(Pin(pin.first.first, pin.first.second,
                                pin.second.first, pin.second.second));
+        pins_.back().id = static_cast<uint32_t>(pins_.size() - 1);
     }
+}
+
+void Net::add_pin(const Pin &pin) {
+    pins_.emplace_back(pin);
+    pins_.back().id = static_cast<uint32_t>(pins_.size() - 1);
 }
 
 Pin::Pin(uint32_t x, uint32_t y, const std::string &name,

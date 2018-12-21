@@ -23,7 +23,8 @@ public:
     // routing related function
     virtual void route() { };
     // assign nets
-    void assign_net_segment(const std::vector<std::shared_ptr<Node>> &segment);
+    void assign_net_segment(const std::vector<std::shared_ptr<Node>> &segment,
+                            int net_id);
     void assign_history();
     void clear_connections();
     std::map<std::string, std::vector<std::vector<std::shared_ptr<Node>>>>
@@ -45,12 +46,13 @@ protected:
     std::map<std::string, int> reg_net_src_;
     // a list of routing segments indexed by net id
     std::map<int,
-            std::map<std::shared_ptr<Node>,
+            std::map<uint32_t,
                     std::vector<std::shared_ptr<Node>>>> current_routes;
 
     // graph independent look tables for computing routing cost
     std::map<std::shared_ptr<Node>, std::set<std::shared_ptr<Node>>>
     node_connections_;
+    std::unordered_map<std::shared_ptr<Node>, int> node_net_ids_;
 
     std::map<std::shared_ptr<Node>, uint32_t> node_history_;
 
@@ -120,8 +122,7 @@ protected:
     uint32_t get_history_cost(const std::shared_ptr<Node> &node);
 
     double get_presence_cost(const std::shared_ptr<Node> &node,
-                             const std::shared_ptr<Node> &pre_node,
-                             uint32_t it);
+                             const std::shared_ptr<Node> &pre_node);
 
 private:
     std::vector<int> squash_net(int src_id);

@@ -12,6 +12,7 @@ public:
     std::string name;
     std::string port;
     std::shared_ptr<Node> node = nullptr;
+    uint32_t id = 0;
     Pin() = default;
     Pin(uint32_t x, uint32_t y, const std::string &name,
         const std::string &port);
@@ -31,7 +32,7 @@ public:
     std::vector<Pin>::iterator begin() { return pins_.begin(); }
     std::vector<Pin>::iterator end() { return pins_.end(); }
 
-    inline void add_pin(const Pin &pin) { pins_.emplace_back(pin); }
+    void add_pin(const Pin &pin);
     inline uint64_t size() const { return pins_.size(); }
     inline Pin& operator[](const uint64_t &index) { return pins_[index]; }
     inline const Pin& operator[](const uint64_t &index) const

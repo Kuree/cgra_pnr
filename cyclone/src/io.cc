@@ -478,21 +478,26 @@ void dump_routing_result(const Router &r, const std::string &filename) {
             << segments.size() << endl;
         std::unordered_set<std::shared_ptr<Node>> visited;
         auto const &src = net[0].node;
+        bool has_src = false;
         for (uint32_t seg_index = 0; seg_index < segments.size(); seg_index++) {
             auto const segment = segments[seg_index];
-            out << "Segment: " << seg_index << " Size: " << segment.size() << endl;
+            out << "Segment: " << seg_index << " Size: " << segment.size()
+                << endl;
             for (uint32_t node_index = 0; node_index < segment.size();
                  node_index++) {
                 auto const &node = segment[node_index];
-                if (seg_index == 0 && node_index == 0 && node != src) {
-                    // it has to be the src
-                    throw ::runtime_error("unexpected state: src has to be"
-                                          "the beginning of the net "
-                                          "segments");
+                if (node_index == 0 && node == src) {
+                    has_src = true;
                 }
                 // just output plain sequence
                 out << node->to_string() << endl;
             }
+        }
+        if (!has_src) {
+            // it has to be the src
+            throw ::runtime_error("unexpected state: src has to be"
+                                  "the beginning of the net "
+                                  "segments");
         }
         out << endl;
     }

@@ -55,7 +55,7 @@ void GlobalRouter::route() {
         clear_connections();
 
         for (const auto &net_id : reordered_netlist) {
-            route_net(netlist_[net_id], it);
+            route_net(net_id, it);
         }
 
         // assign history table
@@ -116,7 +116,7 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
                 if (sink == nullptr)
                     throw ::runtime_error("unable to find sink when compute"
                                           "slack ratio");
-                auto const &route = segments.at(sink);
+                auto const &route = segments.at(net[seg_index].id);
                 double delay = 0;
                 for (const auto &node : route) {
                     delay += node->delay;
@@ -143,13 +143,17 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
 }
 
 void
-GlobalRouter::route_net(Net &net, uint32_t it) {
-    const auto &src = net[0].node;
-    if (src == nullptr)
-        throw ::runtime_error("unable to find src when route net");
+GlobalRouter::route_net(int net_id, uint32_t it) {
     ::vector<::shared_ptr<Node>> current_path;
-    auto pin_indices = reorder_pins(net);
-    for (uint32_t pin_index = 0; pin_index < net.size(); pin_index++) {
+    auto pin_indices = reorder_pins(netlist_[net_id]);
+    for (uint32_t pin_index = 0; pin_index < pin_indices.size(); pin_index++) {
+        // we may update the src while routing, i.e. for reg nets, so we pull
+        // the src info for every pins
+        auto &net = netlist_[net_id];
+        const auto &src = net[0].node;
+        if (src == nullptr)
+            throw ::runtime_error("unable to find src when route net");
+
         auto seg_index = pin_indices[pin_index];
         auto const &sink_node = net[seg_index];
         auto slack_entry = make_pair(src, sink_node.name);
@@ -166,7 +170,7 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             uint32_t min_dist = manhattan_distance(src_node, sink_coord);
             for (uint32_t p = 1; p < current_path.size(); p++) {
                 const auto &node = current_path[p];
-                const auto &pre_node = current_path[p - 1];
+                // const auto &pre_node = current_path[p - 1];
                 const auto &conn = node_connections_.at(node);
                 // break them into several parts so that it's easier to
                 // read and modify
@@ -179,27 +183,36 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                     continue;
                 }
 
-                // also there exists one empty switch box it's connected
+                // it has at least one free switch box connections
                 bool empty = false;
                 for (auto const &n : *node) {
-                    const auto &conn_n = node_connections_.at(n);
-                    if (n->type == NodeType::SwitchBox &&
-                        (conn_n.empty() ||
-                         (conn_n.size() == 1 &&
-                          conn_n.find(pre_node) != conn_n.end()))) {
+                    if (node_connections_.at(n).empty()) {
+                        empty = true;
+                        break;
+                    }
+                    if (node_connections_.at(n).size() == 1
+                        && *node_connections_.at(n).begin() == node
+                        && (node_net_ids_.at(n) == -1
+                            || node_net_ids_.at(n) == net.id)) {
                         empty = true;
                         break;
                     }
                 }
                 if (!empty)
                     continue;
+
+                // has to be an in switch box so that we can switch tracks
+                auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(node);
+                if (sb->io == SwitchBoxIO::SB_OUT)
+                    continue;
+
                 if (manhattan_distance(node, sink_coord) < min_dist) {
                     src_node = node;
                 }
             }
         }
         auto an = slack * slack_factor_;
-        auto cost_f = create_cost_function(an, it);
+        auto cost_f = create_cost_function(an, it, net.id);
 
         // find the routes
         if (sink_node.name[0] == 'r') {
@@ -237,11 +250,11 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
             netlist_[reg_net_id][0].node = switch_node;
 
             // store the segment
-            current_routes[net.id][sink_node.node] = segment;
+            current_routes[net.id][sink_node.id] = segment;
 
             // add some metadata information so that we can fix the reg net very
             // quickly later
-            reg_net_table_.insert({reg_net_id, {net.id, sink_node.node}});
+            reg_net_table_.insert({reg_net_id, {net.id, sink_node.id}});
 
         } else {
             if (sink_node.node == nullptr)
@@ -252,12 +265,12 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
                 throw ::runtime_error("unable to route to port " +
                                       sink_node.node->name);
             }
-            current_routes[net.id][sink_node.node] = segment;
+            current_routes[net.id][sink_node.id] = segment;
         }
 
         // fix the reg net
         if (net[0].name[0] == 'r') {
-            if (pin_index != 0 && src->type != NodeType::SwitchBox) {
+            if (pin_index != 0 && src->type != NodeType::Register) {
                 throw ::runtime_error("failed to fix register net");
             } else if (pin_index == 0) {
                 // we need to find an register along the path and fix it
@@ -266,20 +279,29 @@ GlobalRouter::route_net(Net &net, uint32_t it) {
         }
 
         // also put segment into the current path
-        const auto &segment = current_routes[net.id][sink_node.node];
+        const auto &segment = current_routes[net.id][sink_node.id];
         current_path.insert(current_path.end(), segment.begin(), segment.end());
         // assign it to the node_connections
-        assign_net_segment(segment);
+        assign_net_segment(segment, net.id);
     }
 }
 
 ::function<double(const ::shared_ptr<Node> &, const ::shared_ptr<Node> &)>
 GlobalRouter::create_cost_function(double an,
-                                   uint32_t it) {
+                                   uint32_t it,
+                                   int net_id) {
     return [&, an, it](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> double {
         // based of the PathFinder paper
-        auto pn = get_presence_cost(node2, node1, it);
+        auto pn = get_presence_cost(node2, node1);
+        /* Note:
+         * this is a new entry compared to PathFiner paper since we need to
+         * prevent registers's switchbox been used for other nets.
+         */
+        if (node_net_ids_.at(node2) > -1 && node_net_ids_.at(node2) != net_id)
+            pn += 1;
+        auto pn_factor = init_pn_ * pow(pn_factor_, it);
+        pn *= pn_factor;
         auto dn = node1->get_edge_cost(node2);
         auto hn = get_history_cost(node2) * hn_factor_;
 
@@ -314,32 +336,35 @@ GlobalRouter::get_free_switch(const std::pair<uint32_t, uint32_t> &p) {
 }
 
 std::vector<uint32_t> GlobalRouter::reorder_pins(const Net &net) {
-    ::vector<uint32_t> result(net.size());
+    ::vector<uint32_t> result(net.size() - 1);
     for (uint32_t i = 0; i < result.size(); i++)
-        result[i] = i;
+        result[i] = i + 1;
 
-    // first based on distance
-    auto src_pos = std::make_pair(net[0].x, net[0].y);
-    const auto src_pin = &net[0];
-    std::stable_sort(result.begin(), result.end(),
-                     [&](uint32_t a, uint32_t b) -> bool {
-        uint32_t dist_a = manhattan_distance({net[a].x, net[a].y}, src_pos);
-        uint32_t dist_b = manhattan_distance({net[b].x, net[b].y}, src_pos);
-        return dist_a < dist_b;
-    });
-
-    // the src should be the same
-    if (src_pin != &net[result[0]])
-        throw ::runtime_error("after sorting src node is not the first node");
-
-    // don't need to src node for index
-    result.erase(result.begin());
+    ::vector<uint32_t> finished_list = {0u};
+    // the sorting is similar to RSMT tree construction
+    for (uint32_t i = 0; i < result.size() - 1; i++) {
+        std::stable_sort(result.begin() + i,
+                         result.end(),
+                         [&](uint32_t a, uint32_t b) -> bool {
+                             uint32_t dist_a = 0;
+                             uint32_t dist_b = 0;
+                             for (auto const &index : finished_list) {
+                                 const auto pos = std::make_pair(net[index].x,
+                                                                 net[index].y);
+                                 dist_a += manhattan_distance({net[a].x,
+                                                               net[a].y}, pos);
+                                 dist_b += manhattan_distance({net[b].x,
+                                                               net[b].y}, pos);
+                             }
+                             return dist_a < dist_b;
+                         });
+    }
 
     return result;
 }
 
 void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
-    auto segment = current_routes[net_id][pin.node];
+    auto segment = current_routes[net_id][pin.id];
     auto src_node = segment[0];
     if (src_node->type != NodeType::SwitchBox)
         throw ::runtime_error("the beginning of a reg fix has to be a sb");
@@ -382,32 +407,34 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
 
     // it has to be a pipeline register! so find where it connected to in the
     // path
-    auto next_node = *reg_node->begin();
-    if (next_node->type != NodeType::SwitchBox)
-        throw ::runtime_error("the register has to be in the switch box");
-    // that node has to be in the path
-    uint32_t index;
-    for (index = 0; index < segment.size(); index++) {
-        if (segment[index] == next_node) {
-            break;
+    auto index = segment.size();
+    for (auto const &next_node : *reg_node) {
+        for (index = 0; index < segment.size(); index++) {
+            if (segment[index] == next_node) {
+                break;
+            }
         }
+        if (index != segment.size())
+            break;
     }
+    // that node has to be in the path
+
+
     if (index == segment.size())
         throw ::runtime_error("unable to find the connected register in given "
                               "path");
     // do a surgery to fix the path
     ::vector<::shared_ptr<Node>> new_segment = {reg_node};
-    for (uint32_t i = index; i < segment.size(); i++) {
+    for (auto i = index; i < segment.size(); i++) {
         // append to the new segment
         new_segment.emplace_back(segment[i]);
     }
     // this will be the new segment
-    // first, remove the wrong entry
-    current_routes[net_id].erase(pin.node);
     // then assign the new pin node
     pin.node = reg_node;
+    netlist_[net_id][0].node = reg_node;
     // update the current_routes
-    current_routes[net_id][pin.node] = new_segment;
+    current_routes[net_id][pin.id] = new_segment;
 
     // and we need to fix the old segment by appending to the new ones
     auto key_entry = reg_net_table_.at(net_id);

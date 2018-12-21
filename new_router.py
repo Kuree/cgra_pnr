@@ -200,6 +200,16 @@ def build_routing_graph(routing_resource, layout):
                         new_side = gos(side)
                         sb.side = new_side
                         g.add_edge(sb, port)
+
+                        # we also need to connect the registers
+                        if width == 16:
+                            reg = RegisterNode("reg_" + str(track) + "_"
+                                               + str(gsv(new_side)),
+                                               sb.x, sb.y,
+                                               16,
+                                               track)
+                            g.add_edge(reg, port)
+
                     else:
                         sb.x, sb.y = x, y
                         sb.side = gsi(side)
@@ -256,7 +266,7 @@ def main():
     r_1.set_init_pn(10000)
     r_16.set_init_pn(10000)
 
-    pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
+    # pycyclone.io.dump_routing_graph(g_16, "16bit.graph")
 
     # route these nets
     print("start routing")
