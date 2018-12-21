@@ -264,19 +264,36 @@ def generate_routing(routing_file, tile_mapping, board_layout):
                     if board_layout[y][x] == "i" or board_layout[y][x] == "I":
                         seg_index += 1
                         continue
-                    assert pre_node[0] == "SB"
-                    if pre_node[2] != seg[2] or pre_node[3] != seg[3]:
-                        # we need to produce a fake one
-                        side = (pre_node[4] + 2) % 4
-                        track = pre_node[1]
+                    if pre_node[0] == "SB":
+                        if pre_node[2] != seg[2] or pre_node[3] != seg[3]:
+                            # we need to produce a fake one
+                            side = (pre_node[4] + 2) % 4
+                            track = pre_node[1]
+                            last_node = "Tx{:04X}".format(tile_mapping[pos]) \
+                                        + "_in_" \
+                                        + "s{}t{}{}".format(side, track,
+                                                            "b" if one_bit
+                                                            else "")
+                            line += last_node + " -> "
+                        else:
+                            line += last_node + " -> "
+                    elif pre_node[0] == "REG":
+                        # FIXME: hack an input track
+                        #        by using the register name
+                        _, reg_io, reg_side = pre_node[1].split("_")
+                        reg_track = int(reg_io)
+                        reg_side = (int(reg_side) + 2) % 4
+                        one_bit = False
+                        track = pre_node[2]
+                        assert reg_track == track
                         last_node = "Tx{:04X}".format(tile_mapping[pos]) \
                                     + "_in_" \
-                                    + "s{}t{}{}".format(side, track,
+                                    + "s{}t{}{}".format(reg_side, track,
                                                         "b" if one_bit
                                                         else "")
                         line += last_node + " -> "
                     else:
-                        line += last_node + " -> "
+                        raise Exception("Unknown node " + str(pre_node))
                     line += "Tx{:04X}".format(tile_mapping[pos]) \
                             + "_" + port_name
                     lines.append(line)
