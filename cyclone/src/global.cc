@@ -429,9 +429,7 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
         // append to the new segment
         new_segment.emplace_back(segment[i]);
     }
-    // this will be the new segment
-    // then assign the new pin node
-    pin.node = reg_node;
+
     netlist_[net_id][0].node = reg_node;
     // update the current_routes
     current_routes[net_id][pin.id] = new_segment;
@@ -455,4 +453,11 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
     for (auto i = fix_index; i < src_segment.size(); i++) {
         assign_connection(src_segment[i], src_segment[i - 1]);
     }
+    // this will be the new segment
+    // then assign the new pin node
+    auto &reg_sink_pin = netlist_.at(static_cast<uint32_t>
+                                     (key_entry.first))[key_entry.second];
+    reg_sink_pin.node = reg_node;
+    if (reg_sink_pin.name[0] != 'r')
+        throw ::runtime_error("assigning registers to a wrong pin");
 }
