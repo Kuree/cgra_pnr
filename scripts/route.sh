@@ -35,7 +35,8 @@ if ! [ -f "$place" ] ; then
 fi
 
 # dump the graph files
-python ${root_dir}/process_graph.py -i ${cgra} -o ${file_dir}
+graph_dir=$(dirname ${packed})
+python ${root_dir}/process_graph.py -i ${cgra} -o ${graph_dir}
 
 route="${packed%.packed}.route"
-python ${root_dir}/new_router.py ${option} -g ${file_dir} -i ${packed} -p ${place} -o ${route}
+python ${root_dir}/new_router.py ${option} -g ${graph_dir} -i ${packed} -p ${place} -o ${route}
