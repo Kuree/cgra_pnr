@@ -10,7 +10,8 @@
 enum NodeType {
     SwitchBox,
     Port,
-    Register
+    Register,
+    Generic
 };
 
 enum class SwitchBoxSide {
@@ -83,6 +84,18 @@ protected:
 
 };
 
+class GenericNode : public Node {
+public:
+    GenericNode(const std::string &name, uint32_t x, uint32_t y,
+             uint32_t width, uint32_t track) :
+             Node(NodeType::Generic, name, x, y, width, track) {}
+    GenericNode(const std::string &name, uint32_t x, uint32_t y)
+            : Node(NodeType::Generic, name, x, y) {}
+    std::string to_string() const override;
+
+    static constexpr char TOKEN[] = "GENERIC";
+};
+
 class PortNode : public Node {
 public:
     PortNode(const std::string &name, uint32_t x, uint32_t y,
@@ -90,6 +103,8 @@ public:
     PortNode(const std::string &name, uint32_t x, uint32_t y)
         : Node(NodeType::Port, name, x, y) {}
     std::string to_string() const override;
+
+    static constexpr char TOKEN[] = "PORT";
 };
 
 class RegisterNode : public Node {
@@ -99,6 +114,8 @@ public:
         : Node(NodeType::Register, name, x, y, width, track) { }
 
     std::string to_string() const override;
+
+    static constexpr char TOKEN[] = "REG";
 };
 
 // side illustration
@@ -117,6 +134,8 @@ public:
 
     SwitchBoxSide side;
     SwitchBoxIO io;
+
+    static constexpr char TOKEN[] = "SB";
 };
 
 // operators
@@ -160,6 +179,8 @@ public:
     const std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
     internal_wires() const { return internal_wires_; }
 
+    static constexpr char TOKEN[] = "SWITCH";
+
 private:
     // this is used to construct internal connection of switch boxes
     std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
@@ -180,12 +201,15 @@ struct Tile {
     // through the tiles
     std::map<std::string, std::shared_ptr<PortNode>> ports;
     std::map<std::string, std::shared_ptr<RegisterNode>> registers;
+    std::map<std::string, std::shared_ptr<GenericNode>> generic_nodes;
 
     uint32_t num_tracks() { return static_cast<uint32_t>(switchbox.num_track); }
 
     Tile(uint32_t x, uint32_t y, const Switch &switchbox)
         : Tile(x, y, 1, switchbox) { };
     Tile(uint32_t x, uint32_t y, uint32_t height, const Switch &switchbox);
+
+    static constexpr char TOKEN[] = "TILE";
 };
 
 std::ostream& operator<<(std::ostream &out, const Tile &tile);

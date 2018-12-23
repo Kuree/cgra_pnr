@@ -24,6 +24,9 @@ constexpr auto gsi = get_side_int;
 constexpr auto gsv = get_side_value;
 constexpr auto gii = get_io_int;
 
+constexpr char BEGIN[] = "BEGIN";
+constexpr char END[] = "END";
+
 #define DELIMITER ": \t,()"
 
 // trim function copied from https://stackoverflow.com/a/217605
@@ -245,15 +248,16 @@ void print_conn(std::ofstream &out, const std::string &pad,
 }
 
 void print_sb(std::ofstream &out, const std::string &pad, const Switch &sb) {
-    out << "SWITCH " << sb.width << " " << sb.id << " " << sb.num_track << endl;
-    out << "BEGIN" << endl;
+    out << Switch::TOKEN << " " << sb.width << " " << sb.id << " "
+        << sb.num_track << endl;
+    out << BEGIN << endl;
     const auto wires = sb.internal_wires();
     for (auto const iter : wires) {
         auto [track_from, side_from, track_to, side_to] = iter;
         out << pad << track_from << " " << gsv(side_from) << " "
             << track_to << " " << gsv(side_to) << endl;
     }
-    out << "END" << endl;
+    out << END << endl;
 }
 
 void dump_routing_graph(RoutingGraph &graph,
@@ -277,7 +281,7 @@ void dump_routing_graph(RoutingGraph &graph,
 
     for (const auto &iter : graph) {
         auto tile = iter.second;
-        out << "TILE (" << tile.x << ", " << tile.y << ", "
+        out << Tile::TOKEN << " (" << tile.x << ", " << tile.y << ", "
             << tile.height << ", " << tile.switchbox.id << ")" << endl;
         for (uint32_t side = 0; side < Switch::SIDES; side++) {
             for (auto const &sb : tile.switchbox.get_sbs_by_side(gsi(side))) {
@@ -285,9 +289,9 @@ void dump_routing_graph(RoutingGraph &graph,
                 if (sb->io != SwitchBoxIO::SB_OUT || sb->size() == 0)
                     continue;
                 out << PAD << sb->to_string() << endl;
-                out << PAD << "BEGIN" << endl;
+                out << PAD << BEGIN << endl;
                 print_conn(out, PAD, sb);
-                out << PAD << "END" << endl;
+                out << PAD << END << endl;
             }
         }
         for (auto const &port_iter : tile.ports) {
@@ -297,16 +301,23 @@ void dump_routing_graph(RoutingGraph &graph,
             if (port_iter.second->size() == 0)
                 continue;
             out << PAD << port_iter.second->to_string() << endl;
-            out << PAD << "BEGIN" << endl;
+            out << PAD << BEGIN << endl;
             print_conn(out, PAD, port_iter.second);
-            out << PAD << "END" << endl;
+            out << PAD << END << endl;
         }
 
         for (auto const &reg_tier : tile.registers) {
             out << PAD << reg_tier.second->to_string() << endl;
-            out << PAD << "BEGIN" << endl;
+            out << PAD << BEGIN << endl;
             print_conn(out, PAD, reg_tier.second);
-            out << PAD << "END" << endl;
+            out << PAD << END << endl;
+        }
+
+        for (auto const &generic_tier : tile.generic_nodes) {
+            out << PAD << generic_tier.second->to_string() << endl;
+            out << PAD << BEGIN << endl;
+            print_conn(out, PAD, generic_tier.second);
+            out << PAD << END << endl;
         }
     }
 }
@@ -316,7 +327,7 @@ inline uint32_t stou(const std::string &str) {
 }
 
 PortNode create_port_from_tokens(const ::vector<::string> &tokens) {
-    if (tokens[0] != "PORT")
+    if (tokens[0] != PortNode::TOKEN)
         throw ::runtime_error("expect PORT, got " + tokens[0]);
     if (tokens.size() < 4)
         throw ::runtime_error("expect at least 6 entries for port");
@@ -328,7 +339,7 @@ PortNode create_port_from_tokens(const ::vector<::string> &tokens) {
 }
 
 RegisterNode create_reg_from_tokens(const ::vector<::string> &tokens) {
-    if (tokens[0] != "REG")
+    if (tokens[0] != RegisterNode::TOKEN)
         throw ::runtime_error("expect REG, got " + tokens[0]);
     if (tokens.size() < 6)
         throw ::runtime_error("expect at least 6 entries for reg");
@@ -339,8 +350,20 @@ RegisterNode create_reg_from_tokens(const ::vector<::string> &tokens) {
     return RegisterNode(tokens[1], values[1], values[2], values[3], values[0]);
 }
 
+GenericNode create_generic_from_tokens(const ::vector<::string> &tokens) {
+    if (tokens[0] != GenericNode::TOKEN)
+        throw ::runtime_error("export GENERIC, got " + tokens[0]);
+    if (tokens.size() < 6)
+        throw ::runtime_error("expect at least 6 entries for reg");
+    ::vector<uint32_t> values(4);
+    // track, x, y, width
+    for (uint32_t i = 0; i < 4; i++)
+        values[i] = stou(tokens[i + 2]);
+    return GenericNode(tokens[1], values[1], values[2], values[3], values[0]);
+}
+
 SwitchBoxNode create_sb_from_tokens(const ::vector<::string> &tokens) {
-    if (tokens[0] != "SB")
+    if (tokens[0] != SwitchBoxNode::TOKEN)
         throw ::runtime_error("expect SB, got " + tokens[0]);
     if (tokens.size() < 6)
         throw ::runtime_error("expect at least 6 entries for sb");
@@ -366,22 +389,25 @@ void connect_nodes(Node &from, std::ifstream &in, RoutingGraph &g) {
     ::vector<::string> line_tokens;
     ::string line;
     get_line_tokens(line_tokens, in, line);
-    if (line_tokens.empty() || line_tokens[0] != "BEGIN")
-        throw ::runtime_error("expect BEGIN, got " + line);
+    if (line_tokens.empty() || line_tokens[0] != BEGIN)
+        throw ::runtime_error("expect " + ::string(BEGIN) +  ", got " + line);
     while (std::getline(in, line)) {
         trim(line);
         line_tokens = get_tokens(line);
-        if (line_tokens[0] == "END")
+        if (line_tokens[0] == END)
             break;
-        if (line_tokens[0] == "SB") {
+        if (line_tokens[0] == SwitchBoxNode::TOKEN) {
             auto sb = create_sb_from_tokens(line_tokens);
             g.add_edge(from, sb);
-        } else if (line_tokens[0] == "REG") {
+        } else if (line_tokens[0] == RegisterNode::TOKEN) {
             auto reg = create_reg_from_tokens(line_tokens);
             g.add_edge(from, reg);
-        } else if (line_tokens[0] == "PORT") {
+        } else if (line_tokens[0] == PortNode::TOKEN) {
             auto port = create_port_from_tokens(line_tokens);
             g.add_edge(from, port);
+        } else if (line_tokens[0] == GenericNode::TOKEN) {
+            auto node = create_generic_from_tokens(line_tokens);
+            g.add_edge(from, node);
         } else {
             throw ::runtime_error("unknown node type " + line_tokens[0]);
         }
@@ -405,7 +431,7 @@ RoutingGraph load_routing_graph(const std::string &filename) {
         if (line.empty())
             continue;
         auto line_tokens = get_tokens(line);
-        if (line_tokens[0] == "SWITCH") {
+        if (line_tokens[0] == Switch::TOKEN) {
             // create a switch based on its index
             if (line_tokens.size() != 4)
                 throw ::runtime_error("unable to process line " + line);
@@ -418,11 +444,11 @@ RoutingGraph load_routing_graph(const std::string &filename) {
                                 SwitchBoxSide>> wires;
             std::getline(in, line);
             trim(line);
-            if (line != "BEGIN")
+            if (line != BEGIN)
                 throw ::runtime_error("unable to process line " + line);
             while (std::getline(in, line)) {
                 trim(line);
-                if (line == "END")
+                if (line == END)
                     break;
                 line_tokens = get_tokens(line);
                 if (line_tokens.size() != 4)
@@ -436,7 +462,7 @@ RoutingGraph load_routing_graph(const std::string &filename) {
             Switch switchbox(0, 0, num_track, width, id, wires);
             switch_map.insert({id, switchbox});
         }
-        else if (line_tokens[0] == "TILE") {
+        else if (line_tokens[0] == Tile::TOKEN) {
             if (line_tokens.size() != 5)
                 throw ::runtime_error("unable to process line " + line);
             uint32_t x = stou(line_tokens[1]);
@@ -459,15 +485,18 @@ RoutingGraph load_routing_graph(const std::string &filename) {
             continue;
 
         auto line_tokens = get_tokens(line);
-        if (line_tokens[0] == "SB") {
+        if (line_tokens[0] == SwitchBoxNode::TOKEN) {
             auto sb = create_sb_from_tokens(line_tokens);
             connect_nodes(sb, in, g);
-        } else if (line_tokens[0] == "PORT") {
+        } else if (line_tokens[0] == PortNode::TOKEN) {
             auto port = create_port_from_tokens(line_tokens);
             connect_nodes(port, in, g);
-        } else if (line_tokens[0] == "REG") {
+        } else if (line_tokens[0] == RegisterNode::TOKEN) {
             auto reg = create_reg_from_tokens(line_tokens);
             connect_nodes(reg, in, g);
+        } else if (line_tokens[0] == GenericNode::TOKEN) {
+            auto generic = create_generic_from_tokens(line_tokens);
+            connect_nodes(generic, in, g);
         }
     }
     in.close();

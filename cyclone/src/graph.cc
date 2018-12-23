@@ -12,6 +12,7 @@ using std::runtime_error;
 using std::set;
 using std::ostringstream;
 using std::to_string;
+using std::string;
 
 constexpr auto gsi = get_side_int;
 constexpr auto gsv = get_side_value;
@@ -66,13 +67,17 @@ bool operator==(const std::shared_ptr<Node> &ptr, const Node &node) {
 }
 
 std::string PortNode::to_string() const {
-    return "PORT " + name + " (" + ::to_string(x) + ", " + ::to_string(y) +
-           ", " + ::to_string(width) + ")";
+    return ::string(TOKEN) + " " + name + " (" + ::to_string(x) + ", "
+           + ::to_string(y) + ", " + ::to_string(width) + ")";
 }
 
+std::string GenericNode::to_string() const {
+    return ::string(TOKEN) + " " + name + " (" + ::to_string(x) + ", "
+           + ::to_string(y) + ", " + ::to_string(width) + ")";
+}
 
 std::string RegisterNode::to_string() const {
-    return "REG " + name + " (" + ::to_string(track) + ", " +
+    return ::string(TOKEN) + name + " (" + ::to_string(track) + ", " +
            ::to_string(x) + ", " + ::to_string(y) + ", " +
            ::to_string(width) + ")";
 }
@@ -83,9 +88,8 @@ SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
                              : Node(NodeType::SwitchBox, "", x, y,
                                     width, track), side(side), io(io) { }
 
-
 std::string SwitchBoxNode::to_string() const {
-    return "SB (" + ::to_string(track) + ", " +
+    return ::string(TOKEN) + " (" + ::to_string(track) + ", " +
            ::to_string(x) + ", " + ::to_string(y) + ", " +
            ::to_string(gsv(side)) + ", " + ::to_string(giv(io)) + ", " +
            ::to_string(width) + ")";
@@ -224,8 +228,8 @@ std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {
                             ::make_shared<PortNode>(node.name, node.x,
                                                     node.y, node.width);
                 return tile.ports.at(node.name);
-            case NodeType::SwitchBox:
-                auto const &sb_node = dynamic_cast<const SwitchBoxNode&>(node);
+            case NodeType::SwitchBox: {
+                auto const &sb_node = dynamic_cast<const SwitchBoxNode &>(node);
                 auto const &track = sb_node.track;
                 auto const &side = sb_node.side;
                 auto const &io = sb_node.io;
@@ -234,8 +238,18 @@ std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {
                                           "exist in the switch box");
 
                 return tile.switchbox[{track, side, io}];
-                // default:
-                //    throw ::runtime_error("unknown node type");
+            }
+            case NodeType::Generic:
+                // genetic node
+                if (tile.generic_nodes.find(node.name)
+                    == tile.generic_nodes.end())
+                    tile.generic_nodes[node.name] =
+                            ::make_shared<GenericNode>(node.name,
+                                                       node.x,
+                                                       node.y,
+                                                       node.width,
+                                                       node.track);
+                return tile.generic_nodes.at(node.name);
         }
     }
     return nullptr;
