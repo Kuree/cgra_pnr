@@ -77,7 +77,7 @@ std::string GenericNode::to_string() const {
 }
 
 std::string RegisterNode::to_string() const {
-    return ::string(TOKEN) + name + " (" + ::to_string(track) + ", " +
+    return ::string(TOKEN) + " " + name + " (" + ::to_string(track) + ", " +
            ::to_string(x) + ", " + ::to_string(y) + ", " +
            ::to_string(width) + ")";
 }
