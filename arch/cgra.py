@@ -233,7 +233,7 @@ def generate_routing(routing_file, tile_mapping, board_layout):
                     assert seg_index == len(segment) - 1
                     lines[-1] = lines[-1] + " (r)"
                     line = ""
-                elif node_type == "SB" and seg_index != 0:
+                elif node_type == "SB":
                     track = seg[1]
                     pos = (seg[2], seg[3])
                     side = seg[4]
@@ -297,9 +297,6 @@ def generate_routing(routing_file, tile_mapping, board_layout):
                     line += "Tx{:04X}".format(tile_mapping[pos]) \
                             + "_" + port_name
                     lines.append(line)
-                    line = ""
-                elif node_type == "SB" and seg_index == 0:
-                    lines.append("")   # indicate the jump
                     line = ""
 
                 seg_index += 1
