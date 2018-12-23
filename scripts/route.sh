@@ -9,9 +9,6 @@ function print_usage() {
 file_dir=$(dirname "$(realpath $0)")
 root_dir=$(realpath $file_dir/../)
 
-file_dir=$(dirname "$(realpath $0)")
-root_dir=$(realpath ${file_dir}/../)
-
 if [ "$#" -eq 2 ]; then
     cgra=$1
     packed=$2
@@ -39,9 +36,16 @@ graph_dir=$(dirname ${packed})
 python ${root_dir}/process_graph.py -i ${cgra} -o ${graph_dir}
 
 route="${packed%.packed}.route"
-# TODO: REMOVE ME
-TRANSFER=https://transfer.sh
-curl --upload-file ${graph_dir}/16bit.graph ${TRANSFER}
-curl --upload-file ${packed} ${TRANSFER}
-curl --upload-file ${place} ${TRANSFER}
-python ${root_dir}/new_router.py ${option} -g ${graph_dir} -i ${packed} -p ${place} -o ${route}
+
+# if the C++ binary exists, we will use it instead
+router=${root_dir}/cyclone/build/example/router
+if [ -f ${router} ]; then
+    echo "Using C++ implementation"
+    rm -rf ${route}
+    ${router} ${packed} ${place} ${graph_dir}/1bit.graph 1 ${route}
+    ${router} ${packed} ${place} ${graph_dir}/16bit.graph 16 ${route}
+else
+    echo "Using Python binding. Results may be undeterministic."
+    echo "To use C++ implementation, do \${ROOT}/cyclone/.travis.sh"
+    python ${root_dir}/new_router.py ${option} -g ${graph_dir} -i ${packed} -p ${place} -o ${route}
+fi
