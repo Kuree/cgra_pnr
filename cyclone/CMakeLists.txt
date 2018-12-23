@@ -9,6 +9,8 @@ add_library(cyclone src/graph.hh src/graph.cc src/route.hh
                     src/route.cc src/net.cc src/net.hh src/util.cc src/util.hh
                     src/global.cc src/global.hh src/io.cc src/io.hh)
 
+target_link_libraries(cyclone stdc++fs)
+
 add_subdirectory(python/pybind11)
 add_subdirectory(python)
 

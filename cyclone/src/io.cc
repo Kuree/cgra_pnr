@@ -6,6 +6,7 @@
 #include <functional>
 #include <sstream>
 #include <unordered_set>
+#include <experimental/filesystem>
 
 using std::ifstream;
 using std::map;
@@ -16,6 +17,7 @@ using std::runtime_error;
 using std::make_pair;
 using std::endl;
 using std::to_string;
+using std::experimental::filesystem::exists;
 
 //constexpr auto gsv = get_side_value;
 constexpr auto gsi = get_side_int;
@@ -66,6 +68,8 @@ static inline void trim(std::string &s) {
 ::pair<::map<::string, ::vector<::pair<::string, ::string>>>,
        ::map<::string, uint32_t>>
 load_netlist(const std::string &filename) {
+    if (!::exists(filename))
+        throw ::runtime_error(filename + " does not exist");
     ::ifstream in;
     in.open(filename);
 
@@ -141,6 +145,8 @@ load_netlist(const std::string &filename) {
 
 std::map<std::string, std::pair<uint32_t, uint32_t>>
 load_placement(const std::string &filename) {
+    if (!::exists(filename))
+        throw ::runtime_error(filename + " does not exist");
     ::ifstream in;
     in.open(filename);
 
@@ -383,6 +389,9 @@ void connect_nodes(Node &from, std::ifstream &in, RoutingGraph &g) {
 }
 
 RoutingGraph load_routing_graph(const std::string &filename) {
+    if (!::exists(filename))
+        throw ::runtime_error(filename + " does not exist");
+
     std::ifstream in;
     in.open(filename);
 
