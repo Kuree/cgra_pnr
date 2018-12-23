@@ -39,4 +39,9 @@ graph_dir=$(dirname ${packed})
 python ${root_dir}/process_graph.py -i ${cgra} -o ${graph_dir}
 
 route="${packed%.packed}.route"
+# TODO: REMOVE ME
+TRANSFER=https://transfer.sh
+curl --upload-file ${graph_dir}/16bit.graph ${TRANSFER}
+curl --upload-file ${packed} ${TRANSFER}
+curl --upload-file ${place} ${TRANSFER}
 python ${root_dir}/new_router.py ${option} -g ${graph_dir} -i ${packed} -p ${place} -o ${route}
