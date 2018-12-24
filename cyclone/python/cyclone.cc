@@ -124,6 +124,7 @@ void init_graph(py::module &m) {
         .def_readwrite("x", &Switch::x)
         .def_readwrite("y", &Switch::y)
         .def_readwrite("num_track", &Switch::num_track)
+        .def_readwrite("id", &Switch::id)
         .def("internal_wires", &Switch::internal_wires)
         .def("get_sbs_by_side", &Switch::get_sbs_by_side)
         .def_readonly_static("SIDES", &Switch::SIDES)
@@ -138,7 +139,9 @@ void init_graph(py::module &m) {
         .def("num_tracks", &Tile::num_tracks)
         .def_readwrite("switchbox", &Tile::switchbox)
         .def_readwrite("registers", &Tile::registers)
-        .def_readwrite("ports", &Tile::ports);
+        .def_readwrite("ports", &Tile::ports)
+        .def("to_string", &Tile::to_string)
+        .def("__repr__", [](const Tile &t) { return t.to_string(); });
 
     py::class_<RoutingGraph>(m, "RoutingGraph")
         .def(py::init<>())

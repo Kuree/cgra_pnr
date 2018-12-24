@@ -161,6 +161,12 @@ Tile::Tile(uint32_t x, uint32_t y, uint32_t height, const Switch &switchbox)
 
 }
 
+std::string Tile::to_string() const {
+    return std::string(Tile::TOKEN) + " (" +  ::to_string(x) + ", "
+           + ::to_string(y) + ", " + ::to_string(height) + ", "
+           + ::to_string(switchbox.id) + ")";
+}
+
 std::ostream& operator<<(std::ostream &out, const Tile &tile) {
     out << "tile (" << tile.x << ", " << tile.y << ")";
     return out;

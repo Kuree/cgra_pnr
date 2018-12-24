@@ -281,8 +281,7 @@ void dump_routing_graph(RoutingGraph &graph,
 
     for (const auto &iter : graph) {
         auto tile = iter.second;
-        out << Tile::TOKEN << " (" << tile.x << ", " << tile.y << ", "
-            << tile.height << ", " << tile.switchbox.id << ")" << endl;
+        out << tile.to_string() << endl;
         for (uint32_t side = 0; side < Switch::SIDES; side++) {
             for (auto const &sb : tile.switchbox.get_sbs_by_side(gsi(side))) {
                 // skip in since it's connected internationally

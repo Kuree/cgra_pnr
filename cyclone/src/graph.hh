@@ -210,6 +210,7 @@ struct Tile {
     Tile(uint32_t x, uint32_t y, uint32_t height, const Switch &switchbox);
 
     static constexpr char TOKEN[] = "TILE";
+    std::string to_string() const;
 };
 
 std::ostream& operator<<(std::ostream &out, const Tile &tile);
