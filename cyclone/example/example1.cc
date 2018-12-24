@@ -22,7 +22,7 @@ constexpr auto gii = get_io_int;
 int main(int argc, char *argv[]) {
     // 1. construct routing graph with standard switch box
     Switch switchbox(0, 0, NUM_TRACK, WIDTH, SWITCH_ID,
-                     get_uniform_sb_wires(NUM_TRACK));
+                     get_disjoint_sb_wires(NUM_TRACK));
     // 2 x 2 board with 2 routing tracks
     RoutingGraph g(SIZE, SIZE, switchbox);
     // each tile has 2 ports, "in" and "out"

@@ -4,7 +4,7 @@ import os
 from argparse import ArgumentParser
 import pycyclone
 from pycyclone import GlobalRouter, SwitchBoxIO, Switch
-from pycyclone.util import get_side_int as gsi, get_uniform_sb_wires, gsv
+from pycyclone.util import get_side_int as gsi, get_disjoint_sb_wires, gsv
 from pycyclone.util import get_opposite_side as gos
 from pycyclone.io import load_placement, load_netlist, setup_router_input
 from pycyclone.io import load_routing_graph

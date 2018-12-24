@@ -190,7 +190,7 @@ void init_util(py::module &m) {
                py::overload_cast<SwitchBoxSide>(&get_opposite_side))
           .def("get_opposite_side",
                py::overload_cast<uint32_t>(&get_opposite_side))
-          .def("get_uniform_sb_wires", &get_uniform_sb_wires)
+          .def("get_disjoint_sb_wires", &get_disjoint_sb_wires)
           .def("get_io_value", &get_io_value)
           .def("giv", &get_io_value)
           .def("get_io_int", &get_io_int)
