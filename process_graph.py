@@ -5,7 +5,7 @@ import pycyclone
 from pycyclone import RoutingGraph, SwitchBoxNode, PortNode, SwitchBoxSide
 from pycyclone import Tile, RegisterNode, NodeType
 from pycyclone import GlobalRouter, SwitchBoxIO, Switch
-from pycyclone.util import get_side_int as gsi, get_uniform_sb_wires, gsv
+from pycyclone.util import get_side_int as gsi, get_disjoint_sb_wires, gsv
 from pycyclone.util import get_opposite_side as gos
 from pycyclone.io import load_placement, load_netlist, setup_router_input
 
@@ -51,9 +51,9 @@ def build_routing_graph(routing_resource, layout):
     SIZE = len(layout)
 
     sb_16 = Switch(0, 0, NUM_TRACK, 16, SWITCH_ID,
-                   get_uniform_sb_wires(NUM_TRACK))
+                   get_disjoint_sb_wires(NUM_TRACK))
     sb_1 = Switch(0, 0, NUM_TRACK, 1, SWITCH_ID,
-                  get_uniform_sb_wires(NUM_TRACK))
+                  get_disjoint_sb_wires(NUM_TRACK))
     tiles = list(routing_resource.keys())
     for i in range(2):
         tiles.sort(key=lambda x: x[i])
