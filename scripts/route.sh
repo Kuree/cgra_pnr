@@ -47,5 +47,5 @@ if [ -f ${router} ]; then
 else
     echo "Using Python binding. Results may be undeterministic."
     echo "To use C++ implementation, do \${ROOT}/cyclone/.travis.sh"
-    python ${root_dir}/new_router.py ${option} -g ${graph_dir} -i ${packed} -p ${place} -o ${route}
+    python ${root_dir}/router.py ${option} -g ${graph_dir} -i ${packed} -p ${place} -o ${route}
 fi
