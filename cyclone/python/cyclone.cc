@@ -28,6 +28,7 @@ void init_node_class(py::class_<T, D> &class_) {
         .def("add_edge",
            py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
         .def("get_edge_cost", &T::get_edge_cost)
+        .def("get_conn_in", &T::get_conn_in)
         .def("__repr__", &T::to_string)
         .def("__iter__", [](const T &node) {
             return py::make_iterator(node.begin(), node.end());
@@ -99,14 +100,24 @@ void init_graph(py::module &m) {
     init_node_class<PortNode, std::shared_ptr<PortNode>>(p_node);
     p_node
         .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t>())
-        .def(py::init<const std::string &, uint32_t, uint32_t>());
+        .def(py::init<const std::string &, uint32_t, uint32_t>())
+        .def("__eq__", [](const PortNode &n1, const PortNode &n2) {
+            return n1.type == n2.type && n1.name == n2.name && n1.x == n2.y &&
+                   n1.y == n2.y && n1.width == n2.width &&
+                   n1.track == n2.track;
+        });
 
     py::class_<RegisterNode, std::shared_ptr<RegisterNode>>
     r_node(m, "RegisterNode", node);
     init_node_class<RegisterNode, std::shared_ptr<RegisterNode>>(r_node);
     r_node
         .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t,
-                      uint32_t>());
+                      uint32_t>())
+        .def("__eq__", [](const RegisterNode &n1, const RegisterNode &n2) {
+            return n1.type == n2.type && n1.name == n2.name && n1.x == n2.y &&
+                       n1.y == n2.y && n1.width == n2.width &&
+                       n1.track == n2.track;
+        });
 
     py::class_<SwitchBoxNode, std::shared_ptr<SwitchBoxNode>>
     sb_node(m, "SwitchBoxNode", node);
@@ -115,7 +126,12 @@ void init_graph(py::module &m) {
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t, SwitchBoxSide,
                       SwitchBoxIO>())
         .def_readwrite("side", &SwitchBoxNode::side)
-        .def_readwrite("io", &SwitchBoxNode::io);
+        .def_readwrite("io", &SwitchBoxNode::io)
+        .def("__eq__", [](const SwitchBoxNode &n1, const SwitchBoxNode &n2) {
+            return n1.type == n2.type && n1.name == n2.name && n1.x == n2.y &&
+                   n1.y == n2.y && n1.width == n2.width &&
+                   n1.track == n2.track && n1.side == n2.side && n1.io == n2.io;
+        });
 
     py::class_<Switch>(m, "Switch")
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
@@ -128,7 +144,13 @@ void init_graph(py::module &m) {
         .def("internal_wires", &Switch::internal_wires)
         .def("get_sbs_by_side", &Switch::get_sbs_by_side)
         .def_readonly_static("SIDES", &Switch::SIDES)
-        .def_readonly_static("IOS", &Switch::IOS);
+        .def_readonly_static("IOS", &Switch::IOS)
+        .def("__getitem__", [](const Switch &s,
+                               const std::tuple<SwitchBoxSide,
+                                                uint32_t,
+                                                SwitchBoxIO> &index) {
+            return s[index];
+        });
 
     py::class_<Tile>(m, "Tile")
         .def(py::init<uint32_t, uint32_t, const Switch &>())

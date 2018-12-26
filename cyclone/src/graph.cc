@@ -41,6 +41,7 @@ Node::Node(const Node &node) {
 void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t wire_delay) {
     neighbors_.insert(node);
     edge_cost_[node] = node->delay + wire_delay;
+    node->conn_in_.insert(this);
 }
 
 uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
@@ -201,7 +202,9 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
 
     // notice that this is directional, that is, add n2 to n1's neighbor
     if (n1->width != n2->width)
-        throw ::runtime_error("node2 width does not equal to node1");
+        throw ::runtime_error("node2 width does not equal to node1 "
+                              "node1: " + ::to_string(n1->width) + " "
+                              "node2: " + ::to_string(n2->width));
     n1->add_edge(n2, wire_delay);
 }
 
@@ -270,11 +273,9 @@ std::shared_ptr<Node> RoutingGraph::get_port(const uint32_t &x,
     return t.ports.at(port);
 }
 
-std::shared_ptr<SwitchBoxNode> RoutingGraph::get_sb(const uint32_t &x,
-                                                    const uint32_t &y,
-                                                    const uint32_t &track,
-                                                    const SwitchBoxSide &side,
-                                                    const SwitchBoxIO &io) {
+std::shared_ptr<SwitchBoxNode>
+RoutingGraph::get_sb(const uint32_t &x, const uint32_t &y, const SwitchBoxSide &side,
+                     const uint32_t &track, const SwitchBoxIO &io) {
     auto pos = make_pair(x, y);
     if (grid_.find(pos) == grid_.end()) {
         throw ::runtime_error("unable to find tile");

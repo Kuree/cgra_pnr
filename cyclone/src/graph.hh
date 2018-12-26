@@ -63,6 +63,9 @@ public:
     find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
     uint64_t size() { return neighbors_.size(); }
 
+    // used in creating mux in hardware
+    const std::set<Node*> get_conn_in() const { return conn_in_; }
+
     virtual std::string to_string() const;
     friend std::ostream& operator<<(std::ostream &s, const Node &node) {
         return s << node.to_string();
@@ -81,6 +84,9 @@ protected:
     // TODO: reference.
     std::set<std::shared_ptr<Node>> neighbors_;
     std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
+
+private:
+    std::set<Node*>conn_in_;
 
 };
 
@@ -238,10 +244,11 @@ public:
     // TODO
     // add remove edge functions
 
-    std::shared_ptr<SwitchBoxNode> get_sb(const uint32_t &x, const uint32_t &y,
-                                          const uint32_t &track,
-                                          const SwitchBoxSide &side,
-                                          const SwitchBoxIO &io);
+    std::shared_ptr<SwitchBoxNode>
+    get_sb(const uint32_t &x, const uint32_t &y,
+           const SwitchBoxSide &side,
+           const uint32_t &track,
+           const SwitchBoxIO &io);
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
                                    const std::string &port);
