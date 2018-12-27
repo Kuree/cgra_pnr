@@ -141,6 +141,7 @@ void init_graph(py::module &m) {
         .def_readwrite("y", &Switch::y)
         .def_readwrite("num_track", &Switch::num_track)
         .def_readwrite("id", &Switch::id)
+        .def_readwrite("width", &Switch::width)
         .def("internal_wires", &Switch::internal_wires)
         .def("get_sbs_by_side", &Switch::get_sbs_by_side)
         .def_readonly_static("SIDES", &Switch::SIDES)
@@ -163,6 +164,30 @@ void init_graph(py::module &m) {
         .def_readwrite("registers", &Tile::registers)
         .def_readwrite("ports", &Tile::ports)
         .def("to_string", &Tile::to_string)
+        .def("input_ports", [](const Tile &tile) {
+            std::set<std::string> result;
+            for (auto const &iter : tile.ports) {
+                if (!iter.second->get_conn_in().empty()) {
+                    if (iter.second->size())
+                        throw std::runtime_error(iter.first + " has both in "
+                                                              "and out "
+                                                              "connection");
+                    result.insert(iter.first);
+                }
+            }
+            return result;})
+        .def("output_ports", [](const Tile &tile) {
+            std::set<std::string> result;
+            for (auto const &iter : tile.ports) {
+                if (iter.second->size()) {
+                    if (!iter.second->get_conn_in().empty())
+                        throw std::runtime_error(iter.first + " has both in "
+                                                              "and out "
+                                                              "connection");
+                    result.insert(iter.first);
+                }
+            }
+            return result;})
         .def("__repr__", [](const Tile &t) { return t.to_string(); });
 
     py::class_<RoutingGraph>(m, "RoutingGraph")
@@ -219,7 +244,22 @@ void init_util(py::module &m) {
           .def("get_io_value", &get_io_value)
           .def("giv", &get_io_value)
           .def("get_io_int", &get_io_int)
-          .def("gii", &get_io_int);
+          .def("gii", &get_io_int)
+          .def("convert_to_sb", [](const Node *node) -> const SwitchBoxNode* {
+              if (node->type != NodeType::SwitchBox)
+                  throw std::runtime_error("Node has to be a SwitchBoxNode");
+              return dynamic_cast<const SwitchBoxNode*>(node);
+          })
+          .def("convert_to_port", [](const Node *node) -> const PortNode* {
+              if (node->type != NodeType::Port)
+                  throw std::runtime_error("Node has to be a SwitchBoxNode");
+              return dynamic_cast<const PortNode*>(node);
+          })
+          .def("convert_to_reg", [](const Node *node) -> const RegisterNode* {
+              if (node->type != NodeType::Register)
+                  throw std::runtime_error("Node has to be a SwitchBoxNode");
+              return dynamic_cast<const RegisterNode*>(node);
+          });
 }
 
 void init_io(py::module &m) {
