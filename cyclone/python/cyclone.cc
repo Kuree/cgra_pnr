@@ -28,11 +28,11 @@ void init_node_class(py::class_<T, D> &class_) {
         .def("add_edge",
            py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
         .def("get_edge_cost", &T::get_edge_cost)
-        .def("get_conn_in", &T::get_conn_in)
+        .def("get_conn_in", &T::get_conn_in, py::return_value_policy::reference)
         .def("__repr__", &T::to_string)
         .def("__iter__", [](const T &node) {
             return py::make_iterator(node.begin(), node.end());
-        }, py::keep_alive<0, 1>());
+        }, py::keep_alive<0, 1>(), py::return_value_policy::reference);
 }
 
 template<class T>
@@ -143,7 +143,8 @@ void init_graph(py::module &m) {
         .def_readwrite("id", &Switch::id)
         .def_readwrite("width", &Switch::width)
         .def("internal_wires", &Switch::internal_wires)
-        .def("get_sbs_by_side", &Switch::get_sbs_by_side)
+        .def("get_sbs_by_side", &Switch::get_sbs_by_side,
+             py::return_value_policy::copy)
         .def_readonly_static("SIDES", &Switch::SIDES)
         .def_readonly_static("IOS", &Switch::IOS)
         .def("__getitem__", [](const Switch &s,
