@@ -79,17 +79,20 @@ void init_graph(py::module &m) {
     py::enum_<NodeType>(m, "NodeType")
         .value("SwitchBox", NodeType::SwitchBox)
         .value("Port", NodeType::Port)
-        .value("Register", NodeType::Register);
+        .value("Register", NodeType::Register)
+        .export_values();
 
     py::enum_<SwitchBoxSide>(m, "SwitchBoxSide")
         .value("Left", SwitchBoxSide::Left)
         .value("Bottom", SwitchBoxSide::Bottom)
         .value("Right", SwitchBoxSide::Right)
-        .value("Top", SwitchBoxSide::Top);
+        .value("Top", SwitchBoxSide::Top)
+        .export_values();
 
     py::enum_<SwitchBoxIO>(m, "SwitchBoxIO")
         .value("SB_IN", SwitchBoxIO::SB_IN)
-        .value("SB_OUT", SwitchBoxIO::SB_OUT);
+        .value("SB_OUT", SwitchBoxIO::SB_OUT)
+        .export_values();
 
     // the generic node type
     py::class_<Node, std::shared_ptr<Node>> node(m, "Node");
