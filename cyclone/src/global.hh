@@ -28,7 +28,7 @@ private:
 
     std::map<std::pair<int, uint32_t>,
              double> slack_ratio_;
-    double hn_factor_ = 0.01;
+    double hn_factor_ = 0.1;
     double slack_factor_ = 0.9;
     std::map<int, std::pair<int, uint32_t>> reg_net_table_;
 
