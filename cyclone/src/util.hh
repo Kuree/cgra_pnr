@@ -57,4 +57,7 @@ inline SwitchBoxIO get_io_int(uint32_t io)
 std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
 get_disjoint_sb_wires(uint32_t num_tracks);
 
+std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+get_wilton_sb_wires(uint32_t num_tracks);
+
 #endif //CYCLONE_UTIL_HH

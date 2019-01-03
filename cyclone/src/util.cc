@@ -111,3 +111,54 @@ get_disjoint_sb_wires(uint32_t num_tracks) {
     }
     return result;
 }
+
+uint32_t mod(int a, int b) {
+    while (a < 0)
+        a += b;
+    return static_cast<uint32_t>(a % b);
+}
+
+std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+get_wilton_sb_wires(uint32_t num_tracks) {
+    std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+    result;
+    // Design of Interconnection Networks for Programmable Logic
+    // page 152 Table 7.1
+    // we have 6 different functions
+    // notice that the table only prescribes half of the connections. we will
+    // double the connection by reverse the ordering
+    auto const W = num_tracks;
+    for (uint32_t track = 0; track < num_tracks; track++) {
+        // f_e1
+        result.insert({track, SwitchBoxSide::Left,
+                       mod(W - track, W), SwitchBoxSide ::Top});
+        result.insert({mod(W - track, W), SwitchBoxSide ::Top,
+                       track, SwitchBoxSide::Left});
+        // f_e2
+        result.insert({track, SwitchBoxSide::Top,
+                       mod(track + 1, W), SwitchBoxSide::Right});
+        result.insert({mod(track + 1, W), SwitchBoxSide::Right,
+                       track, SwitchBoxSide::Top});
+        // f_e3
+        result.insert({track, SwitchBoxSide::Bottom,
+                       mod(W -track - 2, W), SwitchBoxSide::Right});
+        result.insert({mod(W -track - 2, W), SwitchBoxSide::Right,
+                       track, SwitchBoxSide::Bottom});
+        // f_e4
+        result.insert({track, SwitchBoxSide::Left,
+                       mod(track - 1, W), SwitchBoxSide::Bottom});
+        result.insert({mod(track - 1, W), SwitchBoxSide::Bottom,
+                       track, SwitchBoxSide::Left});
+        // f_e5
+        result.insert({track, SwitchBoxSide::Left,
+                       track, SwitchBoxSide::Right});
+        result.insert({track, SwitchBoxSide::Right,
+                       track, SwitchBoxSide::Left});
+        // f_e6
+        result.insert({track, SwitchBoxSide::Bottom,
+                       track, SwitchBoxSide::Top});
+        result.insert({track, SwitchBoxSide::Top,
+                       track, SwitchBoxSide::Bottom});
+    }
+    return result;
+}
