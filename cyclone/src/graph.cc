@@ -274,7 +274,8 @@ std::shared_ptr<Node> RoutingGraph::get_port(const uint32_t &x,
 }
 
 std::shared_ptr<SwitchBoxNode>
-RoutingGraph::get_sb(const uint32_t &x, const uint32_t &y, const SwitchBoxSide &side,
+RoutingGraph::get_sb(const uint32_t &x, const uint32_t &y,
+                     const SwitchBoxSide &side,
                      const uint32_t &track, const SwitchBoxIO &io) {
     auto pos = make_pair(x, y);
     if (grid_.find(pos) == grid_.end()) {

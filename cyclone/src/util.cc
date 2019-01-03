@@ -122,6 +122,55 @@ std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
 get_wilton_sb_wires(uint32_t num_tracks) {
     std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
     result;
+    // based on Steven Wilton's PhD thesis
+    // http://www.eecg.toronto.edu/~jayar/pubs/theses/Wilton/StevenWilton.pdf
+    // page 119, equation 6.1
+    auto const W = num_tracks;
+    // we define the t_i as
+    //    3
+    //    _
+    // 2 | | 0
+    //   |_|
+    //    1
+    for (uint32_t track = 0; track < num_tracks; track++) {
+        // t_0, t_2
+        result.insert({track, SwitchBoxSide::Left,
+                       track, SwitchBoxSide::Right});
+        result.insert({track, SwitchBoxSide::Right,
+                       track, SwitchBoxSide::Left});
+        // t_1, t_3
+        result.insert({track, SwitchBoxSide::Bottom,
+                       track, SwitchBoxSide::Top});
+        result.insert({track, SwitchBoxSide::Top,
+                       track, SwitchBoxSide::Bottom});
+        // t_0, t_1
+        result.insert({track, SwitchBoxSide::Left,
+                       mod(W - track, W), SwitchBoxSide::Bottom});
+        result.insert({mod(W - track, W), SwitchBoxSide::Bottom,
+                       track, SwitchBoxSide::Left});
+        // t_1, t_2
+        result.insert({track, SwitchBoxSide::Bottom,
+                       mod(track + 1, W), SwitchBoxSide::Right});
+        result.insert({mod(track + 1, W), SwitchBoxSide::Right,
+                       track, SwitchBoxSide::Bottom});
+        // t_2, t_3
+        result.insert({track, SwitchBoxSide::Right,
+                       mod(2 * W - 2 - track, W), SwitchBoxSide::Top});
+        result.insert({mod(2 * W - 2 - track, W), SwitchBoxSide::Top,
+                       track, SwitchBoxSide::Right});
+        // t3, t_0
+        result.insert({track, SwitchBoxSide::Top,
+                       mod(track + 1, W), SwitchBoxSide::Left});
+        result.insert({mod(track + 1, W), SwitchBoxSide::Left,
+                       track, SwitchBoxSide::Top});
+    }
+    return result;
+}
+
+std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+get_imran_sb_wires(uint32_t num_tracks) {
+    std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+    result;
     // Design of Interconnection Networks for Programmable Logic
     // page 152 Table 7.1
     // we have 6 different functions
