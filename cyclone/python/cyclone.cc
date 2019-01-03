@@ -9,6 +9,7 @@
 
 namespace py = pybind11;
 using std::to_string;
+using std::vector;
 
 const int Switch::SIDES;
 const int Switch::IOS;
@@ -219,7 +220,28 @@ void init_graph(py::module &m) {
         .def("__getitem__", &RoutingGraph::operator[])
         .def("__iter__", [](RoutingGraph &r) {
             return py::make_key_iterator(r.begin(), r.end());
-        }, py::keep_alive<0, 1>());
+        }, py::keep_alive<0, 1>())
+        .def("get_all_sb", [](RoutingGraph &r) {
+            ::vector<SwitchBoxNode*> result;
+            for (const auto &iter : r) {
+                auto const &switch_ = iter.second.switchbox;
+                const auto &top = switch_.get_sbs_by_side(SwitchBoxSide::Top);
+                const auto &right =
+                        switch_.get_sbs_by_side(SwitchBoxSide::Right);
+                auto const &bottom =
+                        switch_.get_sbs_by_side(SwitchBoxSide::Bottom);
+                auto const &left = switch_.get_sbs_by_side(SwitchBoxSide::Left);
+                // merge them into the result
+                ::vector<::vector<std::shared_ptr<SwitchBoxNode>>> lists =
+                        {top, right, bottom, left};
+                for (const auto &lst: lists) {
+                    for (auto const &n : lst) {
+                        result.emplace_back(n.get());
+                    }
+                }
+            }
+            return result;
+        }, py::return_value_policy::reference);
 }
 
 void init_router(py::module &m) {
