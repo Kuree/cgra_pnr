@@ -1,6 +1,6 @@
 set(PYBIND11_CPP_STANDARD -std=c++17)
-# for some reason it gives LTO errors on my laptop. Setting NO_EXTRAS for now
-pybind11_add_module(pycyclone cyclone.cc NO_EXTRAS)
+# for some reason it gives LTO errors on my laptop with release mode
+pybind11_add_module(pycyclone cyclone.cc)
 
 #target_link_libraries(pythunder PRIVATE pybind11::module)
 set(CMAKE_EXE_LINKER_FLAGS " -static")
