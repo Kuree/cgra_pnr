@@ -51,6 +51,13 @@ uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
         return edge_cost_[node];
 }
 
+void Node::remove_edge(const std::shared_ptr<Node> &node) {
+    if (neighbors_.find(node) != neighbors_.end()) {
+        neighbors_.erase(node);
+        edge_cost_.erase(node);
+    }
+}
+
 std::string Node::to_string() const {
     return "NODE " + name + " (" + ::to_string(track) + ", " +
            ::to_string(x) + ", " + ::to_string(y)  + ", " +
@@ -150,6 +157,27 @@ Switch::get_sbs_by_side(const SwitchBoxSide &side) const {
             result.emplace_back(sb);
     }
     return result;
+}
+
+void Switch::remove_sb_nodes(SwitchBoxSide side, SwitchBoxIO io) {
+    // first remove the sbs
+    sbs_[gsv(side)][giv(io)].clear();
+    // then we clean up the internal wires that has reference to the side
+    // and io. this is very useful to create a tall tiles that uses multiple
+    // switches
+    ::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
+    wires_to_remove;
+    for (auto const &conn : internal_wires_) {
+        SwitchBoxSide side_from, side_to;
+        std::tie(std::ignore, side_from, std::ignore, side_to) = conn;
+        if (io == SwitchBoxIO::SB_IN && side_from == side)
+            wires_to_remove.insert(conn);
+        else if (io == SwitchBoxIO::SB_OUT && side_to == side)
+            wires_to_remove.insert(conn);
+    }
+    // remove them
+    for (auto const &conn : wires_to_remove)
+        internal_wires_.erase(conn);
 }
 
 Tile::Tile(uint32_t x, uint32_t y, uint32_t height, const Switch &switchbox)

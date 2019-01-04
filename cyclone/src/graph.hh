@@ -51,6 +51,7 @@ public:
     { add_edge(node, DEFAULT_WIRE_DELAY); }
     virtual void add_edge(const std::shared_ptr<Node> &node,
                           uint32_t wire_delay);
+    virtual void remove_edge(const std::shared_ptr<Node> &node);
 
     uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
 
@@ -184,6 +185,8 @@ public:
 
     const std::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
     internal_wires() const { return internal_wires_; }
+
+    void remove_sb_nodes(SwitchBoxSide side, SwitchBoxIO io);
 
     static constexpr char TOKEN[] = "SWITCH";
 

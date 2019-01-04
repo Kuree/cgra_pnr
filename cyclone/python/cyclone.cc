@@ -150,6 +150,7 @@ void init_graph(py::module &m) {
         .def("get_sbs_by_side", &Switch::get_sbs_by_side,
              py::return_value_policy::copy)
         .def_readonly_static("SIDES", &Switch::SIDES)
+        .def("remove_sb_nodes", &Switch::remove_sb_nodes)
         .def_readonly_static("IOS", &Switch::IOS)
         .def("__getitem__", [](const Switch &s,
                                const std::tuple<SwitchBoxSide,
