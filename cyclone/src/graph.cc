@@ -56,6 +56,10 @@ void Node::remove_edge(const std::shared_ptr<Node> &node) {
         neighbors_.erase(node);
         edge_cost_.erase(node);
     }
+    if (node->conn_in_.find(this) != node->conn_in_.end()) {
+        // remove the incoming connection as well
+        node->conn_in_.erase(this);
+    }
 }
 
 std::string Node::to_string() const {
@@ -160,7 +164,16 @@ Switch::get_sbs_by_side(const SwitchBoxSide &side) const {
 }
 
 void Switch::remove_sb_nodes(SwitchBoxSide side, SwitchBoxIO io) {
-    // first remove the sbs
+    // first remove the connections and nodes
+    for (auto &sb : sbs_[gsv(side)][giv(io)]) {
+        for (const auto &node : *sb) {
+            sb->remove_edge(node);
+        }
+        auto conn_ins = sb->get_conn_in();
+        for (const auto &node : conn_ins) {
+            node->remove_edge(sb);
+        }
+    }
     sbs_[gsv(side)][giv(io)].clear();
     // then we clean up the internal wires that has reference to the side
     // and io. this is very useful to create a tall tiles that uses multiple

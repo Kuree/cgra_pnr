@@ -29,6 +29,7 @@ void init_node_class(py::class_<T, D> &class_) {
         .def("add_edge",
            py::overload_cast<const std::shared_ptr<Node> &>(&Node::add_edge))
         .def("get_edge_cost", &T::get_edge_cost)
+        .def("remove_edge", &T::remove_edge)
         .def("get_conn_in", &T::get_conn_in, py::return_value_policy::reference)
         .def("__repr__", &T::to_string)
         .def("__iter__", [](const T &node) {
