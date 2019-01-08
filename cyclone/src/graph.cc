@@ -166,7 +166,9 @@ Switch::get_sbs_by_side(const SwitchBoxSide &side) const {
 void Switch::remove_sb_nodes(SwitchBoxSide side, SwitchBoxIO io) {
     // first remove the connections and nodes
     for (auto &sb : sbs_[gsv(side)][giv(io)]) {
-        for (const auto &node : *sb) {
+        auto nodes_to_remove = ::set<::shared_ptr<Node>>(sb->begin(),
+                                                         sb->end());
+        for (const auto &node : nodes_to_remove) {
             sb->remove_edge(node);
         }
         auto conn_ins = sb->get_conn_in();
