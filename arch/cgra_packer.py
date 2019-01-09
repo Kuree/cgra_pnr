@@ -332,6 +332,8 @@ def generate_netlists(connections, instances):
                 port = "out"
             elif "valid" in port:
                 port = "valid"
+            elif "addr" in port:
+                port = "addr"
             else:
                 raise Exception("Unrecognized port " + port)
             hyper_edge.append((blk_id, port))
