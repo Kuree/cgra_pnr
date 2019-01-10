@@ -306,10 +306,12 @@ def generate_netlists(connections, instances):
             blk_id = name_to_id[blk_name]
             port = ".".join(raw_names[1:])
             # FIXME: don't care about these so far
-            if port == "ren" or port == "cg_en":
+            if port == "cg_en":
                 continue
             if port == "data.in.0":
                 port = "data0"
+            elif port == "ren":
+                port = "ren"
             elif port == "data.in.1":
                 port = "data1"
             elif port == "in":
