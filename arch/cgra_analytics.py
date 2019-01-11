@@ -2,7 +2,6 @@ from .graph import get_raw_connections
 from .graph import build_raw_graph
 from .cgra import load_packed_file, read_netlist_json
 from .cgra import get_tile_op
-import networkx as nx
 import six
 
 
@@ -19,6 +18,7 @@ TIMING_INFO = {
 
 
 def find_all_timed_path(g, name_to_id, id_to_name, changed_pe):
+    import networkx as nx
     nodes = g.nodes()
     timed_elements = set()
 

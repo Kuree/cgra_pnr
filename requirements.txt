@@ -1,9 +1,6 @@
 # 1.15 has tons of warnings from scipy
 numpy
-scipy
-sklearn
 matplotlib
-networkx
 lxml
 pillow
 # for progress bar
