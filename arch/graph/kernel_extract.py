@@ -4,7 +4,6 @@ import numpy as np
 import sys
 import os.path
 import networkx as nx
-from sklearn.cluster import KMeans
 
 if __name__ == '__main__':
     # handle import

@@ -2,6 +2,7 @@
 numpy
 matplotlib
 lxml
+networkx
 pillow
 # for progress bar
 tqdm
