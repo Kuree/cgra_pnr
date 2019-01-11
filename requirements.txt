@@ -4,6 +4,7 @@ matplotlib
 lxml
 networkx
 pillow
+leidenalg
 # for progress bar
 tqdm
 # futures for python 2 support
