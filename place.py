@@ -117,7 +117,6 @@ def main():
     # only the main thread needs it
     import numpy as np
     from argparse import ArgumentParser
-    from arch.parser import parse_emb
     from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
     from arch.cgra import place_special_blocks, save_placement, prune_netlist
     from arch.cgra_packer import load_packed_file
@@ -129,9 +128,6 @@ def main():
     parser.add_argument("-i", "--input", help="Packed netlist file, " +
                                               "e.g. harris.packed",
                         required=True, action="store", dest="packed_filename")
-    parser.add_argument("-e", "--embedding", help="Netlist embedding file, " +
-                                                  "e.g. harris.emb",
-                        required=True, action="store", dest="netlist_embedding")
     parser.add_argument("-o", "--output", help="Placement result, " +
                                                "e.g. harris.place",
                         required=True, action="store",
@@ -171,7 +167,6 @@ def main():
         parser.error("Must provide wither --fpga or --cgra")
 
     packed_filename = args.packed_filename
-    netlist_embedding = args.netlist_embedding
     placement_filename = args.placement_filename
     aws_config = args.aws_config
     fpga_place = len(fpga_arch) > 0
@@ -197,7 +192,6 @@ def main():
     # Common routine
     board_name, board_meta = board_meta.popitem()
     print("INFO: Placing for", board_name)
-    num_dim, raw_emb = parse_emb(netlist_embedding)
     board = make_board(board_meta)
     board_info = board_meta[-1]
     place_on_board = generate_place_on_board(board_meta, fold_reg=fold_reg)
@@ -209,14 +203,7 @@ def main():
     # FPGA
     if fpga_place:
         netlists, fixed_blk_pos, _ = load_packed_fpga_netlist(packed_filename)
-        num_of_kernels = None
         id_to_name = {}
-        for blk_id in raw_emb:
-            id_to_name[blk_id] = blk_id
-            if blk_id[0] == "i":
-                special_blocks.add(blk_id)
-            else:
-                emb[blk_id] = raw_emb[blk_id]
         # place fixed IO locations
         for blk_id in fixed_blk_pos:
             pos = fixed_blk_pos[blk_id]
@@ -229,14 +216,8 @@ def main():
         # CGRA
         raw_netlist, folded_blocks, id_to_name, changed_pe = \
             load_packed_file(packed_filename)
-        num_of_kernels = get_num_clusters(id_to_name)
         netlists = prune_netlist(raw_netlist)
 
-        for blk_id in raw_emb:
-            if blk_id[0] == "i":
-                special_blocks.add(blk_id)
-            else:
-                emb[blk_id] = raw_emb[blk_id]
         # place the spacial blocks first
         place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
                              id_to_name,
@@ -244,14 +225,9 @@ def main():
                              board_meta)
 
     # common routine
-    data_x = np.zeros((len(emb), num_dim))
-    blks = list(emb.keys())
-    for i in range(len(blks)):
-        data_x[i] = emb[blks[i]]
-
     centroids, cluster_cells, clusters = perform_global_placement(
-        blks, data_x, emb, fixed_blk_pos, netlists,
-        board_meta, fold_reg=fold_reg, num_clusters=num_of_kernels,
+        fixed_blk_pos, netlists,
+        board_meta, fold_reg=fold_reg,
         seed=seed, fpga_place=fpga_place, vis=vis_opt)
 
     # placer with each cluster
@@ -277,45 +253,15 @@ def main():
         visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe)
 
 
-def get_num_clusters(id_to_name):
-    unique_names = set()
-    for blk_id in id_to_name:
-        blk_name = id_to_name[blk_id]
-        name = blk_name.split(".")[0]
-        name = name.split("$")[0]
-        unique_names.add(name)
-
-    count = [1 for name in unique_names if name[:2] == "lb" and
-             "lut" not in name]
-    return sum(count)
-
-
-def perform_global_placement(blks, data_x, emb, fixed_blk_pos, netlists,
+def perform_global_placement(fixed_blk_pos, netlists,
                              board_meta, fold_reg, seed,
-                             num_clusters=None, fpga_place=False, vis=True):
-    from sklearn.cluster import KMeans
-    import numpy as np
+                             fpga_place=False, vis=True):
+    print(fixed_blk_pos)
     from visualize import visualize_clustering_cgra
+    from graph import partition_netlist
     # simple heuristics to calculate the clusters
-    if fpga_place:
-        num_clusters = int(np.ceil(len(emb) / 300)) + 1
-    elif num_clusters is None or num_clusters == 0:
-        num_clusters = int(np.ceil(len(emb) / 40)) + 1
-    # extra careful
-    num_clusters = min(num_clusters, len(blks))
-    print("Trying: num of clusters", num_clusters)
-    kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(data_x)
-    cluster_ids = kmeans.labels_
-    clusters = {}
-    for i in range(len(blks)):
-        cid = cluster_ids[i]
-        if cid not in clusters:
-            clusters[cid] = {blks[i]}
-        else:
-            clusters[cid].add(blks[i])
-    cluster_sizes = [len(clusters[s]) for s in clusters]
-    print("cluster average:", np.average(cluster_sizes), "std:",
-          np.std(cluster_sizes), "total:", np.sum(cluster_sizes))
+    clusters = partition_netlist(netlists)
+
     new_clusters = {}
     for c_id in clusters:
         new_id = "x" + str(c_id)

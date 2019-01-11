@@ -25,7 +25,5 @@ if ! [ -f ${cgra} ] || ! [ -f ${packed} ]; then
 fi
 
 # assume user already have the env activated
-emb="${packed%.packed}.emb"
 place="${packed%.packed}.place"
-python ${root_dir}/random_walk.py -i ${packed} -o ${emb}
-python ${root_dir}/place.py --cgra ${cgra} -i ${packed} -e ${emb} -o ${place} --no-vis ${option}
+python ${root_dir}/place.py --cgra ${cgra} -i ${packed} -o ${place} --no-vis ${option}
