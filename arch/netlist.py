@@ -1,5 +1,4 @@
 import six
-import networkx as nx
 
 
 def group_reg_nets(netlists):
@@ -110,6 +109,7 @@ def is_conn_in(raw_name):
 
 
 def kernel_partition(netlists):
+    import networkx as nx
     g = nx.DiGraph()
     for net_id in netlists:
         net = netlists[net_id]

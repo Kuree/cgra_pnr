@@ -3,7 +3,6 @@ from __future__ import print_function
 from util import reduce_cluster_graph, compute_centroids
 from util import SetEncoder, choose_resource
 import os
-import random
 import pythunder
 import json
 import threading
@@ -104,18 +103,14 @@ def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
                                              clb_type,
                                              fold_reg)
 
-    #if "TRAVIS" not in os.environ:
-    #    # FIXME: travis hack
-    #    # remove this after new router
-    #    global_refine.refine(int(10 * (len(pre_placement) ** 1.33)),
-    #                         0.01, True)
+    global_refine.refine(int(100 * (len(pre_placement) ** 1.33)),
+                         0.001, True)
 
     return global_refine.realize()
 
 
 def main():
     # only the main thread needs it
-    import numpy as np
     from argparse import ArgumentParser
     from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
     from arch.cgra import place_special_blocks, save_placement, prune_netlist
@@ -173,9 +168,6 @@ def main():
 
     seed = args.seed
     print("Using seed", seed, "for placement")
-    # just in case for some library
-    random.seed(seed)
-    np.random.seed(seed)
 
     vis_opt = not args.no_vis
     fold_reg = not args.no_reg_fold
@@ -217,6 +209,9 @@ def main():
         raw_netlist, folded_blocks, id_to_name, changed_pe = \
             load_packed_file(packed_filename)
         netlists = prune_netlist(raw_netlist)
+        for blk in id_to_name:
+            if blk[0] == "i" or blk[0] == "I":
+                special_blocks.add(blk)
 
         # place the spacial blocks first
         place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
@@ -256,7 +251,6 @@ def main():
 def perform_global_placement(fixed_blk_pos, netlists,
                              board_meta, fold_reg, seed,
                              fpga_place=False, vis=True):
-    print(fixed_blk_pos)
     from visualize import visualize_clustering_cgra
     from graph import partition_netlist
     # simple heuristics to calculate the clusters
@@ -285,10 +279,10 @@ def perform_global_placement(fixed_blk_pos, netlists,
 
     board_info = board_meta[-1]
     clb_type = board_info["clb_type"]
-    print(fold_reg)
     gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
                                 new_layout, clb_type, fold_reg)
 
+    gp.anneal_param_factor = len(new_clusters)
     gp.solve()
     gp.anneal()
     cluster_cells_ = gp.realize()

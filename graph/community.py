@@ -32,19 +32,18 @@ def get_cluster(graph, id_to_block, num_iter=15, seed=0):
     membership = partition.membership
     assert len(membership) == len(id_to_block)
     clusters = {}
-    ignored_types = {}
+    ignored_types = {"i", "I"}
     for node_id, cluster_id in enumerate(membership):
         blk_id = id_to_block[node_id]
         if blk_id[0] in ignored_types:
             continue
         if cluster_id not in clusters:
-            clusters[cluster_id] = []
-
-        clusters[cluster_id].append(blk_id)
+            clusters[cluster_id] = set()
+        clusters[cluster_id].add(blk_id)
 
     # sort them
-    for cluster_id in clusters:
-        clusters[cluster_id].sort(key=lambda x: int(x[1:]))
+    # for cluster_id in clusters:
+    #    clusters[cluster_id].sort(key=lambda x: int(x[1:]))
     return clusters
 
 
