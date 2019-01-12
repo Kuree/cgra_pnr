@@ -16,7 +16,6 @@ addons:
       - g++-7
       - realpath
       - libxml2-dev
-      - python-igraph
 
 install:
   - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 99
