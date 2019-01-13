@@ -160,5 +160,4 @@ sls
 *.graph
 
 # random stuff
-example
 test_tapeout/
