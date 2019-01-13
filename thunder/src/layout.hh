@@ -31,6 +31,7 @@ public:
     // cell on the layer
     Layout() = default;
     Layout(const std::map<char, std::vector<std::vector<bool>>> &layers);
+    Layout(const std::vector<std::vector<char>> &layers);
 
     void add_layer(const Layer & layer);
     bool is_legal(const std::string &blk_id, uint32_t x, uint32_t y);

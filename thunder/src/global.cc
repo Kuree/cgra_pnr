@@ -83,7 +83,7 @@ void GlobalPlacer::setup_reduced_layout() {
     }
     // create the new reduced_board and mapping between the new one and the old
     // one
-
+    printf("%ld %ld\n", layout_width, layout_height);
     for (uint32_t y = 0; y < layout_height; y++) {
         reduced_board_layout_.emplace_back(::vector<char>());
         uint32_t new_x = 0;

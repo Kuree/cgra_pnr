@@ -277,10 +277,15 @@ def perform_global_placement(fixed_blk_pos, netlists,
                 row.append(board_layout[y][x])
         new_layout.append(row)
 
+    # not the best practice to use the layers here
+    # but this requires minimum amount of work to convert the old
+    # code to the new codebase
+    layout = pythunder.Layout(new_layout)
+
     board_info = board_meta[-1]
     clb_type = board_info["clb_type"]
     gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
-                                new_layout, clb_type, fold_reg)
+                                layout, clb_type, fold_reg)
 
     gp.anneal_param_factor = len(new_clusters)
     gp.solve()

@@ -79,6 +79,7 @@ void init_pythunder(py::module &m) {
             .def(py::init<>())
             .def(py::init<const std::map<char,
                                          std::vector<std::vector<bool>>> &>())
+            .def(py::init<const std::vector<std::vector<char>> &>())
             .def("add_layer", &Layout::add_layer)
             .def("is_legal", &Layout::is_legal);
 }
