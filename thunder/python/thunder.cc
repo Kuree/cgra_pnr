@@ -56,7 +56,7 @@ void init_pythunder(py::module &m) {
             .def(py::init<std::map<std::string, std::set<std::string>>,
                     std::map<std::string, std::vector<std::string>>,
                     std::map<std::string, std::pair<int, int>>,
-                    std::vector<std::vector<char>>,
+                    const Layout&,
                     char,
                     bool>())
             .def("solve", &GlobalPlacer::solve)
@@ -77,6 +77,8 @@ void init_pythunder(py::module &m) {
             });
     py::class_<Layout>(m, "Layout")
             .def(py::init<>())
+            .def(py::init<const std::map<char,
+                                         std::vector<std::vector<bool>>> &>())
             .def("add_layer", &Layout::add_layer)
             .def("is_legal", &Layout::is_legal);
 }
