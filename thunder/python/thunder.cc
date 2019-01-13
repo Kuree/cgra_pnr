@@ -6,6 +6,7 @@
 #include "../src/vpr.hh"
 #include "../src/global.hh"
 #include "../src/multi_place.hh"
+#include "../src/layout.hh"
 
 namespace py = pybind11;
 using std::move;
@@ -64,6 +65,20 @@ void init_pythunder(py::module &m) {
             .def_readwrite("anneal_param_factor",
                            &GlobalPlacer::anneal_param_factor)
             .def_readwrite("steps", &GlobalPlacer::steps);
+
+    py::class_<Layer>(m, "Layer")
+            .def(py::init<char, uint32_t, uint32_t>())
+            .def("mark_available", &Layer::mark_available)
+            .def("mark_unavailable", &Layer::mark_unavailable)
+            .def_readwrite("blk_type", &Layer::blk_type)
+            .def("__getitem__", [](const Layer &layer,
+                                   const std::pair<uint32_t, uint32_t> &pos) {
+                return layer[pos];
+            });
+    py::class_<Layout>(m, "Layout")
+            .def(py::init<>())
+            .def("add_layer", &Layout::add_layer)
+            .def("is_legal", &Layout::is_legal);
 }
 
 void init_detailed_placement(py::module &m) {
