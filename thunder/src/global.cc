@@ -46,6 +46,9 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
                            hidden_columns() {
     // first compute the reduced board_layout
     setup_reduced_layout();
+    // determine the available clb_types based on board_layout
+    get_clb_types_();
+    // create fixed boxes
     create_fixed_boxes();
     // set up the boxes
     create_boxes();
@@ -163,18 +166,32 @@ void GlobalPlacer::create_boxes() {
         box.id = cluster_id;
         box.index = box_index;
         box.clb_size = 0;
+        // determine the actual clb_size based on how many each clb_types
+        // are needed. usually the primary clb_type_ ('p') is the dominating
+        // factor
+        std::unordered_map<char, uint32_t> clb_sizes;
+        // initialize it
+        for (auto const &blk_type : clb_types_)
+            clb_sizes.insert({blk_type, 0});
+
         for (auto const &blk_name : iter.second) {
             char blk_type = blk_name[0];
-            if (blk_type == clb_type_) {
-                box.clb_size++;
+            if (clb_types_.find(blk_type) != clb_types_.end()) {
+                clb_sizes[blk_type]++;
             } else {
-                if (reg_fold_ && blk_type == 'r')
-                    continue;
                 if (dsp_blocks.find(blk_type) == dsp_blocks.end())
                     dsp_blocks[blk_type] = 0;
                 dsp_blocks[blk_type]++;
             }
         }
+        // assign the clb_size based on the maximum
+        uint32_t max_clb_size = 0;
+        for (const auto &iter : clb_sizes) {
+            if (iter.second > max_clb_size)
+                max_clb_size = iter.second;
+        }
+        box.clb_size = max_clb_size;
+
         // store it so that we can use it in the annealing phase
         box_dsp_blocks_[cluster_id] = dsp_blocks;
         // calculate the width
@@ -307,6 +324,18 @@ GlobalPlacer::collapse_netlist(::map<::string,
         throw std::runtime_error("error in condensing netlist");
 
     return {result, intra_cluster_count};
+}
+
+void GlobalPlacer::get_clb_types_() {
+    // this computes the other clb_types that co-exists with the primary
+    // clb types
+    // it also check if the layout setup is correct
+    auto blk_types = board_layout_.get_layer_types();
+    auto priority_major = board_layout_.get_priority_minor(clb_type_);
+    for (const auto &blk_type : blk_types) {
+        if (board_layout_.get_priority_major(blk_type) == priority_major)
+            clb_types_.insert(blk_type);
+    }
 }
 
 void GlobalPlacer::solve() {

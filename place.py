@@ -339,9 +339,6 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
     height, width = board_info["height"], board_info["width"]
     margin = board_info["margin"]
     clb_type = board_info["clb_type"]
-    disallowed_pos = [(margin, margin), (margin, margin + height),
-                      (margin + width, margin),
-                      (margin + width, margin + height)]
 
     for c_id in cluster_cells:
         cells = cluster_cells[c_id]
@@ -357,8 +354,7 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
         args = {"clusters": clusters[c_id], "cells": cells,
                 "new_netlist": new_netlist,
                 "blk_pos": blk_pos, "fold_reg": fold_reg,
-                "seed": seed, "clb_type": clb_type,
-                "disallowed_pos": disallowed_pos}
+                "seed": seed, "clb_type": clb_type}
         map_args.append(args)
     if not aws_config:
         return detailed_placement_thunder_wrapper(map_args)

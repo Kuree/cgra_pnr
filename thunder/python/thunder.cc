@@ -80,8 +80,19 @@ void init_pythunder(py::module &m) {
             .def(py::init<const std::map<char,
                                          std::vector<std::vector<bool>>> &>())
             .def(py::init<const std::vector<std::vector<char>> &>())
-            .def("add_layer", &Layout::add_layer)
-            .def("is_legal", &Layout::is_legal);
+            .def("add_layer",
+                 py::overload_cast<const Layer&>(&Layout::add_layer))
+            .def("add_layer",
+                 py::overload_cast<const Layer&,
+                                   uint32_t, uint32_t>(&Layout::add_layer))
+            .def_readwrite_static("DEFAULT_PRIORITY", &Layout::DEFAULT_PRIORITY)
+            .def("is_legal", &Layout::is_legal)
+            .def("get_blk_type", &Layout::get_blk_type)
+            .def("get_blk_types", &Layout::get_blk_types)
+            .def("get_layer", &Layout::get_layer)
+            .def("get_priority_major", &Layout::get_priority_major)
+            .def("get_priority_minor", &Layout::get_priority_minor)
+            .def("get_layer_types", &Layout::get_layer_types);
 }
 
 void init_detailed_placement(py::module &m) {

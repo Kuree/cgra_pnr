@@ -54,7 +54,13 @@ Layout::Layout(const std::vector<std::vector<char>> &layers) {
     }
 }
 
+uint32_t Layout::DEFAULT_PRIORITY = 20;
 void Layout::add_layer(const Layer &layer) {
+    add_layer(layer, Layout::DEFAULT_PRIORITY, Layout::DEFAULT_PRIORITY);
+}
+
+void Layout::add_layer(const Layer &layer, uint32_t priority_major,
+                       uint32_t priority_minor) {
     const char blk_type = layer.blk_type;
     if (layers_.find(blk_type) != layers_.end())
         throw ::runtime_error(std::string(1, blk_type) + " already exists");
@@ -69,6 +75,9 @@ void Layout::add_layer(const Layer &layer) {
         if (width_ != width || height_ != height)
             throw ::runtime_error("layer size doesn't match");
     }
+
+    layers_priority_major_.insert({blk_type, priority_major});
+    layers_priority_minor_.insert({blk_type, priority_minor});
 }
 
 bool Layout::is_legal(const std::string &blk_id, uint32_t x, uint32_t y) {
@@ -78,10 +87,45 @@ bool Layout::is_legal(const std::string &blk_id, uint32_t x, uint32_t y) {
 }
 
 char Layout::get_blk_type(uint32_t x, uint32_t y) const {
+    char blk = ' ';
+    uint32_t priority_major = 0;
+    uint32_t priority_minor = 0;
     for (const auto &iter: layers_) {
         auto const &[blk_type, layer] = iter;
-        if (layer[{x, y}])
-            return blk_type;
+        if (layer[{x, y}] &&
+            layers_priority_major_.at(blk_type) > priority_major &&
+            layers_priority_minor_.at(blk_type) > priority_minor) {
+            blk = blk_type;
+            priority_major = layers_priority_major_.at(blk_type);
+            priority_minor = layers_priority_minor_.at(blk_type);
+        }
     }
-    return ' ';
+    return blk;
+}
+
+std::vector<char> Layout::get_blk_types(uint32_t x, uint32_t y) const {
+    ::vector<char> results;
+    uint32_t priority_major = 0;
+    // first pass to find out the max priority
+    for (const auto &[blk_type, layer]: layers_) {
+        if (layer[{x, y}] &&
+            layers_priority_major_.at(blk_type) > priority_major) {
+            priority_major = layers_priority_major_.at(blk_type);
+        }
+    }
+    // second pass to find all blk types has the same priority major
+    for (const auto &[blk_type, layer]: layers_) {
+        if (layer[{x, y}] &&
+            layers_priority_major_.at(blk_type) == priority_major) {
+            results.emplace_back(blk_type);
+        }
+    }
+    return results;
+}
+
+std::set<char> Layout::get_layer_types() {
+    std::set<char> result;
+    for (auto const &iter: layers_)
+        result.insert(iter.first);
+    return result;
 }
