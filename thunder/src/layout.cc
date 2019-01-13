@@ -33,6 +33,27 @@ Layout::Layout(const std::map<char, std::vector<std::vector<bool>>> &layers) {
     }
 }
 
+Layout::Layout(const std::vector<std::vector<char>> &layers) {
+    auto height = static_cast<uint32_t>(layers.size());
+    auto width = static_cast<uint32_t>(layers[0].size());
+    // first pass to create the empty layers
+    for (uint32_t y = 0; y < height; y++) {
+        for (uint32_t x = 0; x < width; x++) {
+            auto const blk_type = layers[y][x];
+            if (layers_.find(blk_type) == layers_.end())
+                add_layer(Layer(blk_type, width, height));
+        }
+    }
+    // second pass to fill that layer in
+    for (uint32_t y = 0; y < height; y++) {
+        for (uint32_t x = 0; x < width; x++) {
+            auto const blk_type = layers[y][x];
+            auto &layer = layers_.at(blk_type);
+            layer.mark_available(x, y);
+        }
+    }
+}
+
 void Layout::add_layer(const Layer &layer) {
     const char blk_type = layer.blk_type;
     if (layers_.find(blk_type) != layers_.end())
