@@ -4,6 +4,7 @@
 #include "include/spline.h"
 #include "anneal.hh"
 #include "layout.hh"
+#include <unordered_set>
 
 
 struct ClusterBox {
@@ -79,6 +80,8 @@ private:
     std::pair<std::vector<std::vector<int>>, std::map<std::string, uint32_t>>
     collapse_netlist(std::map<std::string, std::vector<std::string>>);
 
+    void get_clb_types_();
+
     // SA
     void bound_box(ClusterBox &box);
 
@@ -95,6 +98,7 @@ private:
     std::map<std::string, std::map<char, int>> box_dsp_blocks_;
     std::map<std::string, uint32_t> intra_count_;
     randutils::random_generator<std::mt19937> global_rand_;
+    std::unordered_set<char> clb_types_;
 
     // helper values
     uint32_t reduced_width_ = 0;
