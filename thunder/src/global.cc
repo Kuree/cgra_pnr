@@ -30,7 +30,7 @@ void ClusterBox::assign(const ClusterBox &box) {
 GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
                            ::map<::string, ::vector<::string>> netlists,
                            std::map<std::string, std::pair<int, int>> fixed_pos,
-                           ::vector<::vector<char>> board_layout,
+                           const Layout &board_layout,
                            char clb_type,
                            bool reg_fold) :
                            clb_type_(clb_type),
@@ -38,7 +38,7 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
                            clusters_(::move(clusters)),
                            netlists_(),
                            fixed_pos_(::move(fixed_pos)),
-                           board_layout_(::move(board_layout)),
+                           board_layout_(board_layout),
                            reduced_board_layout_(),
                            boxes_(),
                            legal_spline_(),
@@ -72,19 +72,22 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
 }
 
 void GlobalPlacer::setup_reduced_layout() {
-    const int margin = 10;   // TODO: fix this
+    const uint32_t margin = 10;   // TODO: fix this
     std::vector<char> lane_types;
-    for (auto &blk_type : board_layout_[margin]) {
+    const auto layout_width = board_layout_.width();
+    const auto layout_height = board_layout_.height();
+
+    for (uint32_t x = 0; x < layout_width; x++) {
+        auto blk_type = board_layout_.get_blk_type(x, margin);
         lane_types.emplace_back(blk_type);
     }
     // create the new reduced_board and mapping between the new one and the old
     // one
 
-    for (uint32_t y = 0; y < board_layout_.size(); y++) {
+    for (uint32_t y = 0; y < layout_height; y++) {
         reduced_board_layout_.emplace_back(::vector<char>());
         uint32_t new_x = 0;
-        for (uint32_t x = clb_margin_;
-             x < board_layout_[y].size() - clb_margin_; x++) {
+        for (uint32_t x = clb_margin_; x < layout_width - clb_margin_; x++) {
             const char blk_type = lane_types[x];
             if (blk_type != clb_type_ && blk_type != ' ') {
                 // skip this one
@@ -751,13 +754,16 @@ GlobalPlacer::realize() {
     // compute overlapping
     ::map<int, double> overlap_stats;
     ::vector<::vector<bool>> bboard;
-    bboard.resize(board_layout_.size());
-    for (uint32_t i = 0; i < bboard.size(); i++) {
-        bboard[i].resize(board_layout_[i].size());
-        std::fill(bboard[i].begin(), bboard[i].end(), false);
-        for (uint32_t j = 0; j < bboard[i].size(); j++) {
-            if (board_layout_[i][j] != ' ' && board_layout_[i][j] != 'i')
-                bboard[i][j] = true;
+    auto width = board_layout_.width();
+    auto height = board_layout_.height();
+    bboard.resize(height);
+    for (uint32_t y = 0; y < height; y++) {
+        bboard[y].resize(width);
+        std::fill(bboard[y].begin(), bboard[y].end(), false);
+        for (uint32_t x = 0; x < width; x++) {
+            auto blk_type = board_layout_.get_blk_type(x, y);
+            if (blk_type != ' ' && blk_type != 'i' && blk_type != 'I')
+                bboard[y][x] = true;
         }
     }
 
@@ -807,14 +813,14 @@ GlobalPlacer::realize() {
             const int new_y = pos.y;
             clb_cells.insert(std::make_pair(new_x, new_y));
             bboard[new_y][new_x] = false;
-            if (board_layout_[new_y][new_x] != clb_type_) {
+            auto blk_type = board_layout_.get_blk_type(
+                    static_cast<uint32_t>(new_x), static_cast<uint32_t>(new_y));
+            if (blk_type != clb_type_) {
                 printf("new_y: %d new_x: %d %c\n", new_y, new_x,
-                       board_layout_[new_y][new_x]);
+                       blk_type);
                 printf("pos x: %d y: %d\n", pos.x, pos.y);
                 throw std::runtime_error("error in assign clb cells "
-                    "got cell type " + std::string(1,
-                     board_layout_[new_y][new_x])
-                     + " " + std::to_string(board_layout_[new_y][new_x]));
+                    "got cell type " + std::string(1, blk_type));
             }
         }
         result[boxes_[box_index].id][clb_type_] = clb_cells;
@@ -846,7 +852,7 @@ GlobalPlacer::realize() {
             // find exterior set
             int effort;
             for (effort = 0;
-                 effort < (int) board_layout_.size() / 2; effort++) {
+                 effort < (int) height / 2; effort++) {
                 if (needed <= 0)
                     break;
                 ::vector<::pair<int, int>> cells;
@@ -899,9 +905,10 @@ GlobalPlacer::realize() {
             const char blk_type = iter.first;
             ::vector<::pair<int, int>> cells;
             ::vector<uint32_t> blk_index;
-            for (int y = 0; y < (int)board_layout_.size(); y++) {
-                for (int x = 0; x < (int)board_layout_[y].size(); x++) {
-                    if (bboard[y][x] && board_layout_[y][x] == blk_type) {
+            for (uint32_t y = 0; y < height; y++) {
+                for (uint32_t x = 0; x < width; x++) {
+                    auto b_type = board_layout_.get_blk_type(x, y);
+                    if (bboard[y][x] && b_type == blk_type) {
                         cells.emplace_back(std::make_pair(x, y));
                         blk_index.emplace_back(blk_index.size());
                     }
@@ -1199,7 +1206,10 @@ void GlobalPlacer
             if (x < 0 || y < 0 || x >= (int)bboard[0].size()
                 || y >= (int)bboard.size())
                 continue;
-            if (bboard[y][x] and board_layout_[y][x] == clb_type_)
+            auto blk_type =
+                    board_layout_.get_blk_type(static_cast<uint32_t>(x),
+                                               static_cast<uint32_t>(y));
+            if (bboard[y][x] and blk_type == clb_type_)
                 empty_cells.emplace_back(std::make_pair(x, y));
         }
     }

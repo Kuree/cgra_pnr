@@ -3,6 +3,7 @@
 
 #include "include/spline.h"
 #include "anneal.hh"
+#include "layout.hh"
 
 
 struct ClusterBox {
@@ -37,7 +38,7 @@ public:
     GlobalPlacer(std::map<std::string, std::set<std::string>> clusters,
                  std::map<std::string, std::vector<std::string>> netlists,
                  std::map<std::string, std::pair<int, int>> fixed_pos,
-                 std::vector<std::vector<char>> board_layout,
+                 const Layout &board_layout,
                  char clb_type,
                  bool reg_fold);
 
@@ -86,7 +87,7 @@ private:
     std::map<std::string, std::set<std::string>> clusters_;
     std::vector<std::vector<int>> netlists_;
     std::map<std::string, std::pair<int, int>> fixed_pos_;
-    std::vector<std::vector<char>> board_layout_;
+    Layout board_layout_;
     std::vector<std::vector<char>> reduced_board_layout_;
     std::vector<ClusterBox> boxes_;
     std::vector<std::map<char, tk::spline>> legal_spline_;
