@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread \
 set(HEADER_LIBRARY src/include/randutils.hpp
                    src/include/tqdm.h
                    src/include/cxxpool.h
-                   src/include/spline.h)
+                   src/include/spline.h src/layout.cc src/layout.hh)
 
 add_library(thunder src/anneal.cc src/anneal.hh src/util.cc
             src/util.hh src/detailed.cc src/detailed.hh
