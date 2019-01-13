@@ -1,6 +1,6 @@
-#include "src/util.hh"
-#include "src/detailed.hh"
-#include "src/multi_place.hh"
+#include "../src/util.hh"
+#include "../src/detailed.hh"
+#include "../src/multi_place.hh"
 #include <iostream>
 
 #define SINGLE_THREAD 1
