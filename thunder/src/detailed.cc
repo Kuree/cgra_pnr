@@ -19,6 +19,7 @@ using std::cerr;
 using std::endl;
 using std::set;
 
+char DetailedPlacer::REG_BLK_TYPE = 'r';
 
 bool operator< (const DetailedMove &m1, const DetailedMove &m2) {
     return m1.blk_id < m2.blk_id;
@@ -51,7 +52,7 @@ DetailedPlacer
     this->init_place_regular(cluster_blocks, blk_id_dict, available_pos);
 
     // place registers
-    this->init_place_reg(cluster_blocks, blk_id_dict);
+    this->init_place_reg(cluster_blocks, available_pos, blk_id_dict);
 
     // compute reg no pos
     this->compute_reg_no_pos(cluster_blocks, netlist, blk_id_dict);
@@ -199,32 +200,6 @@ void DetailedPlacer
         uint64_t end_index = instances_.size() - 1;
         instance_type_index_[blk_type] = {start_index, end_index};
     }
-    // and the registers
-    if (fold_reg_) {
-        uint64_t start_index = instances_.size();
-        set<Point> working_set;
-        // reg can float everywhere
-        for (const auto &iter2 : available_pos[clb_type_])
-            working_set.insert(Point(iter2));
-        for (const auto &pos_iter : init_placement) {
-            if (pos_iter.first[0] != 'r') {
-                continue;
-            }
-            auto pos = Point(pos_iter.second);
-            Instance ins(pos_iter.first, pos, (int) instances_.size());
-            instances_.emplace_back(ins);
-            working_set.erase(pos);
-            instance_ids_.emplace_back(ins.id);
-            blk_id_dict[ins.name] = ins.id;
-        }
-        // fill in dummies
-        for (auto const &pos : working_set) {
-            Instance ins(string(1, 'r'), pos, (int) instances_.size());
-            instances_.emplace_back(ins);
-        }
-        uint64_t end_index = instances_.size() - 1;
-        instance_type_index_['r'] = {start_index, end_index};
-    }
 }
 
 
@@ -334,8 +309,6 @@ void DetailedPlacer
     // if so, create dummy instances to fill out the board
     for (const auto &blk_name: cluster_blocks) {
         char blk_type = blk_name[0];
-        if (fold_reg_ && blk_type == 'r')
-            continue;
         if (blk_counts.find(blk_type) == blk_counts.end())
             blk_counts.insert({blk_type, {}});
         blk_counts[blk_type].emplace_back(blk_name);
@@ -344,8 +317,6 @@ void DetailedPlacer
     // compute empty spaces
     for (const auto &iter : blk_counts) {
         char blk_type = iter.first;
-        if (fold_reg_ && blk_type == 'r')
-            continue;
         int64_t empty_space = available_pos[blk_type].size() -
                               iter.second.size();
         if (empty_space < 0)
@@ -359,20 +330,23 @@ void DetailedPlacer
     }
 }
 
-void DetailedPlacer::init_place_reg(const ::vector<::string> &cluster_blocks,
-                                    ::map<::string, int> &blk_id_dict) {
+void
+DetailedPlacer::init_place_reg(const ::vector<::string> &cluster_blocks,
+                               ::map<char,
+                                     ::vector<::pair<int, int>>> &available_pos,
+                               ::map<::string, int> &blk_id_dict) {
     if (fold_reg_) {
         uint64_t start_index = instances_.size();
         ::vector<Point> positions;
-        for (const auto &ins : instances_) {
-            if (ins.name[0] == clb_type_)
-                positions.emplace_back(ins.pos);
+        auto reg_positions = available_pos[REG_BLK_TYPE];
+        for (const auto &pos : reg_positions) {
+            positions.emplace_back(pos);
         }
 
         // initial placement for reg fold
         uint32_t reg_count = 0;
         for (const auto &instance_name : cluster_blocks) {
-            if (instance_name[0] != 'r')
+            if (instance_name[0] != REG_BLK_TYPE)
                 continue;
             const auto &pos = positions[reg_count++];
             Instance ins(instance_name, pos, (int) instances_.size());
@@ -399,7 +373,7 @@ void DetailedPlacer::legalize_reg() {
 
     // get all the available positions
     for (auto const &ins : instances_) {
-        if (ins.name[0] != 'r')
+        if (ins.name[0] != REG_BLK_TYPE)
             continue;
         available_pos.insert(ins.pos);
         working_set.insert(ins.id);
@@ -472,15 +446,15 @@ void DetailedPlacer::compute_reg_no_pos(
                     if (reg_no_pos_.find(blk_id) == reg_no_pos_.end()) {
                         reg_no_pos_.insert({blk_id, {}});
                     }
-                    if (blk[0] == 'r') {
+                    if (blk[0] == REG_BLK_TYPE) {
                         for (auto const &bb : net) {
-                            if (bb[0] != 'r')
+                            if (bb[0] != REG_BLK_TYPE)
                                 reg_no_pos_[blk_id].insert(blk_id_dict[bb]);
                         }
                     } else {
                         // only put registers there
                         for (auto const &bb : net) {
-                            if (bb[0] == 'r')
+                            if (bb[0] == REG_BLK_TYPE)
                                 reg_no_pos_[blk_id].insert(blk_id_dict[bb]);
                         }
                     }

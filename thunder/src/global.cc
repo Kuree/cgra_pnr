@@ -31,10 +31,8 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
                            ::map<::string, ::vector<::string>> netlists,
                            std::map<std::string, std::pair<int, int>> fixed_pos,
                            const Layout &board_layout,
-                           char clb_type,
-                           bool reg_fold) :
+                           char clb_type) :
                            clb_type_(clb_type),
-                           reg_fold_(reg_fold),
                            clusters_(::move(clusters)),
                            netlists_(),
                            fixed_pos_(::move(fixed_pos)),
@@ -186,9 +184,9 @@ void GlobalPlacer::create_boxes() {
         }
         // assign the clb_size based on the maximum
         uint32_t max_clb_size = 0;
-        for (const auto &iter : clb_sizes) {
-            if (iter.second > max_clb_size)
-                max_clb_size = iter.second;
+        for (const auto &iter_clb : clb_sizes) {
+            if (iter_clb.second > max_clb_size)
+                max_clb_size = iter_clb.second;
         }
         box.clb_size = max_clb_size;
 
@@ -791,7 +789,7 @@ GlobalPlacer::realize() {
         std::fill(bboard[y].begin(), bboard[y].end(), false);
         for (uint32_t x = 0; x < width; x++) {
             auto blk_type = board_layout_.get_blk_type(x, y);
-            if (blk_type != ' ' && blk_type != 'i' && blk_type != 'I')
+            if (blk_type != EMPTY_BLK && IO_BLK.find(blk_type) == IO_BLK.end())
                 bboard[y][x] = true;
         }
     }
@@ -852,7 +850,11 @@ GlobalPlacer::realize() {
                     "got cell type " + std::string(1, blk_type));
             }
         }
-        result[boxes_[box_index].id][clb_type_] = clb_cells;
+        for (auto const &clb_type : clb_types_) {
+            auto cells = ::set<::pair<int, int>>(clb_cells.begin(),
+                                                 clb_cells.end());
+            result[boxes_[box_index].id][clb_type] = cells;
+        }
     }
     // fill in the one based one which one needs most
     ::vector<int> cluster_ids;
@@ -903,7 +905,9 @@ GlobalPlacer::realize() {
                 for (uint32_t i = 0; i < cells.size(); i++) {
                     uint32_t ii = cell_index[i];
                     auto[x, y] = cells[ii];
-                    result[boxes_[index].id][clb_type_].insert(cells[ii]);
+                    for (auto const &clb_type : clb_types_) {
+                        result[boxes_[index].id][clb_type].insert(cells[ii]);
+                    }
                     bboard[y][x] = false;
                     needed--;
                     if (needed <= 0)
@@ -914,16 +918,13 @@ GlobalPlacer::realize() {
                  throw std::runtime_error("cannot find enough space "
                                           "de-overlapping");
         }
-
         // assign special blocks
         ::map<char, int> dsp_blocks;
         for (auto const &blk_name : clusters_[boxes_[index].id]) {
             char blk_type = blk_name[0];
-            if (blk_type == clb_type_) {
+            if (clb_types_.find(blk_type) != clb_types_.end()) {
                 continue;
             } else {
-                if (reg_fold_ && blk_type == 'r')
-                    continue;
                 if (dsp_blocks.find(blk_type) == dsp_blocks.end())
                     dsp_blocks[blk_type] = 0;
                 dsp_blocks[blk_type]++;

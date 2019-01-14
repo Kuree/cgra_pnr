@@ -40,8 +40,7 @@ public:
                  std::map<std::string, std::vector<std::string>> netlists,
                  std::map<std::string, std::pair<int, int>> fixed_pos,
                  const Layout &board_layout,
-                 char clb_type,
-                 bool reg_fold);
+                 char clb_type);
 
     void solve();
     void anneal() override;
@@ -49,6 +48,8 @@ public:
     realize();
 
     double anneal_param_factor = 1.0;
+    char EMPTY_BLK = ' ';
+    std::set<char> IO_BLK = {'i', 'I'};
 
 protected:
     void move() override;
@@ -86,7 +87,6 @@ private:
     void bound_box(ClusterBox &box);
 
     char clb_type_;
-    bool reg_fold_;
     std::map<std::string, std::set<std::string>> clusters_;
     std::vector<std::vector<int>> netlists_;
     std::map<std::string, std::pair<int, int>> fixed_pos_;

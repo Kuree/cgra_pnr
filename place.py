@@ -88,14 +88,7 @@ def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
     board_layout = board_meta[0]
     board_info = board_meta[-1]
     clb_type = board_info["clb_type"]
-    available_pos = {}
-    for y in range(len(board_layout)):
-        for x in range(len(board_layout[y])):
-            blk_type = board_layout[y][x]
-            if blk_type is not None:
-                if blk_type not in available_pos:
-                    available_pos[blk_type] = []
-                available_pos[blk_type].append((x, y))
+    available_pos = board_layout.produce_available_pos()
     global_refine = pythunder.DetailedPlacer(pre_placement,
                                              netlists,
                                              available_pos,
@@ -220,6 +213,8 @@ def main():
                              board_meta)
 
     # common routine
+    # produce layout structure
+    board_meta = [get_layout(board_meta), board_meta[-1]]
     centroids, cluster_cells, clusters = perform_global_placement(
         fixed_blk_pos, netlists,
         board_meta, fold_reg=fold_reg,
@@ -248,26 +243,9 @@ def main():
         visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe)
 
 
-def perform_global_placement(fixed_blk_pos, netlists,
-                             board_meta, fold_reg, seed,
-                             fpga_place=False, vis=True):
-    from visualize import visualize_clustering_cgra
-    from graph import partition_netlist
-    # simple heuristics to calculate the clusters
-    clusters = partition_netlist(netlists)
-
-    new_clusters = {}
-    for c_id in clusters:
-        new_id = "x" + str(c_id)
-        new_clusters[new_id] = set()
-        for blk in clusters[c_id]:
-            # make sure that fixed blocks are not in the clusters
-            if blk not in fixed_blk_pos:
-                new_clusters[new_id].add(blk)
-
-    # prepare for the input
-    new_layout = []
+def get_layout(board_meta):
     board_layout = board_meta[0]
+    new_layout = []
     for y in range(len(board_layout)):
         row = []
         for x in range(len(board_layout[y])):
@@ -277,15 +255,48 @@ def perform_global_placement(fixed_blk_pos, netlists,
                 row.append(board_layout[y][x])
         new_layout.append(row)
 
+    default_priority = pythunder.Layout.DEFAULT_PRIORITY
     # not the best practice to use the layers here
     # but this requires minimum amount of work to convert the old
     # code to the new codebase
+    # FIXME: change the CGRA_INFO parser to remove the changes
     layout = pythunder.Layout(new_layout)
+    # add a reg layer to the layout, the same as PE
+    clb_layer = layout.get_layer('p')
+    reg_layer = pythunder.Layer(clb_layer)
+    reg_layer.blk_type = 'r'
+    layout.add_layer(reg_layer, default_priority, 0)
+    # set different layer priorities
+    layout.set_priority_major(' ', 0)
+    layout.set_priority_major('i', 1)
+    # memory is a DSP-type, so lower priority
+    layout.set_priority_major('m', default_priority - 1)
+    return layout
+
+def perform_global_placement(fixed_blk_pos, netlists,
+                             board_meta, fold_reg, seed,
+                             fpga_place=False, vis=True):
+    from visualize import visualize_clustering_cgra
+    from graph import partition_netlist
+    # simple heuristics to calculate the clusters
+    clusters = partition_netlist(netlists)
+
+    # prepare for the input
+    new_clusters = {}
+    for c_id in clusters:
+        new_id = "x" + str(c_id)
+        new_clusters[new_id] = set()
+        for blk in clusters[c_id]:
+            # make sure that fixed blocks are not in the clusters
+            if blk not in fixed_blk_pos:
+                new_clusters[new_id].add(blk)
+
+    layout = board_meta[0]
 
     board_info = board_meta[-1]
     clb_type = board_info["clb_type"]
     gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
-                                layout, clb_type, fold_reg)
+                                layout, clb_type)
 
     gp.anneal_param_factor = len(new_clusters)
     gp.solve()
@@ -332,10 +343,6 @@ def perform_detailed_placement(centroids, cluster_cells, clusters,
     board_pos = fixed_blk_pos.copy()
     map_args = []
 
-    # NOTE:
-    # This is CGRA only. there are corner cases where the reg will put
-    # into one of the corner and the main net routes through all the available
-    # channels. Hence it becomes not routable any more
     height, width = board_info["height"], board_info["width"]
     margin = board_info["margin"]
     clb_type = board_info["clb_type"]

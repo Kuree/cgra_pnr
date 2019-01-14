@@ -33,6 +33,8 @@ public:
     void refine(int num_iter, double threshold,
                 bool print_improvement) override;
 
+    static char REG_BLK_TYPE;
+
 protected:
     void move() override;
     void commit_changes() override;
@@ -65,6 +67,9 @@ private:
                                      std::vector<std::pair<int, int>>>
                                      &available_pos);
     void init_place_reg(const std::vector<std::string> &cluster_blocks,
+                        std::map<char,
+                                std::vector<std::pair<int, int>>>
+                        &available_pos,
                         std::map<std::string, int> &blk_id_dict);
     // automatically set the fold reg
     // will speed up a lot if there is no registers
@@ -107,6 +112,7 @@ private:
     void index_loc() ;
 
     uint32_t estimate_num_swaps() const;
+
 };
 
 
