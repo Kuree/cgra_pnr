@@ -7,6 +7,15 @@ Layer::Layer(char blk_type, uint32_t width,
              uint32_t height) : blk_type(blk_type),
                                 layout_(height, ::vector<bool>(width, false)) {}
 
+Layer::Layer(const Layer &layer) {
+    auto height = layer.layout_.size();
+    blk_type = layer.blk_type;
+    layout_.reserve(height);
+    for (auto const &row: layer.layout_) {
+        auto vec = std::vector<bool>(row.begin(), row.end());
+        layout_.emplace_back(vec);
+    }
+}
 
 bool Layer::operator[](const std::pair<uint32_t, uint32_t> &pos) const {
     auto [x, y] = pos;
@@ -123,9 +132,36 @@ std::vector<char> Layout::get_blk_types(uint32_t x, uint32_t y) const {
     return results;
 }
 
+void Layout::set_priority_major(char blk_type, uint32_t priority) {
+    if (layers_priority_major_.find(blk_type) == layers_priority_major_.end())
+        throw std::runtime_error(std::string(1, blk_type) + " not found");
+    layers_priority_major_[blk_type] = priority;
+}
+
+void Layout::set_priority_minor(char blk_type, uint32_t priority) {
+    if (layers_priority_minor_.find(blk_type) == layers_priority_minor_.end())
+        throw std::runtime_error(std::string(1, blk_type) + " not found");
+    layers_priority_minor_[blk_type] = priority;
+}
+
 std::set<char> Layout::get_layer_types() {
     std::set<char> result;
     for (auto const &iter: layers_)
         result.insert(iter.first);
+    return result;
+}
+
+std::map<char, std::vector<std::pair<uint32_t, uint32_t>>>
+Layout::produce_available_pos() {
+    std::map<char, std::vector<std::pair<uint32_t, uint32_t>>> result;
+    for (uint32_t x = 0; x < width_; x++) {
+        for (uint32_t y = 0; y < height_; y++) {
+            auto blks = get_blk_types(x, y);
+            for (auto const &blk : blks) {
+                auto &lst = result[blk];
+                lst.emplace_back(std::make_pair(x, y));
+            }
+        }
+    }
     return result;
 }

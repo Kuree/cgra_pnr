@@ -12,6 +12,7 @@ public:
     uint32_t id = 0;
 
     Layer(char blk_type, uint32_t width, uint32_t height);
+    Layer(const Layer &layer);
     bool operator[](const std::pair<uint32_t, uint32_t> &pos) const;
     std::vector<bool> operator[](uint32_t row) const
     { return std::vector<bool>(layout_[row].begin(), layout_[row].end()); }
@@ -59,7 +60,11 @@ public:
     { return layers_priority_major_.at(blk_type); }
     uint32_t get_priority_minor(char blk_type)
     { return layers_priority_minor_.at(blk_type); }
+    void set_priority_major(char blk_type, uint32_t priority);
+    void set_priority_minor(char blk_type, uint32_t priority);
     std::set<char> get_layer_types();
+    std::map<char, std::vector<std::pair<uint32_t, uint32_t>>>
+    produce_available_pos();
 
 private:
     // NOTE:

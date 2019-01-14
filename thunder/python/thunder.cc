@@ -57,8 +57,7 @@ void init_pythunder(py::module &m) {
                     std::map<std::string, std::vector<std::string>>,
                     std::map<std::string, std::pair<int, int>>,
                     const Layout&,
-                    char,
-                    bool>())
+                    char>())
             .def("solve", &GlobalPlacer::solve)
             .def("realize", &GlobalPlacer::realize)
             .def("anneal", &SimAnneal::anneal)
@@ -68,6 +67,8 @@ void init_pythunder(py::module &m) {
 
     py::class_<Layer>(m, "Layer")
             .def(py::init<char, uint32_t, uint32_t>())
+            .def(py::init<const Layer &>())
+            .def_readwrite("blk_type", &Layer::blk_type)
             .def("mark_available", &Layer::mark_available)
             .def("mark_unavailable", &Layer::mark_unavailable)
             .def_readwrite("blk_type", &Layer::blk_type)
@@ -92,7 +93,10 @@ void init_pythunder(py::module &m) {
             .def("get_layer", &Layout::get_layer)
             .def("get_priority_major", &Layout::get_priority_major)
             .def("get_priority_minor", &Layout::get_priority_minor)
-            .def("get_layer_types", &Layout::get_layer_types);
+            .def("get_layer_types", &Layout::get_layer_types)
+            .def("set_priority_major", &Layout::set_priority_major)
+            .def("set_priority_minor", &Layout::set_priority_minor)
+            .def("produce_available_pos", &Layout::produce_available_pos);
 }
 
 void init_detailed_placement(py::module &m) {
