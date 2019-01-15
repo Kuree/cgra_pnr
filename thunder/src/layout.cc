@@ -146,7 +146,7 @@ void Layout::set_priority_minor(char blk_type, uint32_t priority) {
     layers_priority_minor_[blk_type] = priority;
 }
 
-std::set<char> Layout::get_layer_types() {
+std::set<char> Layout::get_layer_types() const {
     std::set<char> result;
     for (auto const &iter: layers_)
         result.insert(iter.first);
@@ -166,4 +166,36 @@ Layout::produce_available_pos() {
         }
     }
     return result;
+}
+
+uint32_t Layout::get_margin() {
+    // we assume that it is symmetrical
+    auto clb_type = get_clb_type();
+    uint32_t margin;
+    uint64_t size = width_ > height_? height_ : width_;
+    for (margin = 0; margin < size; margin++) {
+        if (get_blk_type(margin, margin) == clb_type)
+            break;
+    }
+    return margin;
+}
+
+char Layout::get_clb_type() {
+    // the blk_type that has highest priority
+    uint32_t major = 0;
+    uint32_t minor = 0;
+    char blk = ' ';
+    for (uint32_t x = 0; x < width_; x++) {
+        for (uint32_t y = 0; y < height_; y++) {
+            auto blk_type = get_blk_type(x, y);
+            auto blk_major = get_priority_major(blk_type);
+            auto blk_minor = get_priority_minor(blk_type);
+            if (blk_major >= major && blk_minor > minor) {
+                blk = blk_type;
+                major = blk_major;
+                minor = blk_minor;
+            }
+        }
+    }
+    return blk;
 }

@@ -7,6 +7,7 @@
 #include "../src/global.hh"
 #include "../src/multi_place.hh"
 #include "../src/layout.hh"
+#include "../src/io.hh"
 
 namespace py = pybind11;
 using std::move;
@@ -15,6 +16,14 @@ using std::map;
 using std::string;
 using std::pair;
 using std::set;
+
+
+void init_io(py::module &m) {
+    auto io_m = m.def_submodule("io");
+
+    io_m.def("load_layout", &load_layout)
+        .def("dump_layout", &dump_layout);
+}
 
 
 void init_pythunder(py::module &m) {
@@ -96,7 +105,9 @@ void init_pythunder(py::module &m) {
             .def("get_layer_types", &Layout::get_layer_types)
             .def("set_priority_major", &Layout::set_priority_major)
             .def("set_priority_minor", &Layout::set_priority_minor)
-            .def("produce_available_pos", &Layout::produce_available_pos);
+            .def("produce_available_pos", &Layout::produce_available_pos)
+            .def("get_clb_type", &Layout::get_clb_type)
+            .def("get_margin", &Layout::get_margin);
 }
 
 void init_detailed_placement(py::module &m) {
@@ -107,4 +118,5 @@ PYBIND11_MODULE(pythunder, m) {
     m.doc() = "pythunder";
     init_pythunder(m);
     init_detailed_placement(m);
+    init_io(m);
 }

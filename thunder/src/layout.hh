@@ -56,15 +56,20 @@ public:
 
     static uint32_t DEFAULT_PRIORITY;
 
-    uint32_t get_priority_major(char blk_type)
+    uint32_t get_priority_major(char blk_type) const
     { return layers_priority_major_.at(blk_type); }
-    uint32_t get_priority_minor(char blk_type)
+    uint32_t get_priority_minor(char blk_type) const
     { return layers_priority_minor_.at(blk_type); }
     void set_priority_major(char blk_type, uint32_t priority);
     void set_priority_minor(char blk_type, uint32_t priority);
-    std::set<char> get_layer_types();
+    std::set<char> get_layer_types() const;
     std::map<char, std::vector<std::pair<uint32_t, uint32_t>>>
     produce_available_pos();
+
+    uint32_t get_margin();
+    char get_clb_type();
+
+    std::pair<uint32_t, uint32_t> get_size() const { return {width_, height_}; }
 
 private:
     // NOTE:
