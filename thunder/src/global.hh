@@ -104,7 +104,7 @@ private:
     uint32_t reduced_width_ = 0;
     uint32_t reduced_height_ = 0;
     double aspect_ratio_ = 0;
-    std::map<char, std::vector<double>> hidden_columns;
+    std::map<char, std::set<double>> hidden_columns;
     std::vector<double> gaussian_table_;
     double gaussian_sigma_2_ = 1;
     void compute_gaussian_table();
