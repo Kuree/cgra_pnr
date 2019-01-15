@@ -42,10 +42,10 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
                            legal_spline_(),
                            column_mapping_(),
                            hidden_columns() {
-    // first compute the reduced board_layout
-    setup_reduced_layout();
     // determine the available clb_types based on board_layout
     get_clb_types_();
+    // compute the reduced board_layout
+    setup_reduced_layout();
     // create fixed boxes
     create_fixed_boxes();
     // set up the boxes
@@ -73,32 +73,29 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
 }
 
 void GlobalPlacer::setup_reduced_layout() {
-    const uint32_t margin = 10;   // TODO: fix this
     std::vector<char> lane_types;
     const auto layout_width = board_layout_.width();
     const auto layout_height = board_layout_.height();
 
-    for (uint32_t x = 0; x < layout_width; x++) {
-        auto blk_type = board_layout_.get_blk_type(x, margin);
-        lane_types.emplace_back(blk_type);
-    }
     // create the new reduced_board and mapping between the new one and the old
     // one
-    printf("%ld %ld\n", layout_width, layout_height);
-    for (uint32_t y = 0; y < layout_height; y++) {
+    for (uint32_t y = clb_margin_; y < layout_height - clb_margin_; y++) {
         reduced_board_layout_.emplace_back(::vector<char>());
         uint32_t new_x = 0;
         for (uint32_t x = clb_margin_; x < layout_width - clb_margin_; x++) {
-            const char blk_type = lane_types[x];
-            if (blk_type != clb_type_ && blk_type != ' ') {
+            auto blk_type = board_layout_.get_blk_type(x, y);
+            // if it's not the clb types, then we hide them
+            if (clb_types_.find(blk_type) == clb_types_.end() &&
+                blk_type != EMPTY_BLK) {
                 // skip this one
-                if (hidden_columns.find(blk_type) != hidden_columns.end()) {
+                if (hidden_columns.find(blk_type) == hidden_columns.end()) {
                     hidden_columns[blk_type] = {};
                 }
-                hidden_columns[blk_type].emplace_back(new_x + 0.5);
+                hidden_columns[blk_type].insert(new_x + 0.5);
             } else {
-                assert (new_x == reduced_board_layout_[y].size());
-                reduced_board_layout_[y].emplace_back(blk_type);
+                auto new_y = y - clb_margin_;
+                assert (new_x == reduced_board_layout_[new_y].size());
+                reduced_board_layout_[new_y].emplace_back(blk_type);
                 if (column_mapping_.find(new_x) == column_mapping_.end()) {
                     column_mapping_[new_x] = x;
                 } else {
@@ -110,18 +107,13 @@ void GlobalPlacer::setup_reduced_layout() {
             }
         }
     }
+
     // sanity check
-    /*
     for (auto const &y : reduced_board_layout_) {
-        if (y.size() != reduced_board_layout_[margin].size())
+        if (y.size() != reduced_board_layout_[layout_height / 2].size())
             throw std::runtime_error("failed layout check at " +
                                      std::to_string(y.size()));
-        else
-            for (const auto &t : y)
-                printf("%c", t);
-        printf("\n");
     }
-    */
 
     // set helper values
     reduced_height_ = (uint32_t)reduced_board_layout_.size();
@@ -169,8 +161,9 @@ void GlobalPlacer::create_boxes() {
         // factor
         std::unordered_map<char, uint32_t> clb_sizes;
         // initialize it
-        for (auto const &blk_type : clb_types_)
+        for (auto const &blk_type : clb_types_) {
             clb_sizes.insert({blk_type, 0});
+        }
 
         for (auto const &blk_name : iter.second) {
             char blk_type = blk_name[0];
@@ -189,7 +182,6 @@ void GlobalPlacer::create_boxes() {
                 max_clb_size = iter_clb.second;
         }
         box.clb_size = max_clb_size;
-
         // store it so that we can use it in the annealing phase
         box_dsp_blocks_[cluster_id] = dsp_blocks;
         // calculate the width
@@ -204,7 +196,6 @@ void GlobalPlacer::create_boxes() {
             auto height = box.height;
             auto width = box.width;
             const char blk_type = iter_dsp.first;
-
             ::vector<double> cost;
             ::vector<double> x_data;
             auto dsp_columns = hidden_columns[blk_type];
@@ -329,7 +320,7 @@ void GlobalPlacer::get_clb_types_() {
     // clb types
     // it also check if the layout setup is correct
     auto blk_types = board_layout_.get_layer_types();
-    auto priority_major = board_layout_.get_priority_minor(clb_type_);
+    auto priority_major = board_layout_.get_priority_major(clb_type_);
     for (const auto &blk_type : blk_types) {
         if (board_layout_.get_priority_major(blk_type) == priority_major)
             clb_types_.insert(blk_type);

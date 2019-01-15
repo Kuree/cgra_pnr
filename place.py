@@ -266,12 +266,16 @@ def get_layout(board_meta):
     reg_layer = pythunder.Layer(clb_layer)
     reg_layer.blk_type = 'r'
     layout.add_layer(reg_layer, default_priority, 0)
+    # bit_layer = pythunder.Layer(clb_layer)
+    # bit_layer.blk_type = "B"
+    # layout.add_layer(bit_layer, default_priority, 1)
     # set different layer priorities
     layout.set_priority_major(' ', 0)
     layout.set_priority_major('i', 1)
     # memory is a DSP-type, so lower priority
     layout.set_priority_major('m', default_priority - 1)
     return layout
+
 
 def perform_global_placement(fixed_blk_pos, netlists,
                              board_meta, fold_reg, seed,

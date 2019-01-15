@@ -101,13 +101,15 @@ char Layout::get_blk_type(uint32_t x, uint32_t y) const {
     uint32_t priority_minor = 0;
     for (const auto &iter: layers_) {
         auto const &[blk_type, layer] = iter;
+
         if (layer[{x, y}] &&
-            layers_priority_major_.at(blk_type) > priority_major &&
+            layers_priority_major_.at(blk_type) >= priority_major &&
             layers_priority_minor_.at(blk_type) > priority_minor) {
             blk = blk_type;
             priority_major = layers_priority_major_.at(blk_type);
             priority_minor = layers_priority_minor_.at(blk_type);
         }
+
     }
     return blk;
 }
