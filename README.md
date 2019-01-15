@@ -6,21 +6,32 @@ Generic place and route tool for CGRA.
 Because the C++ implementation, exposed to Python via `pybind11`, uses lots
 of C++14/17 features, a modern C++ compiler is required.
 + `g++` 7.0 and above
-+ `gcc` 7.0 and above.
-+ `cmake` 3.5 and above.
++ `cmake` 3.9 and above.
 + `Python` 2.7+/3.6+
+
+It also requires `libxml2-dev` to be installed. On Ubuntu-based distros, simply do
+```
+sudo apt-get install libxml2-dev
+```
+
 ### Install
 ```
-$ make
+$ git submodule update --init --recursive
 $ pip install thunder/
+$ pip install cyclone/
 $ pip install -r requirements.txt
 ```
-#### Use Thunder in other projects
-The core library, `thunder`, can be used outside this repo. Simply do
+#### Use CGRA PnR in other projects
+The placement engine, `thunder`, can be used outside this repo. Simply do
 ```
 pip install -e git+https://github.com/Kuree/cgra_pnr#egg=pkg\&subdirectory=thunder
 ```
 Usage of this library can be found in `place.py`.
+
+The routing engine, `cyclone`, can also be used outside this repo. Simply do
+```
+pip install -e git+https://github.com/Kuree/cgra_pnr#egg=pkg\&subdirectory=cyclone
+```
 
 ### Usage
 ```
