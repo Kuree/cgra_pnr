@@ -108,9 +108,11 @@ def compute_total_wire(routing_result):
 
 def compute_area_usage(placement, board_layout):
     result = {}
-    for y in range(len(board_layout)):
-        for x in range(len(board_layout[0])):
-            blk_type = board_layout[y][x]
+    height = board_layout.height()
+    width = board_layout.width()
+    for y in range(height):
+        for x in range(width):
+            blk_type = board_layout.get_blk_type(x, y)
             if blk_type is None:
                 continue
             if blk_type not in result:
@@ -122,13 +124,13 @@ def compute_area_usage(placement, board_layout):
         if pos in pos_set:
             continue
         x, y = pos
-        blk_type = board_layout[y][x]
+        blk_type = board_layout.get_blk_type(x, y)
         result[blk_type][0] += 1
         pos_set.add(pos)
     return result
 
 
-def compute_routing_usage(routing_result, routing_resource, board_layout):
+def compute_routing_usage(routing_result, routing_resource):
     route_resource = {}
     for pos in routing_resource:
         route_resource[pos] = routing_resource[pos]["route_resource"]

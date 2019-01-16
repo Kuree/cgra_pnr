@@ -55,7 +55,7 @@ def place_special_blocks(board, blks, board_pos, netlists,
     io_mapping = {}
     for net_id in netlists:
         for blk_id, port in netlists[net_id]:
-            if blk_id[0] == "i":
+            if blk_id[0] == "i" or blk_id[0] == "I":
                 if port == "in" or port == "inb":     # this is an output port
                     io_mapping[blk_id] = False
                 elif port == "out" or port == "outb":
@@ -303,7 +303,7 @@ def generate_io(id_to_name, io16_tile, io_pad_bit, io_pad_name, placement,
     io_strings = []
     io_pad_info = {}
     for blk_id in id_to_name:
-        if blk_id[0] == "i":
+        if blk_id[0] == "i" or blk_id[0] == "I":
             pos = placement[blk_id]
             pad_name = io_pad_name[pos]
             if "io1_" in id_to_name[blk_id]:
