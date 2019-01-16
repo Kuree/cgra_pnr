@@ -12,7 +12,6 @@ addons:
       - ubuntu-toolchain-r-test
     packages:
       - make
-      - gcc-7
       - g++-7
       - realpath
       - libxml2-dev
