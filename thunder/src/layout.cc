@@ -1,3 +1,4 @@
+#include <sstream>
 #include "layout.hh"
 
 using std::vector;
@@ -15,6 +16,18 @@ Layer::Layer(const Layer &layer) {
         auto vec = std::vector<bool>(row.begin(), row.end());
         layout_.emplace_back(vec);
     }
+}
+
+std::vector<std::pair<uint32_t, uint32_t>> Layer::produce_available_pos() {
+    ::vector<std::pair<uint32_t, uint32_t>> result;
+
+    for (uint32_t y = 0; y < layout_.size(); y++) {
+        for (uint32_t x = 0; x < layout_[y].size(); x++) {
+            if (layout_[y][x])
+                result.emplace_back(std::make_pair(x, y));
+        }
+    }
+    return result;
 }
 
 bool Layer::operator[](const std::pair<uint32_t, uint32_t> &pos) const {
@@ -99,12 +112,10 @@ char Layout::get_blk_type(uint32_t x, uint32_t y) const {
     char blk = ' ';
     uint32_t priority_major = 0;
     uint32_t priority_minor = 0;
-    for (const auto &iter: layers_) {
-        auto const &[blk_type, layer] = iter;
-
+    for (auto const &[blk_type, layer]: layers_) {
         if (layer[{x, y}] &&
             layers_priority_major_.at(blk_type) >= priority_major &&
-            layers_priority_minor_.at(blk_type) > priority_minor) {
+            layers_priority_minor_.at(blk_type) >= priority_minor) {
             blk = blk_type;
             priority_major = layers_priority_major_.at(blk_type);
             priority_minor = layers_priority_minor_.at(blk_type);
@@ -180,7 +191,7 @@ uint32_t Layout::get_margin() {
     return margin;
 }
 
-char Layout::get_clb_type() {
+char Layout::get_clb_type() const {
     // the blk_type that has highest priority
     uint32_t major = 0;
     uint32_t minor = 0;
@@ -190,12 +201,24 @@ char Layout::get_clb_type() {
             auto blk_type = get_blk_type(x, y);
             auto blk_major = get_priority_major(blk_type);
             auto blk_minor = get_priority_minor(blk_type);
-            if (blk_major >= major && blk_minor > minor) {
+            if (blk_major >= major && blk_minor >= minor) {
                 blk = blk_type;
                 major = blk_major;
                 minor = blk_minor;
+
             }
         }
     }
     return blk;
+}
+
+std::string Layout::layout_repr() {
+    std::stringstream ss;
+    for (uint32_t y = 0; y < height_; y++) {
+        for (uint32_t x = 0; x < width_; x++) {
+            ss << get_blk_type(x, y);
+        }
+        ss << std::endl;
+    }
+    return ss.str();
 }

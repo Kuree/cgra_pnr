@@ -310,6 +310,11 @@ std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {
 std::shared_ptr<Node> RoutingGraph::get_port(const uint32_t &x,
                                              const uint32_t &y,
                                              const std::string &port) {
+    if (grid_.find({x, y}) == grid_.end()) {
+        std::stringstream ss;
+        ss << "unable to find grid tile " << x << " " << y;
+        throw ::runtime_error(ss.str());
+    }
     const Tile &t = grid_.at({x, y});
     if (t.ports.find(port) == t.ports.end())
         throw ::runtime_error("unable to find port " + port);

@@ -33,6 +33,8 @@ public:
     void refine(int num_iter, double threshold,
                 bool print_improvement) override;
 
+    void set_seed(uint32_t seed);
+
     static char REG_BLK_TYPE;
 
 protected:

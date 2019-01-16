@@ -2,6 +2,7 @@ from __future__ import print_function
 from lxml import etree
 import sys
 import os
+import pythunder
 
 
 """
@@ -139,10 +140,9 @@ def parse_vpr(filename):
             break
 
         # some other info that's useful for SA placer
-        info = {"margin": 1, "clb_type": 'c', "arch_type": "fpga",
-                "height": height, "width": width}
-        layouts[layout_name] = (layout_board, blk_height, blk_capacity,
-                                info)
+        layout = get_layout(layout_board)
+
+        layouts[layout_name] = layout
     return layouts
 
 
@@ -156,19 +156,52 @@ def convert_cgra_type(tile_type):
     elif tile_type == "io1bit":
         return 'i'
     elif tile_type == "io16bit":
-        return 'i'
+        return 'I'
     else:
         raise Exception("Unknown tile type " + tile_type)
 
 
-def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
+def get_layout(board_layout):
+    new_layout = []
+    for y in range(len(board_layout)):
+        row = []
+        for x in range(len(board_layout[y])):
+            if board_layout[y][x] is None:
+                row.append(' ')
+            else:
+                row.append(board_layout[y][x])
+        new_layout.append(row)
+
+    default_priority = pythunder.Layout.DEFAULT_PRIORITY
+    # not the best practice to use the layers here
+    # but this requires minimum amount of work to convert the old
+    # code to the new codebase
+    # FIXME: change the CGRA_INFO parser to remove the changes
+    layout = pythunder.Layout(new_layout)
+    # add a reg layer to the layout, the same as PE
+    clb_layer = layout.get_layer('p')
+    reg_layer = pythunder.Layer(clb_layer)
+    reg_layer.blk_type = 'r'
+    layout.add_layer(reg_layer, default_priority, 0)
+    # bit_layer = pythunder.Layer(clb_layer)
+    # bit_layer.blk_type = "B"
+    # layout.add_layer(bit_layer, default_priority, 1)
+    # set different layer priorities
+    layout.set_priority_major(' ', 0)
+    layout.set_priority_major('i', 1)
+    layout.set_priority_major("I", 2)
+    # memory is a DSP-type, so lower priority
+    layout.set_priority_major('m', default_priority - 1)
+    return layout
+
+
+def parse_cgra(filename, use_tile_addr=False):
     root = etree.parse(filename)
     layout_name = "CGRA"
     # only one layout in CGRA files
     board_dict = {}     # because CGRA file doesn't tell the size beforehand
     available_types = set()
     tile_mapping = {}
-    io_tiles = []
     io_pad_name = {}
     io_pad_bit = {}
     io16_tile = {}
@@ -186,9 +219,9 @@ def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
         tile_mapping[(x, y)] = tile_addr
         # figure out where the 16 bit IO tiles
         if tile_type == "io1bit":
-            # only 16 bit IO tiles has
+            # only 16 bit IO tiles has this
             if tile.find("p2f_wide") is not None:
-                io_tiles.append((x, y))
+                board_dict[(x, y)] = "I"
             pad_name = tile.attrib["name"]
             io_pad_name[(x, y)] = pad_name
             # obtain the io pad bit number
@@ -208,7 +241,7 @@ def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
     height = positions[0][1] + 1
     layout_board = []
     for h in range(height):
-        row = [None] * width
+        row = [' '] * width
         layout_board.append(row)
     for x, y in board_dict:
         layout_board[y][x] = board_dict[(x, y)]
@@ -219,105 +252,20 @@ def parse_cgra(filename, use_tile_addr=False, fold_reg=True):
         blk_height[blk] = 1
         blk_capacity[blk] = 1
 
-    # fold reg
-    if fold_reg:
-        blk_capacity["p"] = 2
-
-    # find pe margin
-    pe_margin = -1
-    for ii in range(min(height, height)):
-        if layout_board[ii][ii] == "p":
-            pe_margin = ii
-            break
-    if pe_margin == -1:
-        print("Failed to get PE margin, use default value 2", file=sys.stderr)
-        pe_margin = 2
-
-    # id_remap
-    id_remap = {"r": "p"}
-
-    info = {"margin": pe_margin, "clb_type": "p", "arch_type": "cgra",
-            "height": height, "width": width, "id_remap": id_remap,
-            "io": io_tiles, "io_pad_name": io_pad_name,
+    info = {"io_pad_name": io_pad_name,
             "io_pad_bit": io_pad_bit, "io16_tile": io16_tile}
 
     # NOTE:
     # the CGRA file sets the height for each tiles implicitly
     # no need to worry about the height
     layouts = {}
+    layout = get_layout(layout_board)
     if use_tile_addr:
-        layouts[layout_name] = (layout_board, blk_height, blk_capacity, info,
+        layouts[layout_name] = (layout, info,
                                 tile_mapping)
     else:
-        layouts[layout_name] = (layout_board, blk_height, blk_capacity, info)
+        layouts[layout_name] = layout
     return layouts
-
-
-def make_board(board_meta):
-    layout_board, _, blk_capacity, _ = board_meta
-    height = len(layout_board)
-    width = len(layout_board[0])
-    capacity = 1
-    for blk in blk_capacity:
-        if blk_capacity[blk] > capacity:
-            capacity = blk_capacity[blk]
-    if capacity > 1:
-        board = []
-        for y in range(height):
-            row = [[] for _ in range(width)]
-            board.append(row)
-    else:
-        board = []
-        for y in range(height):
-            row = [None for _ in range(width)]
-            board.append(row)
-    return board
-
-
-def generate_is_cell_legal(board_meta, fold_reg=True):
-    """fold_reg is only valid for CGRA"""
-    layout_board, blk_height, blk_capacity, board_info = board_meta
-    height = len(layout_board)
-    width = len(layout_board[0])
-
-    if "id_remap" in board_info:
-        id_remap = board_info["id_remap"]
-    else:
-        id_remap = {}
-
-    def is_legal(board, pos, blk):
-        # if board is not defined, we only check the legitimacy
-        x, y = pos
-        blk_type = blk[0]
-        if blk_type in id_remap:
-            blk_type = id_remap[blk_type]
-        if x < 0 or y < 0 or x >= width or y >= height:
-            return False
-        if layout_board[y][x] != blk_type and blk[0] != 'r':
-            return False
-        if board is not None:
-            if type(board[y][x]) == list:
-                capacity = blk_capacity[blk_type]
-                if len(board[y][x]) >= capacity:
-                    return False
-                if fold_reg:
-                    if len(board[y][x]) == 1:
-                        old_blk = board[y][x][0]
-                        if old_blk[0] == blk[0]:
-                            # cannot have the same type
-                            return False
-                if blk_height[blk_type] != 1:
-                    b_height = blk_height[blk_type]
-                    y_min = max(0, y - b_height)
-                    y_max = min(height, y + b_height)
-                    for yy in range(y_min, y_max):
-                        if len(board[y][x]) >= capacity:
-                            return False
-            else:
-                if board[y][x] is not None:
-                    return False
-        return True
-    return is_legal
 
 
 def parse_fpga(fpga_file):
@@ -325,8 +273,6 @@ def parse_fpga(fpga_file):
     with open(fpga_file) as f:
         lines = f.readlines()
 
-    height = 0
-    width = 0
     board_layout = []
 
     io_tiles = set()
@@ -360,63 +306,9 @@ def parse_fpga(fpga_file):
                 board_layout[y][x] = "d"
             else:
                 raise Exception("Unknown SITE " + site_type)
-
-    # fill in board info
-    info = {"margin": 1, "clb_type": "c", "arch_type": "fpga",
-            "height": height, "width": width, "id_remap": {},
-            "io": io_tiles}
-    layouts = {}
     layout_name = "fpga"
-    blk_height = {"i": 1, "c": 1, "d": 1, "m": 1}
-    blk_capacity = blk_height.copy()
-    layouts[layout_name] = (board_layout, blk_height, blk_capacity, info)
+    layouts = {layout_name: pythunder.Layout(board_layout)}
     return layouts
-
-
-def generate_place_on_board(board_meta, fold_reg=True):
-    is_legal = generate_is_cell_legal(board_meta, fold_reg=fold_reg)
-
-    def place_on_board(board, blk_id, pos):
-        x, y = pos
-        if type(board[y][x]) == list:
-            if blk_id in board[y][x]:
-                return
-            if not is_legal(board, pos, blk_id):
-                raise Exception("Illegal position for " + blk_id + " at " +
-                                str(pos))
-            board[y][x].append(blk_id)
-        else:
-            if board[y][x] == blk_id:
-                return
-            if not is_legal(board, pos, blk_id):
-                raise Exception("Illegal position for " + blk_id + " at " +
-                                str(pos))
-            board[y][x] = blk_id
-    return place_on_board
-
-
-def print_board_info(board_name, board_meta):
-    layout_board, blk_height, blk_capacity, info = board_meta
-    height = len(layout_board)
-    width = len(layout_board[0])
-    print("Board", board_name, "Layout {}x{}:".format(width, height))
-    _, columns = os.popen('stty size', 'r').read().split()
-    columns = int(columns)
-    if width < columns:
-        space = " " if width * 2 < columns else ""
-        for y in range(height):
-            for x in range(width):
-                t = layout_board[y][x]
-                if t is None:
-                    t = '-'
-                print(t, end=(space if x < width - 1 else ""))
-            print()
-    print("Block info: ", end="")
-    for blk in blk_height:
-        print("blk-{} {}x{}-{}".format(blk, 1, blk_height[blk],
-                                       blk_capacity[blk]),
-              end="  ")
-    print("\nCLB/PE margin:", info["margin"])
 
 
 def main():
@@ -439,7 +331,7 @@ def main():
                 use_fpga = True
                 break
     filename = sys.argv[1]
-    if (not use_vpr) and (not use_cgra) and not (use_fpga):
+    if (not use_vpr) and (not use_cgra) and not use_fpga:
         _, ext = os.path.splitext(filename)
         if ext == ".xml":
             use_vpr = True
@@ -447,21 +339,21 @@ def main():
             use_cgra = True
         elif ext == ".scl":
             use_fpga = True
-    meta = None
+    layout = None
     if use_vpr:
         print("Parsing VPR arch file", filename)
-        meta = parse_vpr(filename)
+        layout = parse_vpr(filename)
     if use_cgra:
         print("Parsing CGRA arch file", filename)
-        meta = parse_cgra(filename)
+        layout = parse_cgra(filename)
     if use_fpga:
         print("Parsing FPGA arch file", filename)
-        meta = parse_fpga(filename)
-    if meta is None:
+        layout = parse_fpga(filename)
+    if layout is None:
         print("Unexpected state", file=sys.stderr)
         exit(1)
-    for board_name in meta:
-        print_board_info(board_name, meta[board_name])
+    for board_name in layout:
+        print(layout[board_name])
 
 
 if __name__ == "__main__":

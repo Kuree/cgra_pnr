@@ -14,8 +14,7 @@ def detailed_placement_thunder(args, context=None):
     netlist = args["new_netlist"]
     blk_pos = args["blk_pos"]
     fold_reg = args["fold_reg"]
-    # seed = args["seed"]
-    # disallowed_pos = args["disallowed_pos"]
+    seed = args["seed"]
     clb_type = args["clb_type"]
     fixed_pos = {}
     for blk_id in blk_pos:
@@ -23,6 +22,7 @@ def detailed_placement_thunder(args, context=None):
     placer = pythunder.DetailedPlacer(blks, netlist, cells,
                                       fixed_pos, clb_type,
                                       fold_reg)
+    placer.set_seed(seed)
     placer.anneal()
     placer.refine(1000, 0.01, False)
     placement = placer.realize()
@@ -83,12 +83,10 @@ def get_lambda_arn(map_args, aws_config):
     return choose_resource(estimates, aws_config)
 
 
-def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
+def refine_global_thunder(layout, pre_placement, netlists, fixed_pos,
                           fold_reg):
-    board_layout = board_meta[0]
-    board_info = board_meta[-1]
-    clb_type = board_info["clb_type"]
-    available_pos = board_layout.produce_available_pos()
+    clb_type = layout.get_clb_type()
+    available_pos = layout.produce_available_pos()
     global_refine = pythunder.DetailedPlacer(pre_placement,
                                              netlists,
                                              available_pos,
@@ -102,10 +100,23 @@ def refine_global_thunder(board_meta, pre_placement, netlists, fixed_pos,
     return global_refine.realize()
 
 
+def place_on_board(board, blk_id, pos):
+    x, y = pos
+    board[y][x].append(blk_id)
+
+
+def make_board(layout):
+    width = layout.width()
+    height = layout.height()
+    board = [[[] for _ in range(width)] for _ in range(height)]
+    return board
+
+
 def main():
     # only the main thread needs it
+    # this is to avoid loading unnecessary crop while calling from aws lambda
     from argparse import ArgumentParser
-    from arch import make_board, parse_cgra, generate_place_on_board, parse_fpga
+    from arch import parse_cgra, parse_fpga
     from arch.cgra import place_special_blocks, save_placement, prune_netlist
     from arch.cgra_packer import load_packed_file
     from arch.fpga import load_packed_fpga_netlist
@@ -172,18 +183,14 @@ def main():
         fold_reg = False
         board_meta = parse_fpga(fpga_arch)
     else:
-        board_meta = parse_cgra(cgra_arch, fold_reg=fold_reg)
-    print(fold_reg)
+        board_meta = parse_cgra(cgra_arch)
     # Common routine
-    board_name, board_meta = board_meta.popitem()
+    board_name, layout = board_meta.popitem()
     print("INFO: Placing for", board_name)
-    board = make_board(board_meta)
-    board_info = board_meta[-1]
-    place_on_board = generate_place_on_board(board_meta, fold_reg=fold_reg)
+    board = make_board(layout)
 
     fixed_blk_pos = {}
     special_blocks = set()
-    emb = {}
 
     # FPGA
     if fpga_place:
@@ -208,27 +215,23 @@ def main():
 
         # place the spacial blocks first
         place_special_blocks(board, special_blocks, fixed_blk_pos, raw_netlist,
-                             id_to_name,
                              place_on_board,
-                             board_meta)
+                             layout)
 
     # common routine
     # produce layout structure
-    board_meta = [get_layout(board_meta), board_meta[-1]]
     centroids, cluster_cells, clusters = perform_global_placement(
-        fixed_blk_pos, netlists,
-        board_meta, fold_reg=fold_reg,
-        seed=seed, fpga_place=fpga_place, vis=vis_opt)
+        fixed_blk_pos, netlists, layout, seed=seed, vis=vis_opt)
 
     # placer with each cluster
     board_pos = perform_detailed_placement(centroids,
                                            cluster_cells, clusters,
                                            fixed_blk_pos, netlists,
                                            fold_reg, seed,
-                                           board_info,
+                                           layout,
                                            aws_config)
     # refinement
-    board_pos = refine_global_thunder(board_meta, board_pos, netlists,
+    board_pos = refine_global_thunder(layout, board_pos, netlists,
                                       fixed_blk_pos, fold_reg)
 
     for blk_id in board_pos:
@@ -243,43 +246,8 @@ def main():
         visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe)
 
 
-def get_layout(board_meta):
-    board_layout = board_meta[0]
-    new_layout = []
-    for y in range(len(board_layout)):
-        row = []
-        for x in range(len(board_layout[y])):
-            if board_layout[y][x] is None:
-                row.append(' ')
-            else:
-                row.append(board_layout[y][x])
-        new_layout.append(row)
-
-    default_priority = pythunder.Layout.DEFAULT_PRIORITY
-    # not the best practice to use the layers here
-    # but this requires minimum amount of work to convert the old
-    # code to the new codebase
-    # FIXME: change the CGRA_INFO parser to remove the changes
-    layout = pythunder.Layout(new_layout)
-    # add a reg layer to the layout, the same as PE
-    clb_layer = layout.get_layer('p')
-    reg_layer = pythunder.Layer(clb_layer)
-    reg_layer.blk_type = 'r'
-    layout.add_layer(reg_layer, default_priority, 0)
-    # bit_layer = pythunder.Layer(clb_layer)
-    # bit_layer.blk_type = "B"
-    # layout.add_layer(bit_layer, default_priority, 1)
-    # set different layer priorities
-    layout.set_priority_major(' ', 0)
-    layout.set_priority_major('i', 1)
-    # memory is a DSP-type, so lower priority
-    layout.set_priority_major('m', default_priority - 1)
-    return layout
-
-
 def perform_global_placement(fixed_blk_pos, netlists,
-                             board_meta, fold_reg, seed,
-                             fpga_place=False, vis=True):
+                             layout, seed, vis=True):
     from visualize import visualize_clustering_cgra
     from graph import partition_netlist
     # simple heuristics to calculate the clusters
@@ -294,14 +262,9 @@ def perform_global_placement(fixed_blk_pos, netlists,
             # make sure that fixed blocks are not in the clusters
             if blk not in fixed_blk_pos:
                 new_clusters[new_id].add(blk)
-
-    layout = board_meta[0]
-
-    board_info = board_meta[-1]
-    clb_type = board_info["clb_type"]
     gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
-                                layout, clb_type)
-
+                                layout)
+    gp.set_seed(seed)
     gp.anneal_param_factor = len(new_clusters)
     gp.solve()
     gp.anneal()
@@ -312,10 +275,11 @@ def perform_global_placement(fixed_blk_pos, netlists,
         cells = cluster_cells_[c_id]
         c_id = int(c_id[1:])
         cluster_cells[c_id] = cells
+    clb_type = layout.get_clb_type()
     centroids = compute_centroids(cluster_cells, b_type=clb_type)
 
     if vis:
-        visualize_clustering_cgra(board_meta, cluster_cells)
+        visualize_clustering_cgra(layout, cluster_cells)
     assert (cluster_cells is not None and centroids is not None)
     return centroids, cluster_cells, clusters
 
@@ -327,6 +291,7 @@ def detailed_placement_thunder_wrapper(args):
     fixed_blocks = {}
     clb_type = args[0]["clb_type"]
     fold_reg = args[0]["fold_reg"]
+    seed = args[0]["seed"]
     for i in range(len(args)):
         arg = args[i]
         clusters[i] = arg["clusters"]
@@ -335,21 +300,20 @@ def detailed_placement_thunder_wrapper(args):
         fixed_blocks[i] = arg["blk_pos"]
     return pythunder.detailed_placement(clusters, cells, netlists, fixed_blocks,
                                         clb_type,
-                                        fold_reg)
+                                        fold_reg,
+                                        seed)
 
 
 def perform_detailed_placement(centroids, cluster_cells, clusters,
                                fixed_blk_pos, netlists,
-                               fold_reg, seed, board_info,
+                               fold_reg, seed, layout,
                                aws_config=""):
     from six.moves import queue
     import boto3
     board_pos = fixed_blk_pos.copy()
     map_args = []
 
-    height, width = board_info["height"], board_info["width"]
-    margin = board_info["margin"]
-    clb_type = board_info["clb_type"]
+    clb_type = layout.get_clb_type()
 
     for c_id in cluster_cells:
         cells = cluster_cells[c_id]

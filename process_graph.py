@@ -1,4 +1,3 @@
-from __future__ import print_function
 import os
 from argparse import ArgumentParser
 import pycyclone
@@ -35,7 +34,7 @@ def get_new_coord(x, y, side):
 
 
 def is_fu_tile(layout, x, y):
-    return layout[y][x] != ' ' and layout[y][x] is not None
+    return layout.get_blk_type(x, y) != ' '
 
 
 def build_routing_graph(routing_resource, layout):
@@ -48,7 +47,9 @@ def build_routing_graph(routing_resource, layout):
     # go away once fully integrate into garnet
     NUM_TRACK = 5
     SWITCH_ID = 0
-    SIZE = len(layout)
+    layout_width = layout.width()
+    layout_height = layout.height()
+    clb_type = layout.get_clb_type()
 
     sb_16 = Switch(0, 0, NUM_TRACK, 16, SWITCH_ID,
                    get_disjoint_sb_wires(NUM_TRACK))
@@ -60,16 +61,15 @@ def build_routing_graph(routing_resource, layout):
     for x, y in tiles:
         if not is_fu_tile(layout, x, y):
             continue
-        if len(routing_resource[(x, y)]["route_resource"]) == 0 and\
-            "out" not in routing_resource[(x, y)]["port"]:
-            continue
+        # if "out" not in routing_resource[(x, y)]["port"]:
+        #    continue
         t1 = Tile(x, y, sb_1)
         t16 = Tile(x, y, sb_16)
         g_1.add_tile(t1)
         g_16.add_tile(t16)
 
-    for y in range(SIZE - 1):
-        for x in range(SIZE):
+    for y in range(layout_height - 1):
+        for x in range(layout_width):
             if (not is_fu_tile(layout, x, y)) or \
                     (not is_fu_tile(layout, x, y + 1)):
                 continue
@@ -89,7 +89,7 @@ def build_routing_graph(routing_resource, layout):
                                               SwitchBoxIO.SB_IN)
                     g.add_edge(sb_top, sb_bottom)
                     # also add reg as well
-                    if width == 16:
+                    if width == 16 and layout.get_blk_type(x, y) == clb_type:
                         reg1 = RegisterNode("reg_" + str(track) + "_"
                                             + str(gsv(SwitchBoxSide.Bottom)),
                                             x, y,
@@ -101,7 +101,8 @@ def build_routing_graph(routing_resource, layout):
                     sb_bottom.io = SwitchBoxIO.SB_OUT
                     sb_top.io = SwitchBoxIO.SB_IN
                     g.add_edge(sb_bottom, sb_top)
-                    if width == 16:
+                    if width == 16 and\
+                       layout.get_blk_type(x, y + 1) == clb_type:
                         reg2 = RegisterNode("reg_" + str(track) + "_"
                                             + str(gsv(SwitchBoxSide.Top)),
                                             x, y + 1,
@@ -110,9 +111,9 @@ def build_routing_graph(routing_resource, layout):
                         g.add_edge(sb_bottom, reg2)
                         g.add_edge(reg2, sb_top)
 
-    for y in range(SIZE):
+    for y in range(layout_height):
         # connect from left to right and right to left
-        for x in range(SIZE - 1):
+        for x in range(layout_width - 1):
             if (not is_fu_tile(layout, x, y)) or \
                     (not is_fu_tile(layout, x + 1, y)):
                 continue
@@ -132,7 +133,7 @@ def build_routing_graph(routing_resource, layout):
                                              SwitchBoxIO.SB_IN)
                     g.add_edge(sb_left, sb_right)
                     # also add reg as well
-                    if width == 16:
+                    if width == 16  and layout.get_blk_type(x, y) == clb_type:
                         reg1 = RegisterNode("reg_" + str(track) + "_"
                                             + str(gsv(SwitchBoxSide.Right)),
                                             x, y,
@@ -145,7 +146,8 @@ def build_routing_graph(routing_resource, layout):
                     sb_left.io = SwitchBoxIO.SB_IN
                     g.add_edge(sb_right, sb_left)
                     # also add reg as well
-                    if width == 16:
+                    if width == 16 and \
+                            layout.get_blk_type(x + 1, y) == clb_type:
                         reg2 = RegisterNode("reg_" + str(track) + "_"
                                             + str(gsv(SwitchBoxSide.Left)),
                                             x + 1, y,
@@ -254,8 +256,7 @@ def main():
     elif os.path.isfile(g_16_filename):
         print("override existing graph file")
 
-    meta = parse_cgra(cgra_filename)["CGRA"]
-    layout = meta[0]
+    layout = parse_cgra(cgra_filename)["CGRA"]
     raw_routing_resource = parse_routing_resource(cgra_filename)
     routing_resource = build_routing_resource(raw_routing_resource)
     g_1, g_16 = build_routing_graph(routing_resource, layout)

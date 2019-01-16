@@ -546,6 +546,7 @@ void setup_router_input(Router &r, const std::string &packed_filename,
                         const std::string &placement_filename,
                         uint32_t width) {
     auto [netlist, track_mode] = load_netlist(packed_filename);
+    printf("netlist: %ld\n", netlist.size());
     auto placement = load_placement(placement_filename);
     for (auto const &it : placement) {
         auto [x, y] = it.second;
