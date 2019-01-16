@@ -47,6 +47,7 @@ void init_pythunder(py::module &m) {
             .def("realize", &DetailedPlacer::realize)
             .def("refine", &SimAnneal::refine)
             .def("estimate", &DetailedPlacer::estimate)
+            .def("set_seed", &DetailedPlacer::set_seed)
             .def_readwrite("steps", &DetailedPlacer::steps)
             .def_readwrite("tmax", &DetailedPlacer::tmax)
             .def_readwrite("tmin", &DetailedPlacer::tmin);
@@ -65,11 +66,11 @@ void init_pythunder(py::module &m) {
             .def(py::init<std::map<std::string, std::set<std::string>>,
                     std::map<std::string, std::vector<std::string>>,
                     std::map<std::string, std::pair<int, int>>,
-                    const Layout&,
-                    char>())
+                    const Layout&>())
             .def("solve", &GlobalPlacer::solve)
             .def("realize", &GlobalPlacer::realize)
             .def("anneal", &SimAnneal::anneal)
+            .def("set_seed", &GlobalPlacer::set_seed)
             .def_readwrite("anneal_param_factor",
                            &GlobalPlacer::anneal_param_factor)
             .def_readwrite("steps", &GlobalPlacer::steps);
@@ -80,6 +81,7 @@ void init_pythunder(py::module &m) {
             .def_readwrite("blk_type", &Layer::blk_type)
             .def("mark_available", &Layer::mark_available)
             .def("mark_unavailable", &Layer::mark_unavailable)
+            .def("produce_available_pos", &Layer::produce_available_pos)
             .def_readwrite("blk_type", &Layer::blk_type)
             .def("__getitem__", [](const Layer &layer,
                                    const std::pair<uint32_t, uint32_t> &pos) {
@@ -107,11 +109,25 @@ void init_pythunder(py::module &m) {
             .def("set_priority_minor", &Layout::set_priority_minor)
             .def("produce_available_pos", &Layout::produce_available_pos)
             .def("get_clb_type", &Layout::get_clb_type)
-            .def("get_margin", &Layout::get_margin);
+            .def("get_margin", &Layout::get_margin)
+            .def("height", &Layout::height)
+            .def("width", &Layout::width)
+            .def("__repr__", &Layout::layout_repr);
 }
 
 void init_detailed_placement(py::module &m) {
-    m.def("detailed_placement", &multi_place);
+    m.def("detailed_placement",
+            py::overload_cast<const ::map<int, std::set<std::string>>&,
+            const ::map<int, ::map<char, std::set<std::pair<int, int>>>>&,
+            const ::map<int, ::map<std::string, std::vector<std::string>>>&,
+            const ::map<int, ::map<std::string, std::pair<int, int>>>&,
+            char, bool>(&multi_place))
+      .def("detailed_placement",
+             py::overload_cast<const ::map<int, std::set<std::string>>&,
+             const ::map<int, ::map<char, std::set<std::pair<int, int>>>>&,
+             const ::map<int, ::map<std::string, std::vector<std::string>>>&,
+             const ::map<int, ::map<std::string, std::pair<int, int>>>&,
+             char, bool, uint32_t>(&multi_place));
 }
 
 PYBIND11_MODULE(pythunder, m) {

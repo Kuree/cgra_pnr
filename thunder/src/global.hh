@@ -39,13 +39,13 @@ public:
     GlobalPlacer(std::map<std::string, std::set<std::string>> clusters,
                  std::map<std::string, std::vector<std::string>> netlists,
                  std::map<std::string, std::pair<int, int>> fixed_pos,
-                 const Layout &board_layout,
-                 char clb_type);
+                 const Layout &board_layout);
 
     void solve();
     void anneal() override;
     std::map<std::string, std::map<char, std::set<std::pair<int, int>>>>
     realize();
+    void set_seed(uint32_t seed);
 
     double anneal_param_factor = 1.0;
     char EMPTY_BLK = ' ';

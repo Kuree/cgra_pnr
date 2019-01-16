@@ -86,10 +86,9 @@ def visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe):
         print("Image saved to", output_path)
 
 
-def visualize_clustering_cgra(board_meta, cluster_cells):
+def visualize_clustering_cgra(layout, cluster_cells):
     scale = 30
-    board_info = board_meta[-1]
-    height, width = board_info["height"], board_info["width"]
+    height, width = layout.height(), layout.width()
     im, draw = draw_board(width, height, scale)
     for c_id in cluster_cells:
         cells = cluster_cells[c_id]
@@ -102,69 +101,16 @@ def visualize_clustering_cgra(board_meta, cluster_cells):
     plt.show()
 
 
-def visualize_routing(cgra_filename, board_meta, packed_filename,
-                      routing_result, fold_reg):
-    from router import Router
-    router = Router(cgra_filename, board_meta, packed_filename,
-                    "", fold_reg=fold_reg)
-    # update routing resource
-    for net_id in routing_result:
-        path = routing_result[net_id]
-        # update it by hand because the format is different from
-        # the one in
-        track_in = None
-        entry_to_remove = set()
-        for entry in path:
-            entry_type = entry[0]
-            if entry_type == "src":
-                (pos,_), (track_in, track_out) = entry[1:]
-                entry_to_remove.add((pos, track_out))
-            elif entry_type == "link":
-                assert track_in is not None
-                (src_pos, dst_pos), (conn_out, conn_in) = entry[1:]
-                entry_to_remove.add((src_pos, conn_out))
-                entry_to_remove.add((src_pos, track_in))
-                track_in = conn_in
-            elif entry_type == "sink":
-                if len(entry[1:]) == 3:
-                    (_, (conn_in, conn_out)), _, (pos, _) = entry[1:]
-                    entry_to_remove.add((pos, conn_out))
-                    entry_to_remove.add((pos, conn_in))
-                    track_in = conn_in
-                else:
-                    conn, (dst_pos, _) = entry[1:]
-                    if len(conn) == 2:
-                        conn_in, conn_out = conn
-                        entry_to_remove.add((dst_pos, conn_in))
-                        entry_to_remove.add((dst_pos, conn_out))
-                        track_in = conn_in
-                    else:
-                        entry_to_remove.add((dst_pos, conn))
-                        track_in = conn
-        for pos, conn in entry_to_remove:
-            resource = router.routing_resource[pos]["route_resource"]
-            remove_set = set()
-            for conn1, conn2 in resource:
-                if conn1 == conn or conn2 == conn:
-                    remove_set.add((conn1, conn2))
-            for entry in remove_set:
-                resource.remove(entry)
-
-    router.vis_routing_resource()
-
-
 def visualize_board(cgra_file):
     from arch import parse_cgra
     color_index = "imopr"
-    board_meta = parse_cgra(cgra_file)["CGRA"]
-    board_layout = board_meta[0]
+    layout = parse_cgra(cgra_file)["CGRA"]
     scale = 30
-    board_info = board_meta[-1]
-    height, width = board_info["height"], board_info["width"]
+    height, width = layout.height(), layout.width()
     im, draw = draw_board(width, height, scale)
     for y in range(height):
         for x in range(width):
-            blk_type = board_layout[y][x]
+            blk_type = layout.get_blk_type(x, y)
             if blk_type is not None:
                 index = color_index.index(blk_type)
                 color = color_palette[index]
@@ -201,17 +147,11 @@ def main():
     from arch import parse_cgra
     from arch import load_packed_file
     _, _, _, changed_pe = load_packed_file(packed_file)
-    fold_reg = len(changed_pe) == 0
-    board_meta = parse_cgra(cgra_info, fold_reg=fold_reg)["CGRA"]
+    board_meta = parse_cgra(cgra_info)["CGRA"]
     if ext == ".place":
         from arch import parse_placement
         board_pos, _ = parse_placement(input_file)
         visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe)
-    elif ext == ".route":
-        from arch import parse_routing_result
-        routing_result = parse_routing_result(input_file)
-        visualize_routing(cgra_info, board_meta, packed_file, routing_result,
-                          fold_reg=fold_reg)
 
 
 if __name__ == '__main__':

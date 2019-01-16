@@ -74,6 +74,10 @@ DetailedPlacer
     set_bounds(available_pos);
 }
 
+void DetailedPlacer::set_seed(uint32_t seed) {
+    detail_rand_.seed(seed);
+}
+
 void DetailedPlacer::index_loc() {
     // index to loc
     for (const auto &instance : instances_) {

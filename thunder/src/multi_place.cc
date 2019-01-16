@@ -13,12 +13,12 @@ using std::pair;
 using std::set;
 
 
-::map<::string, ::pair<int, int>>  multi_place(
-        std::map<int, std::set<std::string>> clusters,
-        std::map<int, std::map<char, std::set<std::pair<int, int>>>> cells,
-        std::map<int, std::map<std::string, std::vector<std::string>>> netlists,
-        std::map<int, std::map<std::string, std::pair<int, int>>> fixed_blocks,
-        char clb_type, bool fold_reg) {
+::map<std::string, std::pair<int, int>>  multi_place(
+        const ::map<int, ::set<::string>> &clusters,
+        const ::map<int, ::map<char, ::set<std::pair<int, int>>>> &cells,
+        const ::map<int, ::map<::string, ::vector<::string>>> &netlists,
+        const ::map<int, ::map<::string, ::pair<int, int>>> &fixed_blocks,
+        char clb_type, bool fold_reg, uint32_t seed) {
 
     uint64_t num_clusters = clusters.size();
     // make sure that they have the same size
@@ -41,7 +41,7 @@ using std::set;
 
     for (auto const &iter : clusters) {
         int cluster_id = iter.first;
-        auto cluster_set = clusters[cluster_id];
+        auto const &cluster_set = clusters.at(cluster_id);
         auto cluster = ::vector<::string>(cluster_set.begin(),
                                           cluster_set.end());
 
@@ -50,15 +50,15 @@ using std::set;
         assert (netlists.find(cluster_id) != netlists.end());
         assert (fixed_blocks.find(cluster_id) != fixed_blocks.end());
 
-        auto available_pos_set = cells[cluster_id];
+        auto available_pos_set = cells.at(cluster_id);
         ::map<char, ::vector<::pair<int, int>>> available_pos;
         for (const auto &iter2 : available_pos_set) {
             auto pos = ::vector<::pair<int, int>>(iter2.second.begin(),
                                                   iter2.second.end());
             available_pos.insert({iter2.first, pos});
         }
-        auto netlist = netlists[cluster_id];
-        auto fixed_pos = fixed_blocks[cluster_id];
+        auto netlist = netlists.at(cluster_id);
+        auto fixed_pos = fixed_blocks.at(cluster_id);
 
         // assign args
         clusters_args.emplace_back(cluster);
@@ -80,6 +80,7 @@ using std::set;
                 char c,
                 bool fold) {
             DetailedPlacer placer(blks, n, p, f, c, fold);
+            placer.set_seed(seed);
             placer.anneal();
             // placer.refine(1000, 0.001, true);
             return placer.realize();
@@ -98,4 +99,15 @@ using std::set;
     }
 
     return result;
+}
+
+::map<std::string, std::pair<int, int>>  multi_place(
+        const ::map<int, ::set<::string>> &clusters,
+        const ::map<int, ::map<char, ::set<std::pair<int, int>>>> &cells,
+        const ::map<int, ::map<::string, ::vector<::string>>> &netlists,
+        const ::map<int, ::map<::string, ::pair<int, int>>> &fixed_blocks,
+        char clb_type, bool fold_reg) {
+    constexpr uint32_t seed = 0;
+    return multi_place(clusters, cells, netlists, fixed_blocks, clb_type,
+                       fold_reg, seed);
 }

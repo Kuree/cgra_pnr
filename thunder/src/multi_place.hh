@@ -5,10 +5,23 @@
 #include <vector>
 
 std::map<std::string, std::pair<int, int>>  multi_place(
-        std::map<int, std::set<std::string>> clusters,
-        std::map<int, std::map<char, std::set<std::pair<int, int>>>> cells,
-        std::map<int, std::map<std::string, std::vector<std::string>>> netlists,
-        std::map<int, std::map<std::string, std::pair<int, int>>> fixed_blocks,
+        const std::map<int, std::set<std::string>> &clusters,
+        const std::map<int, std::map<char,
+                                     std::set<std::pair<int, int>>>> &cells,
+        const std::map<int, std::map<std::string,
+                                     std::vector<std::string>>> &netlists,
+        const std::map<int, std::map<std::string,
+                                     std::pair<int, int>>> &fixed_blocks,
+        char clb_type, bool fold_reg, uint32_t seed);
+
+std::map<std::string, std::pair<int, int>>  multi_place(
+        const std::map<int, std::set<std::string>> &clusters,
+        const std::map<int, std::map<char,
+                std::set<std::pair<int, int>>>> &cells,
+        const std::map<int, std::map<std::string,
+                std::vector<std::string>>> &netlists,
+        const std::map<int, std::map<std::string,
+                std::pair<int, int>>> &fixed_blocks,
         char clb_type, bool fold_reg);
 
 #endif //THUNDER_MULTI_PLACE_HH

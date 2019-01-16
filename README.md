@@ -5,7 +5,7 @@ Generic place and route tool for CGRA.
 ### Prerequisites
 Because the C++ implementation, exposed to Python via `pybind11`, uses lots
 of C++14/17 features, a modern C++ compiler is required.
-+ `g++` 7.0 and above
++ `g++` 7.0+/`clang` 4.0+
 + `cmake` 3.9 and above.
 + `Python` 2.7+/3.6+
 

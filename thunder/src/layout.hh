@@ -18,6 +18,8 @@ public:
     { return std::vector<bool>(layout_[row].begin(), layout_[row].end()); }
     std::pair<uint64_t, uint64_t> get_size() const;
 
+    std::vector<std::pair<uint32_t, uint32_t>> produce_available_pos();
+
 private:
     std::vector<std::vector<bool>> layout_;
 public:
@@ -40,8 +42,9 @@ public:
     // primary one, it will have highest minor priority.
 
     Layout() = default;
-    Layout(const std::map<char, std::vector<std::vector<bool>>> &layers);
-    Layout(const std::vector<std::vector<char>> &layers);
+    explicit Layout(const std::map<char,
+                                   std::vector<std::vector<bool>>> &layers);
+    explicit Layout(const std::vector<std::vector<char>> &layers);
 
     void add_layer(const Layer &layer);
     void add_layer(const Layer &layer, uint32_t priority_major,
@@ -67,9 +70,11 @@ public:
     produce_available_pos();
 
     uint32_t get_margin();
-    char get_clb_type();
+    char get_clb_type() const;
 
     std::pair<uint32_t, uint32_t> get_size() const { return {width_, height_}; }
+
+    std::string layout_repr();
 
 private:
     // NOTE:

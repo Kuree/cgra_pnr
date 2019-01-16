@@ -30,9 +30,8 @@ void ClusterBox::assign(const ClusterBox &box) {
 GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
                            ::map<::string, ::vector<::string>> netlists,
                            std::map<std::string, std::pair<int, int>> fixed_pos,
-                           const Layout &board_layout,
-                           char clb_type) :
-                           clb_type_(clb_type),
+                           const Layout &board_layout) :
+                           clb_type_(board_layout.get_clb_type()),
                            clusters_(::move(clusters)),
                            netlists_(),
                            fixed_pos_(::move(fixed_pos)),
@@ -70,6 +69,10 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
     // set annealing parameters
     this->tmax = tmin * 2;
     this->steps = (int)(std::pow(clusters_.size()* nets.size(), 1.8));
+}
+
+void GlobalPlacer::set_seed(uint32_t seed) {
+    global_rand_.seed(seed);
 }
 
 void GlobalPlacer::setup_reduced_layout() {

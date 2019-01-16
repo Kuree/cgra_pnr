@@ -46,8 +46,8 @@ def parse_placement(placement_file):
     return placement, id_to_name
 
 
-def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
-                         place_on_board, board_meta):
+def place_special_blocks(board, blks, board_pos, netlists,
+                         place_on_board, layout):
     # put IO in fixed blocks
     io_count = 0
 
@@ -63,31 +63,22 @@ def place_special_blocks(board, blks, board_pos, netlists, id_to_name,
                 else:
                     raise Exception("Unknown port: " + port + " for IO: " +
                                     blk_id)
-
-    board_info = board_meta[-1]
-    io_locations = board_info["io"]
-    io_locations.sort(key=lambda x: x[0] + x[1])
-    # input_io_locations = [(1, 2), (2, 1)]
-    # output_io_locations = [(18, 2), (2, 18)]
-    input_io_locations = io_locations[:len(io_locations) // 2]
-    output_io_locations = io_locations[len(io_locations) // 2:]
-
-    # Keyi:
-    # sort the io location lists so that it will produce result consistent
-    # with the simulator
-    input_io_locations.sort(key=lambda x: x[0])
-    output_io_locations.sort(key=lambda x: x[1])
+    one_bit_io_layer = layout.get_layer("i")
+    one_bit_io_locations = one_bit_io_layer.produce_available_pos()
+    sixteen_bit_io_layer = layout.get_layer("I")
+    sixteen_bit_io_locations = sixteen_bit_io_layer.produce_available_pos()
 
     blks = list(blks)
     blks.sort(key=lambda b: int(b[1:]))
 
     for blk_id in blks:
         if blk_id[0] == "i":
-            is_input = io_mapping[blk_id]
-            if is_input:
-                pos = input_io_locations.pop(0)
-            else:
-                pos = output_io_locations.pop(0)
+            pos = one_bit_io_locations.pop()
+            place_on_board(board, blk_id, pos)
+            board_pos[blk_id] = pos
+            io_count += 1
+        elif blk_id[0] == "I":
+            pos = sixteen_bit_io_locations.pop()
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
             io_count += 1
@@ -121,7 +112,7 @@ def generate_bitstream(board_filename, netlist_filename,
 
     # build PE tiles types
     pe_tiles = {}
-    type_str = "mpir"
+    type_str = "mpirI"
     for name in instances:
         instance = instances[name]
         blk_id = name_to_id[name]
@@ -217,7 +208,8 @@ def generate_routing(routing_file, tile_mapping, board_layout):
                         port_name = "validb"
                     x, y = seg[2], seg[3]
                     pos = (x, y)
-                    if board_layout[y][x] == "i" or board_layout[y][x] == "I":
+                    blk_type = board_layout.get_blk_type(x, y)
+                    if blk_type == "i" or blk_type == "I":
                         seg_index += 2
                         line = ""
                         continue
@@ -261,7 +253,8 @@ def generate_routing(routing_file, tile_mapping, board_layout):
                     one_bit = seg[-1] != 16
                     x, y = seg[2], seg[3]
                     pos = (x, y)
-                    if board_layout[y][x] == "i" or board_layout[y][x] == "I":
+                    blk_type = board_layout.get_blk_type(x, y)
+                    if blk_type == "i" or blk_type == "I":
                         seg_index += 1
                         continue
                     if pre_node[0] == "SB":

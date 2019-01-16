@@ -282,7 +282,7 @@ def parse_and_pack_netlist(netlist_filename, fold_reg=True):
         for blk_id, _ in net:
             if blk_id[0] == "p":
                 pes.add(blk_id)
-            elif blk_id[0] == "i":
+            elif blk_id[0] == "i" or blk_id[0] == "I":
                 ios.add(blk_id)
             elif blk_id[0] == "m":
                 mems.add(blk_id)
@@ -517,7 +517,7 @@ def change_name_to_id(instances):
             if instance_type == "cgralib.PE":
                 blk_type = "p"
             elif instance_type == "cgralib.IO":
-                blk_type = "i"
+                blk_type = "I"
             elif instance_type == "cgralib.Mem":
                 blk_type = "m"
             elif instance_type == "coreir.const":

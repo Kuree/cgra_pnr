@@ -96,6 +96,13 @@ def parse_routing_resource(cgra_file):
                 assert tile_elem.find("f2p_wide") is not None
                 for elem in tile_elem.findall("f2p_wide"):
                     io_entry["input"].add(elem.text)
+            else:
+                assert tile_elem.find("p2f_1bit") is not None
+                for elem in tile_elem.findall("p2f_1bit"):
+                    io_entry["output"].add(elem.text)
+                assert tile_elem.find("f2p_1bit") is not None
+                for elem in tile_elem.findall("f2p_1bit"):
+                    io_entry["input"].add(elem.text)
 
             result[(col, row)] = io_entry
     return result
