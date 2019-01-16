@@ -20,7 +20,7 @@ def main():
     route_file = sys.argv[3]
     packed_file = route_file.replace(".route", ".packed")
     placement_file = route_file.replace(".route", ".place")
-    board_meta = parse_cgra(cgra_file)["CGRA"]
+    board_layout = parse_cgra(cgra_file)["CGRA"]
     routing_result = parse_routing(route_file)
     placement, _ = parse_placement(placement_file)
 
@@ -35,7 +35,7 @@ def main():
 
     print("-" * cols)
     print("Area Usage:")
-    usage = compute_area_usage(placement, board_meta[0])
+    usage = compute_area_usage(placement, board_layout)
     for entry in usage:
         percentage = usage[entry][0] / usage[entry][1] * 100
         num_bar = int(percentage / 100 * scale)
@@ -54,8 +54,7 @@ def main():
     print("-" * cols)
     r = parse_routing_resource(cgra_file)
     routing_resource = build_routing_resource(r)
-    resource_usage = compute_routing_usage(routing_result, routing_resource,
-                                           board_meta[0])
+    resource_usage = compute_routing_usage(routing_result, routing_resource)
     for bus in resource_usage:
         print("BUS:", bus)
         for track in resource_usage[bus]:
