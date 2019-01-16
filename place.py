@@ -247,11 +247,20 @@ def main():
 
 
 def perform_global_placement(fixed_blk_pos, netlists,
-                             layout, seed, vis=True):
+                             layout, seed, vis=True, partition_threshold=10):
     from visualize import visualize_clustering_cgra
     from graph import partition_netlist
     # simple heuristics to calculate the clusters
-    clusters = partition_netlist(netlists)
+    # if we have less than 10 blocks. no need to partition it
+    blk_set = set()
+    for net_id, blks in netlists.items():
+        for blk in blks:
+            if blk not in fixed_blk_pos:
+                blk_set.add(blk)
+    if len(blk_set) <= partition_threshold:
+        clusters = {0: blk_set}
+    else:
+        clusters = partition_netlist(netlists)
 
     # prepare for the input
     new_clusters = {}
@@ -264,6 +273,7 @@ def perform_global_placement(fixed_blk_pos, netlists,
                 new_clusters[new_id].add(blk)
     gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
                                 layout)
+    print("cluster", new_clusters)
     gp.set_seed(seed)
     gp.anneal_param_factor = len(new_clusters)
     gp.solve()
