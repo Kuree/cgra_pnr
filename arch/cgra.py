@@ -1,6 +1,5 @@
 from __future__ import print_function, division
 import arch
-import networkx as nx
 import json
 import six
 
@@ -86,13 +85,22 @@ def place_special_blocks(board, blks, board_pos, netlists,
             raise Exception("Unknown block type", blk_id)
 
 
+def get_blks(netlist):
+    result = set()
+    for _, blks in netlist.items():
+        for blk in blks:
+            if blk[0] != "I" and blk[0] != "i":
+                result.add(blk)
+    return result
+
+
 def generate_bitstream(board_filename, netlist_filename,
                        packed_filename, placement_filename,
                        routing_filename, output_filename,
                        io_json):
     netlists, folded_blocks, id_to_name, changed_pe =\
         load_packed_file(packed_filename)
-    g = build_graph(netlists)
+    blks = get_blks(netlists)
     board_meta = arch.parse_cgra(board_filename, True)["CGRA"]
     placement, _ = parse_placement(placement_filename)
     tile_mapping = board_meta[-1]
@@ -120,7 +128,7 @@ def generate_bitstream(board_filename, netlist_filename,
             continue
         blk_id = name_to_id[name]
         # it might be absorbed already
-        if blk_id not in g.nodes():
+        if blk_id not in blks:
             continue
         # it has to be a PE tile
         assert(blk_id[0] in type_str)
@@ -512,20 +520,6 @@ def determine_pin_ports(net, placement, fold_reg=True):
         pin_directions.add((pos, port))
 
     return pin_directions
-
-
-def build_graph(netlists, no_port=False):
-    g = nx.Graph()
-    for net_id in netlists:
-        for entry in netlists[net_id]:
-            if no_port:
-                blk_id = entry
-            else:
-                blk_id, _ = entry
-            g.add_edge(net_id, blk_id)
-    # for edge in g.edges():
-    #    g[edge[0]][edge[1]]['weight'] = 1
-    return g.to_undirected()
 
 
 def prune_netlist(raw_netlist):

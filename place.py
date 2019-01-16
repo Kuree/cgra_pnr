@@ -284,7 +284,6 @@ def perform_global_placement(fixed_blk_pos, netlists,
                 new_clusters[new_id].add(blk)
     gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
                                 layout)
-    print("cluster", new_clusters)
     gp.set_seed(seed)
     gp.anneal_param_factor = len(new_clusters)
     gp.solve()
