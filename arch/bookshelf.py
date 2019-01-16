@@ -3,7 +3,7 @@ from __future__ import print_function
 import sys
 import os
 
-from .arch import parse_cgra
+from .arch import get_layout
 from .cgra import parse_placement, load_packed_file
 
 
@@ -165,13 +165,8 @@ def mock_board_meta(size, memory_repeat=5):
             else:
                 row[x] = "p"
         board_layout.append(row)
-    info = {"margin": margin, "clb_type": "p", "arch_type": "cgra",
-            "height": height, "width": width, "id_remap": {},
-            "io": io_tiles, "io_pad_name": {},
-            "io_pad_bit": {}, "io16_tile": {}}
-    blk_height = {"i": 1, "p": 1, "m": 1}
-    blk_capacity = {"i": 1, "p": 1, "m": 1}
-    layouts = {"CGRA": (board_layout, blk_height, blk_capacity, info)}
+    layout = get_layout(board_layout)
+    layouts = {"cgra": layout}
     return layouts
 
 

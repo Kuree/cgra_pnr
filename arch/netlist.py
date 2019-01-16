@@ -106,36 +106,3 @@ def is_conn_in(raw_name):
         if name in raw_name:
             return True
     return False
-
-
-def kernel_partition(netlists):
-    import networkx as nx
-    g = nx.DiGraph()
-    for net_id in netlists:
-        net = netlists[net_id]
-        first_node = net[0]
-        for node in net[1:]:
-            g.add_edge(first_node, node)
-    nodes = list(nx.algorithms.topological_sort(g))
-    clusters = []
-    cluster = set()
-    for i in range(len(nodes)):
-        node = nodes[i]
-        node_type = node[0]
-        if node_type == "i" or node_type == "m":
-            if len(clusters) == 0:
-                cluster.add(node)
-            else:
-                if len(cluster) > 0:
-                    cluster.add(node)
-                    clusters.append(cluster)
-                    cluster = []
-                else:
-                    clusters[-1].add(node)
-        else:
-            cluster.add(node)
-    print(len(clusters))
-    cluster_result = {}
-    for i in range(len(clusters)):
-        cluster_result[i] = clusters[i]
-    return cluster_result

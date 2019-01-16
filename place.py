@@ -153,6 +153,8 @@ def main():
                         action="store", default="")
     parser.add_argument("-f", "--fpga", action="store", dest="fpga_arch",
                         default="", help="ISPD FPGA architecture file")
+    parser.add_argument("-l", "--layout", action="store", dest="cgra_layout",
+                        default="", help="CGRA layout file")
     parser.add_argument("--mock", action="store", dest="mock_size",
                         default=0, type=int, help="Mock CGRA board with "
                                                   "provided size")
@@ -160,10 +162,14 @@ def main():
 
     cgra_arch = args.cgra_arch
     fpga_arch = args.fpga_arch
+    cgra_layout = args.cgra_layout
     mock_size = args.mock_size
 
-    if len(cgra_arch) == 0 ^ len(fpga_arch) == 0 and mock_size == 0:
-        parser.error("Must provide wither --fpga or --cgra")
+    if sum([len(cgra_arch) != 0,
+            len(fpga_arch) != 0,
+            len(cgra_layout) != 0]) != 1 and \
+            mock_size == 0:
+        parser.error("Must provide wither --fpga, --cgra, or --layout")
 
     packed_filename = args.packed_filename
     placement_filename = args.placement_filename
@@ -183,11 +189,16 @@ def main():
         fold_reg = False
         board_meta = parse_fpga(fpga_arch)
     else:
-        board_meta = parse_cgra(cgra_arch)
+        if len(cgra_arch) > 0:
+            board_meta = parse_cgra(cgra_arch)
+        else:
+            board_meta = {"cgra": pythunder.io.load_layout(cgra_layout)}
     # Common routine
     board_name, layout = board_meta.popitem()
     print("INFO: Placing for", board_name)
     board = make_board(layout)
+
+    pythunder.io.dump_layout(layout, "test.layout")
 
     fixed_blk_pos = {}
     special_blocks = set()
@@ -243,7 +254,7 @@ def main():
     basename_file = os.path.basename(placement_filename)
     design_name, _ = os.path.splitext(basename_file)
     if vis_opt:
-        visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe)
+        visualize_placement_cgra(layout, board_pos, design_name, changed_pe)
 
 
 def perform_global_placement(fixed_blk_pos, netlists,
