@@ -1,5 +1,8 @@
-CGRA PnR [![Build Status](https://travis-ci.org/Kuree/cgra_pnr.svg?branch=master)](https://travis-ci.org/Kuree/cgra_pnr)
----
+CGRA PnR
+--------
+[![Build Status](https://travis-ci.org/Kuree/cgra_pnr.svg?branch=master)](https://travis-ci.org/Kuree/cgra_pnr)
+[![Documentation Status](https://readthedocs.org/projects/cgra-pnr/badge/?version=dev)](https://cgra-pnr.readthedocs.io/en/dev/?badge=dev)
+
 Generic place and route tool for CGRA.
 ## Getting started
 ### Prerequisites
