@@ -193,12 +193,26 @@ Layout load_layout(const std::string &filename) {
     while(std::getline(in, line)) {
         trim(line);
         auto tokens = get_tokens(line);
-        if (tokens.size() != 4 || tokens[0] != "LAYOUT") {
+        if (tokens[0] != "LAYOUT") {
             throw ::runtime_error("expect layer header. got " + line);
         }
-        char blk_type = tokens[1][0];
-        uint32_t major = stou(tokens[2]);
-        uint32_t minor = stou(tokens[3]);
+        char blk_type;
+        uint32_t major;
+        uint32_t minor;
+        if (tokens.size() == 3) {
+            blk_type = ' ';
+            major = stou(tokens[1]);
+            minor = stou(tokens[2]);
+        } else if (tokens.size() == 4) {
+            if (tokens[1].size() != 1)
+                throw ::runtime_error("expect single char. got " + tokens[1]);
+            blk_type = tokens[1][0];
+
+            major = stou(tokens[2]);
+            minor = stou(tokens[3]);
+        } else {
+            throw ::runtime_error("expect layer header. got " + line);
+        }
 
         ::vector<::vector<bool>> layer;
         // we expect BEGIN token

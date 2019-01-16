@@ -1,17 +1,9 @@
 # 1.15 has tons of warnings from scipy
-numpy
-matplotlib
 lxml
-networkx
 pillow
 leidenalg
-# for progress bar
-tqdm
-# futures for python 2 support
-futures
+six
 # aws python sdk
 boto3
-# should be installed with matplotlib; just in case
-six
 # this is to deal with serverless configuration
 pyyaml

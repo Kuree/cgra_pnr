@@ -3,8 +3,6 @@ import os
 from PIL import Image, ImageDraw
 import sys
 
-from matplotlib import pyplot as plt
-
 SCALE_FACTOR = 10
 
 
@@ -50,11 +48,10 @@ def draw_cell(draw, pos, color, scale=None, width_frac=1):
                     y * scale + size), fill=color)
 
 
-def visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe):
-    color_index = "imoprcd"
+def visualize_placement_cgra(layout, board_pos, design_name, changed_pe):
+    color_index = "imoprcdI"
     scale = 30
-    board_info = board_meta[-1]
-    height, width = board_info["height"], board_info["width"]
+    height, width = layout.height(), layout.width()
     im, draw = draw_board(width, height, scale)
     pos_set = set()
     blk_id_list = list(board_pos.keys())
@@ -74,8 +71,7 @@ def visualize_placement_cgra(board_meta, board_pos, design_name, changed_pe):
             width_frac = 1
         draw_cell(draw, pos, color, scale, width_frac=width_frac)
 
-    plt.imshow(im)
-    plt.show()
+    im.show()
 
     file_dir = os.path.dirname(os.path.realpath(__file__))
     output_dir = os.path.join(file_dir, "figures")
@@ -92,18 +88,17 @@ def visualize_clustering_cgra(layout, cluster_cells):
     im, draw = draw_board(width, height, scale)
     for c_id in cluster_cells:
         cells = cluster_cells[c_id]
-        color = color_palette[c_id]
+        color = color_palette[c_id % len(color_palette)]
         for blk_type in cells:
             for pos in cells[blk_type]:
                 draw_cell(draw, pos, color, scale)
 
-    plt.imshow(im)
-    plt.show()
+    im.show()
 
 
 def visualize_board(cgra_file):
     from arch import parse_cgra
-    color_index = "imopr"
+    color_index = "imoprI"
     layout = parse_cgra(cgra_file)["CGRA"]
     scale = 30
     height, width = layout.height(), layout.width()
@@ -113,10 +108,9 @@ def visualize_board(cgra_file):
             blk_type = layout.get_blk_type(x, y)
             if blk_type is not None:
                 index = color_index.index(blk_type)
-                color = color_palette[index]
+                color = color_palette[index % len(color_palette)]
                 draw_cell(draw, (x, y), color, scale)
-    plt.imshow(im)
-    plt.show()
+    im.show()
 
     basename = os.path.basename(cgra_file)
     design_name, ext = os.path.splitext(basename)

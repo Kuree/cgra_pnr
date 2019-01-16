@@ -1,10 +1,3 @@
-from .graph import get_raw_connections
-from .graph import build_raw_graph
-from .cgra import load_packed_file, read_netlist_json
-from .cgra import get_tile_op
-import six
-
-
 # FIXME
 # random numbers
 TIMING_INFO = {
@@ -15,43 +8,6 @@ TIMING_INFO = {
     "mem": 1000,
     "reg": 0
 }
-
-
-def find_all_timed_path(g, name_to_id, id_to_name, changed_pe):
-    import networkx as nx
-    nodes = g.nodes()
-    timed_elements = set()
-
-    for node in nodes:
-        if ("reg" in node or "mem" in node or "io" in node) and \
-           ("lut" not in node and "cnst" not in node and
-           name_to_id[node][0] != "b"):
-            timed_elements.add(node)
-    # in case of reg folding
-    for node in changed_pe:
-        timed_elements.add(id_to_name[node])
-
-    def find_path(start_node):
-        """recursive function to get all path starting from the start_node"""
-        result = []
-        nei = list(nx.neighbors(g, start_node))
-        for n in nei:
-            if n in timed_elements:
-                result.append([start_node, n])
-            else:
-                r = find_path(n)
-                for nn in r:
-                    result.append([start_node] + nn)
-        return result
-
-    paths = []
-    for node in timed_elements:
-        path = find_path(node)
-        for node_path in path:
-            if len(node_path) > 1:
-                paths.append(node_path)
-
-    return paths
 
 
 def convert_timed_path(timed_paths, netlists, folded_blocks, name_to_id):
