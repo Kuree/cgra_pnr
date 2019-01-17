@@ -48,20 +48,6 @@ def parse_placement(placement_file):
 def place_special_blocks(board, blks, board_pos, netlists,
                          place_on_board, layout):
     # put IO in fixed blocks
-    io_count = 0
-
-    # find ports
-    io_mapping = {}
-    for net_id in netlists:
-        for blk_id, port in netlists[net_id]:
-            if blk_id[0] == "i" or blk_id[0] == "I":
-                if port == "in" or port == "inb":     # this is an output port
-                    io_mapping[blk_id] = False
-                elif port == "out" or port == "outb":
-                    io_mapping[blk_id] = True
-                else:
-                    raise Exception("Unknown port: " + port + " for IO: " +
-                                    blk_id)
     one_bit_io_layer = layout.get_layer("i")
     one_bit_io_locations = one_bit_io_layer.produce_available_pos()
     sixteen_bit_io_layer = layout.get_layer("I")
@@ -69,18 +55,28 @@ def place_special_blocks(board, blks, board_pos, netlists,
 
     blks = list(blks)
     blks.sort(key=lambda b: int(b[1:]))
-
+    io_blks = []
     for blk_id in blks:
+        if blk_id[0] == "i" or blk_id[0] == "I":
+            io_blks.append(blk_id)
+    # we assign 16-bit first so that we can apply masksk
+    io_blks.sort(key=lambda x: x[0] == "i")
+    io_mask = layout.get_layer_masks()["I"]
+
+    for blk_id in io_blks:
         if blk_id[0] == "i":
             pos = one_bit_io_locations.pop()
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
-            io_count += 1
         elif blk_id[0] == "I":
             pos = sixteen_bit_io_locations.pop()
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
-            io_count += 1
+            assert pos in io_mask.mask_pos
+            bit1_ios = io_mask.mask_pos[pos]
+            for pos in bit1_ios:
+                if pos in one_bit_io_locations:
+                    one_bit_io_locations.remove(pos)
         else:
             raise Exception("Unknown block type", blk_id)
 

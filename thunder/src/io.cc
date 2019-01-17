@@ -22,6 +22,10 @@ using std::experimental::filesystem::exists;
 
 #define DELIMITER ": \t,()"
 
+
+const ::string BEGIN = "BEGIN";
+const ::string END = "END";
+
 // trim function copied from https://stackoverflow.com/a/217605
 // trim from start (in place)
 static inline void ltrim(std::string &s) {
@@ -143,38 +147,115 @@ load_netlist(const std::string &filename) {
 }
 
 
-std::map<std::string, std::pair<uint32_t, uint32_t>>
-load_placement(const std::string &filename) {
-    if (!::exists(filename))
-        throw ::runtime_error(filename + " does not exist");
-    ::ifstream in;
-    in.open(filename);
-
+void parse_layout(::ifstream &in, Layout &layout,
+                  std::vector<::string> &tokens) {
     ::string line;
-    uint32_t line_num = 0;
-    std::map<std::string, std::pair<uint32_t, uint32_t>> placement;
+    char blk_type;
+    uint32_t major;
+    uint32_t minor;
+    if (tokens.size() == 3) {
+        blk_type = ' ';
+        major = stou(tokens[1]);
+        minor = stou(tokens[2]);
+    } else if (tokens.size() == 4) {
+        if (tokens[1].size() != 1)
+            throw ::runtime_error("expect single char. got " + tokens[1]);
+        blk_type = tokens[1][0];
 
-    while(std::getline(in, line)) {
-        if (line_num < 2) {
-            line_num++;
-            continue;
-        }
-        trim(line);
-
-        auto tokens = get_tokens(line);
-        if (tokens.size() != 4)
-            throw ::runtime_error("unable to process line " + line);
-        auto x = stou(tokens[1]);
-        auto y = stou(tokens[2]);
-        auto blk_id = tokens[3].substr(1, ::string::npos);
-
-        placement.insert({blk_id, {x, y}});
-        line_num++;
+        major = stou(tokens[2]);
+        minor = stou(tokens[3]);
+    } else {
+        throw ::runtime_error("expect layer header. got " + line);
     }
 
-    return placement;
+    ::vector<::vector<bool>> layer;
+    // we expect BEGIN token
+    std::getline(in, line);
+    trim(line);
+    if (line != BEGIN) {
+        std::stringstream msg;
+        msg << "expect " << BEGIN << " got " << line;
+        throw ::runtime_error(msg.str());
+    }
+    while(std::getline(in, line)) {
+        trim(line);
+        if (line == END)
+            break;
+        ::vector<bool> row;
+        for (const auto c : line) {
+            if (c == '1')
+                row.emplace_back(true);
+            else if (c == '0')
+                row.emplace_back(false);
+            else
+                throw ::runtime_error("expect either 1 or 0, got " +
+                                      ::string(1, c));
+        }
+        if (!layer.empty()) {
+            if (layer[0].size() != row.size()) {
+                throw ::runtime_error("not a rectangular layout");
+            }
+        }
+        layer.emplace_back(row);
+    }
+    auto height = static_cast<uint32_t>(layer.size());
+    auto width = static_cast<uint32_t>(layer[0].size());
+    auto l = Layer(blk_type, width, height);
+    for (uint32_t y = 0; y < layer.size(); y++) {
+        auto const &row = layer[y];
+        for (uint32_t x = 0; x < row.size(); x++) {
+            if (layer[y][x])
+                l.mark_available(x, y);
+        }
+    }
+    layout.add_layer(l, major, minor);
 }
 
+void parse_mask(::ifstream &in, Layout &layout,
+                std::vector<::string> &tokens) {
+    ::string line;
+    // read the masks
+    if (tokens.size() != 3) {
+        throw std::runtime_error("expect format MASK %c %c.");
+    }
+    char blk_type = tokens[1][0];
+    char mask_blk_type = tokens[2][0];
+
+    std::getline(in, line);
+    trim(line);
+    if (line != BEGIN) {
+        std::stringstream msg;
+        msg << "expect " << BEGIN << " got " << line;
+        throw ::runtime_error(msg.str());
+    }
+    LayerMask mask;
+    mask.blk_type = blk_type;
+    mask.mask_blk_type = mask_blk_type;
+
+    while(std::getline(in, line)) {
+        trim(line);
+        if (line == END)
+            break;
+        tokens = get_tokens(line);
+        if (tokens.size() % 2) {
+            throw ::runtime_error("expect coordinates pair, got " + line);
+        }
+        uint32_t src_x = stou(tokens[0]);
+        uint32_t src_y = stou(tokens[1]);
+
+        std::pair<uint32_t, uint32_t> src_pos = {src_x, src_y};
+        if (mask.mask_pos.find(src_pos) == mask.mask_pos.end())
+            mask.mask_pos.insert({src_pos, {}});
+
+        for (uint32_t i = 2; i < tokens.size(); i += 2) {
+            uint32_t x = stou(tokens[i]);
+            uint32_t y = stou(tokens[i + 1]);
+            mask.mask_pos[src_pos].emplace_back(std::make_pair(x, y));
+        }
+    }
+
+    layout.add_layer_mask(mask);
+}
 
 Layout load_layout(const std::string &filename) {
     if (!::exists(filename))
@@ -184,8 +265,6 @@ Layout load_layout(const std::string &filename) {
 
     Layout layout;
 
-    const ::string BEGIN = "BEGIN";
-    const ::string END = "END";
 
     ::string line;
     // the first line has to be meta data line
@@ -193,68 +272,14 @@ Layout load_layout(const std::string &filename) {
     while(std::getline(in, line)) {
         trim(line);
         auto tokens = get_tokens(line);
-        if (tokens[0] != "LAYOUT") {
-            throw ::runtime_error("expect layer header. got " + line);
-        }
-        char blk_type;
-        uint32_t major;
-        uint32_t minor;
-        if (tokens.size() == 3) {
-            blk_type = ' ';
-            major = stou(tokens[1]);
-            minor = stou(tokens[2]);
-        } else if (tokens.size() == 4) {
-            if (tokens[1].size() != 1)
-                throw ::runtime_error("expect single char. got " + tokens[1]);
-            blk_type = tokens[1][0];
-
-            major = stou(tokens[2]);
-            minor = stou(tokens[3]);
+        if (tokens[0] == "LAYOUT") {
+            parse_layout(in, layout, tokens);
+        } else if (tokens[0] == "MASK") {
+            parse_mask(in, layout, tokens);
         } else {
-            throw ::runtime_error("expect layer header. got " + line);
+            throw ::runtime_error("expect header. got " + line);
         }
 
-        ::vector<::vector<bool>> layer;
-        // we expect BEGIN token
-        std::getline(in, line);
-        trim(line);
-        if (line != BEGIN) {
-            std::stringstream msg;
-            msg << "expect " << BEGIN << " got " << line;
-            throw ::runtime_error(msg.str());
-        }
-        while(std::getline(in, line)) {
-            trim(line);
-            if (line == END)
-                break;
-            ::vector<bool> row;
-            for (const auto c : line) {
-                if (c == '1')
-                    row.emplace_back(true);
-                else if (c == '0')
-                    row.emplace_back(false);
-                else
-                    throw ::runtime_error("expect either 1 or 0, got " +
-                                          ::string(1, c));
-            }
-            if (!layer.empty()) {
-                if (layer[0].size() != row.size()) {
-                    throw ::runtime_error("not a rectangular layout");
-                }
-            }
-            layer.emplace_back(row);
-        }
-        auto height = static_cast<uint32_t>(layer.size());
-        auto width = static_cast<uint32_t>(layer[0].size());
-        auto l = Layer(blk_type, width, height);
-        for (uint32_t y = 0; y < layer.size(); y++) {
-            auto const &row = layer[y];
-            for (uint32_t x = 0; x < row.size(); x++) {
-                if (layer[y][x])
-                    l.mark_available(x, y);
-            }
-        }
-        layout.add_layer(l, major, minor);
     }
     return layout;
 }
@@ -262,9 +287,6 @@ Layout load_layout(const std::string &filename) {
 void dump_layout(const Layout &layout, const std::string &filename) {
     std::ofstream out;
     out.open(filename, std::ofstream::out);
-
-    const ::string BEGIN = "BEGIN";
-    const ::string END = "END";
 
     auto [width, height] = layout.get_size();
 
@@ -284,6 +306,25 @@ void dump_layout(const Layout &layout, const std::string &filename) {
                     out << "0";
             }
             out << endl;
+        }
+        out << END << endl;
+    }
+
+    // dump masks as well
+    auto masks = layout.get_layer_masks();
+    for (const auto &[blk_type, mask] : masks) {
+        const auto mask_type = mask.mask_blk_type;
+        out << "MASK " << blk_type << " " << mask_type << endl << BEGIN << endl;
+        for (const auto &[blk_pos, positions] : mask.mask_pos) {
+            auto [src_x, src_y] = blk_pos;
+            out << "(" << src_x << ", " << src_y << ")";
+            for (uint32_t i = 0; i < positions.size(); i++) {
+                auto [x, y] = positions[i];
+                out << " (" << x << ", " << y << ") ";
+                if (i % 8 == 7 && i != positions.size() - 1) {
+                    out << endl << "(" << src_x << ", " << src_y << ")";
+                }
+            }
         }
         out << END << endl;
     }
