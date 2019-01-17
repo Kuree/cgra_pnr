@@ -194,6 +194,22 @@ def get_layout(board_layout):
     layout.set_priority_major('m', default_priority - 1)
     return layout
 
+def set_io_mask(layout, io_mask_table):
+    mask = pythunder.LayerMask()
+    mask.blk_type = "I"
+    mask.mask_blk_type = "i"
+    io16_layer = layout.get_layer("I")
+    io16_pos = io16_layer.produce_available_pos()
+    for _, pos_list in io_mask_table.items():
+        for pos in io16_pos:
+            if pos in pos_list:
+                io1bit = []
+                for b1_pos in pos_list:
+                    io1bit.append(b1_pos)
+                mask.add_mask_pos(pos, io1bit)
+                io16_pos.remove(pos)
+    layout.add_layer_mask(mask)
+
 
 def parse_cgra(filename, use_tile_addr=False):
     root = etree.parse(filename)
@@ -205,6 +221,7 @@ def parse_cgra(filename, use_tile_addr=False):
     io_pad_name = {}
     io_pad_bit = {}
     io16_tile = {}
+    io_mask_table = {}
 
     for tile in root.iter("tile"):
         if "type" not in tile.attrib or tile.attrib["type"] == "gst":
@@ -232,7 +249,9 @@ def parse_cgra(filename, use_tile_addr=False):
             # add it to the io 16 tiles
             if pad_name not in io16_tile:
                 io16_tile[pad_name] = []
+                io_mask_table[pad_name] = []
             io16_tile[pad_name].append(tile_addr)
+            io_mask_table[pad_name].append((x, y))
 
     positions = list(board_dict.keys())
     positions.sort(key=lambda entry: entry[0], reverse=True)
@@ -260,6 +279,7 @@ def parse_cgra(filename, use_tile_addr=False):
     # no need to worry about the height
     layouts = {}
     layout = get_layout(layout_board)
+    set_io_mask(layout, io_mask_table)
     if use_tile_addr:
         layouts[layout_name] = (layout, info,
                                 tile_mapping)

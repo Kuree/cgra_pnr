@@ -222,3 +222,10 @@ std::string Layout::layout_repr() {
     }
     return ss.str();
 }
+
+void Layout::add_layer_mask(const LayerMask &mask) {
+    auto const blk_type = mask.blk_type;
+    if (layer_masks_.find(blk_type) != layer_masks_.end())
+        throw std::runtime_error(std::string(1, blk_type) + " already exists");
+    layer_masks_.insert({blk_type, mask});
+}

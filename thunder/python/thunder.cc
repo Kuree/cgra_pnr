@@ -26,6 +26,64 @@ void init_io(py::module &m) {
 }
 
 
+void init_layout(py::module &m) {
+    py::class_<Layer>(m, "Layer")
+            .def(py::init<char, uint32_t, uint32_t>())
+            .def(py::init<const Layer &>())
+            .def_readwrite("blk_type", &Layer::blk_type)
+            .def("mark_available", &Layer::mark_available)
+            .def("mark_unavailable", &Layer::mark_unavailable)
+            .def("produce_available_pos", &Layer::produce_available_pos)
+            .def_readwrite("blk_type", &Layer::blk_type)
+            .def("__getitem__", [](const Layer &layer,
+                                   const std::pair<uint32_t, uint32_t> &pos) {
+                return layer[pos];
+            });
+    py::class_<Layout>(m, "Layout")
+            .def(py::init<>())
+            .def(py::init<const std::map<char,
+                    std::vector<std::vector<bool>>> &>())
+            .def(py::init<const std::vector<std::vector<char>> &>())
+            .def("add_layer",
+                 py::overload_cast<const Layer&>(&Layout::add_layer))
+            .def("add_layer",
+                 py::overload_cast<const Layer&,
+                         uint32_t, uint32_t>(&Layout::add_layer))
+            .def_readwrite_static("DEFAULT_PRIORITY", &Layout::DEFAULT_PRIORITY)
+            .def("is_legal", &Layout::is_legal)
+            .def("get_blk_type", &Layout::get_blk_type)
+            .def("get_blk_types", &Layout::get_blk_types)
+            .def("get_layer", &Layout::get_layer)
+            .def("get_priority_major", &Layout::get_priority_major)
+            .def("get_priority_minor", &Layout::get_priority_minor)
+            .def("get_layer_types", &Layout::get_layer_types)
+            .def("set_priority_major", &Layout::set_priority_major)
+            .def("set_priority_minor", &Layout::set_priority_minor)
+            .def("produce_available_pos", &Layout::produce_available_pos)
+            .def("get_layer_masks", &Layout::get_layer_masks)
+            .def("add_layer_mask", &Layout::add_layer_mask)
+            .def("get_clb_type", &Layout::get_clb_type)
+            .def("get_margin", &Layout::get_margin)
+            .def("height", &Layout::height)
+            .def("width", &Layout::width)
+            .def("__repr__", &Layout::layout_repr);
+
+    py::class_<LayerMask>(m, "LayerMask")
+            .def(py::init<>())
+            .def_readwrite("blk_type", &LayerMask::blk_type)
+            .def_readwrite("mask_blk_type", &LayerMask::mask_blk_type)
+            .def("add_mask_pos",
+                    [](LayerMask &mask,
+                       const std::pair<uint32_t, uint32_t> &blk_pos,
+                       std::vector<std::pair<uint32_t, uint32_t>> &list) {
+                if (mask.mask_pos.find(blk_pos) != mask.mask_pos.end())
+                    throw std::runtime_error("pos already exists");
+                mask.mask_pos[blk_pos] = list;
+            })
+            .def_readwrite("mask_pos", &LayerMask::mask_pos,
+                           py::return_value_policy::reference);
+}
+
 void init_pythunder(py::module &m) {
     py::class_<DetailedMove>(m, "DetailedMove")
             .def(py::init<>());
@@ -74,45 +132,6 @@ void init_pythunder(py::module &m) {
             .def_readwrite("anneal_param_factor",
                            &GlobalPlacer::anneal_param_factor)
             .def_readwrite("steps", &GlobalPlacer::steps);
-
-    py::class_<Layer>(m, "Layer")
-            .def(py::init<char, uint32_t, uint32_t>())
-            .def(py::init<const Layer &>())
-            .def_readwrite("blk_type", &Layer::blk_type)
-            .def("mark_available", &Layer::mark_available)
-            .def("mark_unavailable", &Layer::mark_unavailable)
-            .def("produce_available_pos", &Layer::produce_available_pos)
-            .def_readwrite("blk_type", &Layer::blk_type)
-            .def("__getitem__", [](const Layer &layer,
-                                   const std::pair<uint32_t, uint32_t> &pos) {
-                return layer[pos];
-            });
-    py::class_<Layout>(m, "Layout")
-            .def(py::init<>())
-            .def(py::init<const std::map<char,
-                                         std::vector<std::vector<bool>>> &>())
-            .def(py::init<const std::vector<std::vector<char>> &>())
-            .def("add_layer",
-                 py::overload_cast<const Layer&>(&Layout::add_layer))
-            .def("add_layer",
-                 py::overload_cast<const Layer&,
-                                   uint32_t, uint32_t>(&Layout::add_layer))
-            .def_readwrite_static("DEFAULT_PRIORITY", &Layout::DEFAULT_PRIORITY)
-            .def("is_legal", &Layout::is_legal)
-            .def("get_blk_type", &Layout::get_blk_type)
-            .def("get_blk_types", &Layout::get_blk_types)
-            .def("get_layer", &Layout::get_layer)
-            .def("get_priority_major", &Layout::get_priority_major)
-            .def("get_priority_minor", &Layout::get_priority_minor)
-            .def("get_layer_types", &Layout::get_layer_types)
-            .def("set_priority_major", &Layout::set_priority_major)
-            .def("set_priority_minor", &Layout::set_priority_minor)
-            .def("produce_available_pos", &Layout::produce_available_pos)
-            .def("get_clb_type", &Layout::get_clb_type)
-            .def("get_margin", &Layout::get_margin)
-            .def("height", &Layout::height)
-            .def("width", &Layout::width)
-            .def("__repr__", &Layout::layout_repr);
 }
 
 void init_detailed_placement(py::module &m) {
@@ -134,5 +153,6 @@ PYBIND11_MODULE(pythunder, m) {
     m.doc() = "pythunder";
     init_pythunder(m);
     init_detailed_placement(m);
+    init_layout(m);
     init_io(m);
 }

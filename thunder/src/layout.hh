@@ -29,6 +29,16 @@ public:
                                  uint32_t y) { layout_[y][x] = false; }
 };
 
+class LayerMask {
+public:
+    // masks to block other layers. only useful in IO groups so far
+    char blk_type;
+    char mask_blk_type;
+
+    std::map<std::pair<uint32_t, uint32_t>,
+             std::vector<std::pair<uint32_t, uint32_t>>> mask_pos;
+};
+
 class Layout {
 public:
     // layout consists of each layers, where you can only place one single
@@ -69,6 +79,11 @@ public:
     std::map<char, std::vector<std::pair<uint32_t, uint32_t>>>
     produce_available_pos();
 
+    // masks
+    const std::map<char, LayerMask> get_layer_masks() const
+    { return layer_masks_; }
+    void add_layer_mask(const LayerMask &mask);
+
     uint32_t get_margin();
     char get_clb_type() const;
 
@@ -84,6 +99,8 @@ private:
     std::unordered_map<char, uint32_t> layers_priority_minor_;
     uint64_t width_ = 0;
     uint64_t height_ = 0;
+
+    std::map<char, LayerMask> layer_masks_;
 };
 
 
