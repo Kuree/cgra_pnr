@@ -65,7 +65,7 @@ def place_special_blocks(board, blks, board_pos, netlists,
 
     for blk_id in io_blks:
         if blk_id[0] == "i":
-            pos = one_bit_io_locations.pop()
+            pos = sixteen_bit_io_locations.pop()
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
         elif blk_id[0] == "I":
