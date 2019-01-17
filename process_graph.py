@@ -50,6 +50,7 @@ def build_routing_graph(routing_resource, layout):
     layout_width = layout.width()
     layout_height = layout.height()
     clb_type = layout.get_clb_type()
+    margin = layout.get_margin()
 
     sb_16 = Switch(0, 0, NUM_TRACK, 16, SWITCH_ID,
                    get_disjoint_sb_wires(NUM_TRACK))
@@ -69,7 +70,7 @@ def build_routing_graph(routing_resource, layout):
         g_16.add_tile(t16)
 
     for y in range(layout_height - 1):
-        for x in range(layout_width):
+        for x in range(margin, layout_width - margin):
             if (not is_fu_tile(layout, x, y)) or \
                     (not is_fu_tile(layout, x, y + 1)):
                 continue
@@ -111,7 +112,7 @@ def build_routing_graph(routing_resource, layout):
                         g.add_edge(sb_bottom, reg2)
                         g.add_edge(reg2, sb_top)
 
-    for y in range(layout_height):
+    for y in range(margin, layout_height - margin):
         # connect from left to right and right to left
         for x in range(layout_width - 1):
             if (not is_fu_tile(layout, x, y)) or \
