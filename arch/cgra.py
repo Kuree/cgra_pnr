@@ -85,8 +85,8 @@ def get_blks(netlist):
     result = set()
     for _, blks in netlist.items():
         for blk in blks:
-            if blk[0] != "I" and blk[0] != "i":
-                result.add(blk)
+            if blk[0][0] != "I" and blk[0][0] != "i":
+                result.add(blk[0])
     return result
 
 
