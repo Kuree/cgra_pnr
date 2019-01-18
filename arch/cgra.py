@@ -315,7 +315,7 @@ def generate_io(id_to_name, io16_tile, io_pad_bit, io_pad_name, placement,
                 id_to_name[blk_id] = "io1_out_0_0"
                 io_bit = io_pad_bit[pos]
                 io_pad_info[id_to_name[blk_id]] = {"bits":
-                                                       {io_bit: {"pad_bit":
+                                                       {"0": {"pad_bit":
                                                                   io_bit}},
                                                    "mode": "out",
                                                    "width": 1}
@@ -324,7 +324,7 @@ def generate_io(id_to_name, io16_tile, io_pad_bit, io_pad_name, placement,
             elif "reset" in id_to_name[blk_id]:
                 io_bit = io_pad_bit[pos]
                 io_pad_info[id_to_name[blk_id]] = {"bits":
-                                                       {io_bit: {"pad_bit":
+                                                       {"0": {"pad_bit":
                                                                      io_bit}},
                                                    "mode": "reset",
                                                    "width": 1}
