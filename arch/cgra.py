@@ -35,7 +35,7 @@ def parse_placement(placement_file):
     id_to_name = {}
     for line in lines:
         raw_line = line.split()
-        assert(len(raw_line) == 4)
+        assert (len(raw_line) == 4)
         blk_name = raw_line[0]
         x = int(raw_line[1])
         y = int(raw_line[2])
@@ -94,7 +94,7 @@ def generate_bitstream(board_filename, netlist_filename,
                        packed_filename, placement_filename,
                        routing_filename, output_filename,
                        io_json):
-    netlists, folded_blocks, id_to_name, changed_pe =\
+    netlists, folded_blocks, id_to_name, changed_pe = \
         load_packed_file(packed_filename)
     blks = get_blks(netlists)
     board_meta = arch.parse_cgra(board_filename, True)["CGRA"]
@@ -127,7 +127,7 @@ def generate_bitstream(board_filename, netlist_filename,
         if blk_id not in blks:
             continue
         # it has to be a PE tile
-        assert(blk_id[0] in type_str)
+        assert (blk_id[0] in type_str)
         pos = placement[blk_id]
         tile = tile_mapping[pos]
 
@@ -313,19 +313,19 @@ def generate_io(id_to_name, io16_tile, io_pad_bit, io_pad_name, placement,
             if "io1_" in id_to_name[blk_id]:
                 # hack to make it consistent with run_tbg.csh
                 id_to_name[blk_id] = "io1_out_0_0"
+                io_bit = io_pad_bit[pos]
                 io_pad_info[id_to_name[blk_id]] = {"bits":
-                                                       {"0": {"pad_bit":
-                                                                  io_pad_bit[
-                                                                      pos]}},
+                                                       {io_bit: {"pad_bit":
+                                                                  io_bit}},
                                                    "mode": "out",
                                                    "width": 1}
                 tile = tile_mapping[pos]
                 io_strings.append("Tx{:04X}_pad(out,1)".format(tile))
             elif "reset" in id_to_name[blk_id]:
+                io_bit = io_pad_bit[pos]
                 io_pad_info[id_to_name[blk_id]] = {"bits":
-                                                       {"0": {"pad_bit":
-                                                                  io_pad_bit[
-                                                                      pos]}},
+                                                       {io_bit: {"pad_bit":
+                                                                     io_bit}},
                                                    "mode": "reset",
                                                    "width": 1}
                 tile = tile_mapping[pos]
@@ -416,7 +416,7 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
         entry_data = folded_block[entry]
         if len(entry_data) == 2:
             # reg folding
-            assert(entry[0][0] == "r")
+            assert (entry[0][0] == "r")
             b_id, port = entry_data
             pin_name = "reg"
         elif len(entry_data) == 3:
@@ -431,7 +431,7 @@ def get_tile_pins(blk_id, op, folded_block, instances, changed_pe,
                 index = 2
             else:
                 index = int(port[-1])
-            assert(pin_name is not None)
+            assert (pin_name is not None)
             pins[index] = pin_name
     if blk_id in changed_pe:
         pins[0] = "reg"
@@ -468,7 +468,7 @@ def get_tile_op(instance, blk_id, changed_pe, rename_op=True):
             op = "mem"
         print_order = 3
     elif pe_type == "cgralib.IO":
-        return None, None    # don't care yet
+        return None, None  # don't care yet
     else:
         op = instance["genargs"]["op_kind"][-1]
         if op == "bit":
