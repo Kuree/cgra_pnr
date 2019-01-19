@@ -326,6 +326,6 @@ void dump_layout(const Layout &layout, const std::string &filename) {
                 }
             }
         }
-        out << END << endl;
+        out << endl << END << endl;
     }
 }

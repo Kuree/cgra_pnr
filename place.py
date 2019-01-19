@@ -198,7 +198,7 @@ def main():
     print("INFO: Placing for", board_name)
     board = make_board(layout)
 
-    pythunder.io.dump_layout(layout, "test.layout")
+    pythunder.io.dump_layout(layout, "cgra.layout")
 
     fixed_blk_pos = {}
     special_blocks = set()
