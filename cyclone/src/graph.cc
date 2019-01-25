@@ -83,7 +83,7 @@ std::string PortNode::to_string() const {
            + ::to_string(y) + ", " + ::to_string(width) + ")";
 }
 
-std::string GenericNode::to_string() const {
+std::string RegisterMuxNode::to_string() const {
     return ::string(TOKEN) + " " + name + " (" + ::to_string(x) + ", "
            + ::to_string(y) + ", " + ::to_string(width) + ")";
 }
@@ -293,15 +293,15 @@ std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {
             }
             case NodeType::Generic:
                 // genetic node
-                if (tile.generic_nodes.find(node.name)
-                    == tile.generic_nodes.end())
-                    tile.generic_nodes[node.name] =
-                            ::make_shared<GenericNode>(node.name,
+                if (tile.rmux_nodes.find(node.name)
+                    == tile.rmux_nodes.end())
+                    tile.rmux_nodes[node.name] =
+                            ::make_shared<RegisterMuxNode>(node.name,
                                                        node.x,
                                                        node.y,
                                                        node.width,
                                                        node.track);
-                return tile.generic_nodes.at(node.name);
+                return tile.rmux_nodes.at(node.name);
         }
     }
     return nullptr;

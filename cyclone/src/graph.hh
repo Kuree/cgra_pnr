@@ -91,16 +91,16 @@ private:
 
 };
 
-class GenericNode : public Node {
+class RegisterMuxNode : public Node {
 public:
-    GenericNode(const std::string &name, uint32_t x, uint32_t y,
+    RegisterMuxNode(const std::string &name, uint32_t x, uint32_t y,
              uint32_t width, uint32_t track) :
              Node(NodeType::Generic, name, x, y, width, track) {}
-    GenericNode(const std::string &name, uint32_t x, uint32_t y)
+    RegisterMuxNode(const std::string &name, uint32_t x, uint32_t y)
             : Node(NodeType::Generic, name, x, y) {}
     std::string to_string() const override;
 
-    static constexpr char TOKEN[] = "GENERIC";
+    static constexpr char TOKEN[] = "RMUX";
 };
 
 class PortNode : public Node {
@@ -210,7 +210,7 @@ struct Tile {
     // through the tiles
     std::map<std::string, std::shared_ptr<PortNode>> ports;
     std::map<std::string, std::shared_ptr<RegisterNode>> registers;
-    std::map<std::string, std::shared_ptr<GenericNode>> generic_nodes;
+    std::map<std::string, std::shared_ptr<RegisterMuxNode>> rmux_nodes;
 
     uint32_t num_tracks() { return static_cast<uint32_t>(switchbox.num_track); }
 

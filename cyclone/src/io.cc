@@ -312,7 +312,7 @@ void dump_routing_graph(RoutingGraph &graph,
             out << PAD << END << endl;
         }
 
-        for (auto const &generic_tier : tile.generic_nodes) {
+        for (auto const &generic_tier : tile.rmux_nodes) {
             out << PAD << generic_tier.second->to_string() << endl;
             out << PAD << BEGIN << endl;
             print_conn(out, PAD, generic_tier.second);
@@ -349,8 +349,8 @@ RegisterNode create_reg_from_tokens(const ::vector<::string> &tokens) {
     return RegisterNode(tokens[1], values[1], values[2], values[3], values[0]);
 }
 
-GenericNode create_generic_from_tokens(const ::vector<::string> &tokens) {
-    if (tokens[0] != GenericNode::TOKEN)
+RegisterMuxNode create_generic_from_tokens(const ::vector<::string> &tokens) {
+    if (tokens[0] != RegisterMuxNode::TOKEN)
         throw ::runtime_error("export GENERIC, got " + tokens[0]);
     if (tokens.size() < 6)
         throw ::runtime_error("expect at least 6 entries for reg");
@@ -358,7 +358,7 @@ GenericNode create_generic_from_tokens(const ::vector<::string> &tokens) {
     // track, x, y, width
     for (uint32_t i = 0; i < 4; i++)
         values[i] = stou(tokens[i + 2]);
-    return GenericNode(tokens[1], values[1], values[2], values[3], values[0]);
+    return RegisterMuxNode(tokens[1], values[1], values[2], values[3], values[0]);
 }
 
 SwitchBoxNode create_sb_from_tokens(const ::vector<::string> &tokens) {
@@ -404,7 +404,7 @@ void connect_nodes(Node &from, std::ifstream &in, RoutingGraph &g) {
         } else if (line_tokens[0] == PortNode::TOKEN) {
             auto port = create_port_from_tokens(line_tokens);
             g.add_edge(from, port);
-        } else if (line_tokens[0] == GenericNode::TOKEN) {
+        } else if (line_tokens[0] == RegisterMuxNode::TOKEN) {
             auto node = create_generic_from_tokens(line_tokens);
             g.add_edge(from, node);
         } else {
@@ -493,7 +493,7 @@ RoutingGraph load_routing_graph(const std::string &filename) {
         } else if (line_tokens[0] == RegisterNode::TOKEN) {
             auto reg = create_reg_from_tokens(line_tokens);
             connect_nodes(reg, in, g);
-        } else if (line_tokens[0] == GenericNode::TOKEN) {
+        } else if (line_tokens[0] == RegisterMuxNode::TOKEN) {
             auto generic = create_generic_from_tokens(line_tokens);
             connect_nodes(generic, in, g);
         }
