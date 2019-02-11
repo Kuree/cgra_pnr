@@ -4,3 +4,6 @@
 [submodule "cyclone/python/pybind11"]
 	path = cyclone/python/pybind11
 	url = https://github.com/pybind/pybind11
+[submodule "thunder/lib/leidenalg"]
+	path = thunder/lib/leidenalg
+	url = git@github.com:Kuree/leidenalg.git
