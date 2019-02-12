@@ -2,11 +2,11 @@
 set -e
 
 # thunder
-pushd thunder/
+cd thunder/
 python setup.py sdist upload -r pypi
-popd
+cd ..
 
 # cyclone
-pushd cyclone/
+cd cyclone/
 python setup.py sdist upload -r pypi
-popd
+cd ..
