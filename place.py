@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division
 
 from util import reduce_cluster_graph, compute_centroids
 from util import SetEncoder, choose_resource
@@ -285,7 +285,11 @@ def perform_global_placement(fixed_blk_pos, netlists,
     gp = pythunder.GlobalPlacer(new_clusters, netlists, fixed_blk_pos,
                                 layout)
     gp.set_seed(seed)
-    gp.anneal_param_factor = len(new_clusters) * 1.5
+    # compute the anneal parameter here
+    total_blocks = layout.get_layer(layout.get_clb_type()).produce_available_pos()
+    fill_ratio = min(0.99, len(blk_set) / len(total_blocks))
+    gp.anneal_param_factor = 1 / (1 - fill_ratio)
+    print("use anneal param", gp.anneal_param_factor)
     gp.solve()
     gp.anneal()
     cluster_cells_ = gp.realize()
