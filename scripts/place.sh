@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -xe
+set -e
 
 # global variables
 is_garet=0
