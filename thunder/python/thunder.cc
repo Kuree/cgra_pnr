@@ -8,6 +8,7 @@
 #include "../src/multi_place.hh"
 #include "../src/layout.hh"
 #include "../src/io.hh"
+#include "../src/graph.hh"
 
 namespace py = pybind11;
 using std::move;
@@ -23,6 +24,12 @@ void init_io(py::module &m) {
 
     io_m.def("load_layout", &load_layout)
         .def("dump_layout", &dump_layout);
+}
+
+void init_graph(py::module &m) {
+    auto graph_m = m.def_submodule("graph");
+
+    graph_m.def("partition_netlist", &partition_netlist);
 }
 
 
@@ -155,4 +162,5 @@ PYBIND11_MODULE(pythunder, m) {
     init_detailed_placement(m);
     init_layout(m);
     init_io(m);
+    init_graph(m);
 }

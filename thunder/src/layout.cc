@@ -18,7 +18,8 @@ Layer::Layer(const Layer &layer) {
     }
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> Layer::produce_available_pos() {
+std::vector<std::pair<uint32_t, uint32_t>>
+Layer::produce_available_pos() const {
     ::vector<std::pair<uint32_t, uint32_t>> result;
 
     for (uint32_t y = 0; y < layout_.size(); y++) {

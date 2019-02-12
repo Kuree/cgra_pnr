@@ -18,7 +18,7 @@ public:
     { return std::vector<bool>(layout_[row].begin(), layout_[row].end()); }
     std::pair<uint64_t, uint64_t> get_size() const;
 
-    std::vector<std::pair<uint32_t, uint32_t>> produce_available_pos();
+    std::vector<std::pair<uint32_t, uint32_t>> produce_available_pos() const;
 
 private:
     std::vector<std::vector<bool>> layout_;
