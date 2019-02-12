@@ -533,8 +533,10 @@ double GlobalPlacer::eval_f(double overlap_param) const {
         aspect += gaussian_table_[x];
     }
 
+    // NOTE:
+    // disable aspect force for now since it's not stable
     return hpwl * hpwl_param_ + overlap * potential_param_ * overlap_param +
-           legal * legal_param_ + aspect * aspect_param_;
+           legal * legal_param_;
 }
 
 void  GlobalPlacer::eval_grad_f(::vector<::pair<double, double>> &grad_f,

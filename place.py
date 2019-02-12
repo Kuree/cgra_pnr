@@ -289,7 +289,7 @@ def perform_global_placement(fixed_blk_pos, netlists,
     total_blocks = layout.get_layer(layout.get_clb_type()).produce_available_pos()
     fill_ratio = min(0.99, len(blk_set) / len(total_blocks))
     gp.anneal_param_factor = 1 / (1 - fill_ratio)
-    print("use anneal param", gp.anneal_param_factor)
+    print("use anneal param factor:", gp.anneal_param_factor)
     gp.solve()
     gp.anneal()
     cluster_cells_ = gp.realize()
