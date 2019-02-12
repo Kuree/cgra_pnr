@@ -159,3 +159,25 @@ filter_clusters(const std::map<int, std::set<std::string>> &clusters,
     }
     return result;
 }
+
+std::map<std::string, std::pair<int, int>>
+compute_centroids(const std::map<std::string,
+                                 std::map<char,
+                                           std::set<std::pair<int,
+                                                              int>>>> &clusters,
+                  char clb_type) {
+    std::map<std::string, std::pair<int, int>> result;
+    for (auto const &[cluster_id, positions] : clusters) {
+        int x_sum = 0;
+        int y_sum = 0;
+        auto pos = positions.at(clb_type);
+        for (auto const &[x, y] : pos) {
+            x_sum += x;
+            y_sum += y;
+        }
+        auto c_x = static_cast<int>(x_sum / pos.size());
+        auto c_y = static_cast<int>(x_sum / pos.size());
+        result[cluster_id] = {c_x, c_y};
+    }
+    return result;
+}

@@ -75,9 +75,10 @@ int main(int argc, char *argv[]) {
     gp.solve();
     gp.anneal();
 
-    auto raw_result = gp.realize();
+    auto gp_result = gp.realize();
+    auto centroids = compute_centroids(gp_result, layout.get_clb_type());
+    // substitutes the clusters
 
-    (void)raw_result;
-
+    (void)centroids;
     return EXIT_SUCCESS;
 }
