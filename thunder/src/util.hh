@@ -5,6 +5,7 @@
 #include <map>
 #include <climits>
 #include <iterator>
+#include <set>
 
 struct Net;
 
@@ -63,5 +64,13 @@ inline std::pair<int, int> compute_overlap(const Point &p1, const Point &p2,
     int dy = std::min(p2.y, p4.y) - std::max(p1.y, p3.y);
     return {dx, dy};
 }
+
+std::map<std::string, std::set<std::string>>
+convert_clusters(const std::map<int, std::set<std::string>> &clusters,
+                 const std::map<std::string, std::pair<int, int>> &fixed_pos);
+
+std::map<int, std::set<std::string>>
+filter_clusters(const std::map<int, std::set<std::string>> &clusters,
+                const std::map<std::string, std::pair<int, int>> &fixed_pos);
 
 #endif //THUNDER_UTIL_HH

@@ -2,6 +2,7 @@
 #include "../src/graph.hh"
 #include "../src/global.hh"
 #include "../src/layout.hh"
+#include "../src/util.hh"
 
 using std::string;
 constexpr uint32_t seed = 0;
@@ -17,23 +18,6 @@ convert_netlist(const std::map<::string,
             blks[i] = net[i].first;
         }
         result.insert({net_id, blks});
-    }
-    return result;
-}
-
-std::map<std::string, std::set<std::string>>
-convert_clusters(const std::map<int, std::set<std::string>> &clusters,
-                 const std::map<std::string,
-                                std::pair<int, int>> &fixed_pos) {
-    std::map<std::string, std::set<std::string>> result;
-    for (const auto &[id, raw_blks]: clusters) {
-        auto cluster_id = "x" + std::to_string(id);
-        auto blks = std::set<std::string>();
-        for (auto const &blk : raw_blks) {
-            if (fixed_pos.find(blk) == fixed_pos.end())
-                blks.insert(blk);
-        }
-        result[cluster_id] = blks;
     }
     return result;
 }

@@ -12,9 +12,9 @@ of C++14/17 features, a modern C++ compiler is required.
 + `cmake` 3.9 and above.
 + `Python` 2.7+/3.6+
 
-It also requires `libxml2-dev` to be installed. On Ubuntu-based distros, simply do
+It also requires `libigraph0-dev` to be installed. On Ubuntu-based distros, simply do
 ```
-sudo apt-get install libxml2-dev
+sudo apt-get install libigraph0-dev
 ```
 
 ### Install

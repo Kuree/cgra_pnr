@@ -9,6 +9,7 @@
 #include "../src/layout.hh"
 #include "../src/io.hh"
 #include "../src/graph.hh"
+#include "../src/util.hh"
 
 namespace py = pybind11;
 using std::move;
@@ -30,6 +31,12 @@ void init_graph(py::module &m) {
     auto graph_m = m.def_submodule("graph");
 
     graph_m.def("partition_netlist", &partition_netlist);
+}
+
+void init_util(py::module &m) {
+    auto util_m = m.def_submodule("util");
+    util_m.def("convert_clusters", &convert_clusters);
+    util_m.def("filter_clusters", &filter_clusters);
 }
 
 
@@ -163,4 +170,5 @@ PYBIND11_MODULE(pythunder, m) {
     init_layout(m);
     init_io(m);
     init_graph(m);
+    init_util(m);
 }

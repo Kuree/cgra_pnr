@@ -1,6 +1,10 @@
+#include "../src/global.hh"
+#include "../src/graph.hh"
+#include "../src/io.hh"
 #include "util.hh"
 #include <set>
 #include <cassert>
+#include <string>
 
 using std::pair;
 using std::map;
@@ -123,4 +127,35 @@ std::map<::string, ::vector<::string>> group_reg_nets(
     }
 
     return linked_nets;
+}
+
+std::map<std::string, std::set<std::string>>
+convert_clusters(const std::map<int, std::set<std::string>> &clusters,
+                 const std::map<std::string, std::pair<int, int>> &fixed_pos) {
+    map<string, set<string>> result;
+    for (const auto &[id, raw_blks]: clusters) {
+        auto cluster_id = "x" + std::to_string(id);
+        auto blks = set<string>();
+        for (auto const &blk : raw_blks) {
+            if (fixed_pos.find(blk) == fixed_pos.end())
+                blks.insert(blk);
+        }
+        result[cluster_id] = blks;
+    }
+    return result;
+}
+
+std::map<int, std::set<std::string>>
+filter_clusters(const std::map<int, std::set<std::string>> &clusters,
+                 const std::map<std::string, std::pair<int, int>> &fixed_pos) {
+    map<int, set<string>> result;
+    for (const auto &[id, raw_blks]: clusters) {
+        auto blks = set<string>();
+        for (auto const &blk : raw_blks) {
+            if (fixed_pos.find(blk) == fixed_pos.end())
+                blks.insert(blk);
+        }
+        result[id] = blks;
+    }
+    return result;
 }

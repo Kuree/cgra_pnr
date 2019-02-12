@@ -1,7 +1,6 @@
 # 1.15 has tons of warnings from scipy
 lxml
 pillow
-leidenalg
 six
 # aws python sdk
 boto3
