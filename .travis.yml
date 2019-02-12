@@ -27,6 +27,23 @@ install:
 script:
   - ./.travis.sh
 
+after_success:
+    - echo [distutils]                                  > ~/.pypirc
+    - echo index-servers =                             >> ~/.pypirc
+    - echo "  pypi"                                    >> ~/.pypirc
+    - echo                                             >> ~/.pypirc
+    - echo [pypi]                                      >> ~/.pypirc
+    - echo repository=https://pypi.python.org/pypi     >> ~/.pypirc
+    - echo username=keyi                               >> ~/.pypirc
+    - echo password=$PYPI_PASSWORD                     >> ~/.pypirc
+
+deploy:
+  - provider: script
+    script: /bin/sh scripts/deploy.sh
+    on:
+      # branch: master
+      tags: false # true
+
 notifications:
   email:
     on_success: never # default: change
