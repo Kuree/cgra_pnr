@@ -41,8 +41,8 @@ deploy:
   - provider: script
     script: /bin/sh scripts/deploy.sh
     on:
-      branch: dev #master
-      tags: false # true
+      branch: master
+      tags: true
       condition: $TRAVIS_PYTHON_VERSION = "2.7"
 
 notifications:
