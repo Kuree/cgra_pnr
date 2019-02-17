@@ -43,13 +43,17 @@ prefixed_placement(const std::map<std::string,
         }
     }
 
+    // sort the working set
+    ::vector<::string> fixed_blocks(working_set.begin(), working_set.end());
+    std::sort(fixed_blocks.begin(), fixed_blocks.end());
+
     const auto &io_layout = layout.get_layer('I');
     const auto available_pos = io_layout.produce_available_pos();
-    if (available_pos.size() < working_set.size())
+    if (available_pos.size() < fixed_blocks.size())
         throw std::runtime_error("unable to assign all IO tiles");
     uint32_t pos_index = 0;
     std::map<std::string, std::pair<int, int>> result;
-    for (auto const &blk_id : working_set) {
+    for (auto const &blk_id : fixed_blocks) {
         auto const &pos = available_pos[pos_index++];
         result[blk_id] = pos;
     }
