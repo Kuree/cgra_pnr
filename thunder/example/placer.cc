@@ -96,7 +96,8 @@ check_placement(const ::map<::string,
     auto available_pos = layout.produce_available_pos();
     ::map<char, std::set<::pair<int, int>>> pos_set;
     for (auto const &[blk_type, pos_list] : available_pos) {
-        pos_set[blk_type] = std::set(pos_list.begin(), pos_list.end());
+        pos_set[blk_type] = std::set<::pair<int, int>>(pos_list.begin(),
+                                                       pos_list.end());
     }
     for (auto const &[blk_id, pos] : placement) {
         char blk_type = blk_id[0];
