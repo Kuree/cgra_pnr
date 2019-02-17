@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 file_dir=$(dirname "$(realpath $0)")
 # placer
