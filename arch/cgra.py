@@ -72,11 +72,12 @@ def place_special_blocks(board, blks, board_pos, netlists,
             pos = sixteen_bit_io_locations.pop()
             place_on_board(board, blk_id, pos)
             board_pos[blk_id] = pos
-            assert pos in io_mask.mask_pos
-            bit1_ios = io_mask.mask_pos[pos]
-            for pos in bit1_ios:
-                if pos in one_bit_io_locations:
-                    one_bit_io_locations.remove(pos)
+            # disbale io_mask for now
+            # assert pos in io_mask.mask_pos
+            # bit1_ios = io_mask.mask_pos[pos]
+            # for pos in bit1_ios:
+            #     if pos in one_bit_io_locations:
+            #         one_bit_io_locations.remove(pos)
         else:
             raise Exception("Unknown block type", blk_id)
 
