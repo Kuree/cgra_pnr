@@ -46,8 +46,18 @@ if [ ${is_garnet} -eq "1" ]; then
     # we need to look up the layout file
     layout=$(awk -F "=" '/layout/ {print $2}' ${cgra})
     echo "Using layout file " ${layout}
-    python ${root_dir}/place.py --layout ${layout} -i ${packed} -o ${place} --no-vis ${option}
 else
-    echo "Using cgra_info file " ${cgra}
-    python ${root_dir}/place.py --cgra ${cgra} -i ${packed} -o ${place} --no-vis ${option}
+    echo "Using cgra_info file" ${cgra}
+    layout="${packed%.packed}.layout"
+    python ${root_dir}/process_layout.py -i ${cgra} -o ${layout}
+fi
+
+placer=${root_dir}/thunder/build/example/placer
+
+if [ -f ${placer} ]; then
+    echo "Using C++ implementation"
+    ${placer} ${layout} ${packed} ${place}
+else
+    echo "Using Python binding"
+    python ${root_dir}/place.py --layout ${layout} -i ${packed} -o ${place} --no-vis ${option}
 fi

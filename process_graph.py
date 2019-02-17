@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 from argparse import ArgumentParser
 import pycyclone
@@ -227,7 +228,7 @@ def build_routing_graph(routing_resource, layout):
 
 
 def main():
-    parser = ArgumentParser("CGRA Router")
+    parser = ArgumentParser("CGRA graph creation")
     parser.add_argument("-i", "--input", help="CGRA info file",
                         required=True, action="store", dest="cgra_filename")
     parser.add_argument("-o", "--output", help="Graph output folder for "

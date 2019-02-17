@@ -150,16 +150,16 @@ void init_pythunder(py::module &m) {
 
 void init_detailed_placement(py::module &m) {
     m.def("detailed_placement",
-            py::overload_cast<const ::map<int, std::set<std::string>>&,
-            const ::map<int, ::map<char, std::set<std::pair<int, int>>>>&,
-            const ::map<int, ::map<std::string, std::vector<std::string>>>&,
-            const ::map<int, ::map<std::string, std::pair<int, int>>>&,
+            py::overload_cast<const ::map<::string, std::set<std::string>>&,
+            const ::map<::string, ::map<char, std::set<std::pair<int, int>>>>&,
+            const ::map<::string, ::map<std::string, std::vector<std::string>>>&,
+            const ::map<::string, ::map<std::string, std::pair<int, int>>>&,
             char, bool>(&multi_place))
       .def("detailed_placement",
-             py::overload_cast<const ::map<int, std::set<std::string>>&,
-             const ::map<int, ::map<char, std::set<std::pair<int, int>>>>&,
-             const ::map<int, ::map<std::string, std::vector<std::string>>>&,
-             const ::map<int, ::map<std::string, std::pair<int, int>>>&,
+             py::overload_cast<const ::map<::string, std::set<std::string>>&,
+             const ::map<::string, ::map<char, std::set<std::pair<int, int>>>>&,
+             const ::map<::string, ::map<::string, std::vector<std::string>>>&,
+             const ::map<::string, ::map<::string, std::pair<int, int>>>&,
              char, bool, uint32_t>(&multi_place));
 }
 

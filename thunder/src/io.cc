@@ -328,4 +328,60 @@ void dump_layout(const Layout &layout, const std::string &filename) {
         }
         out << endl << END << endl;
     }
+
+    out.close();
+}
+
+void save_placement(const std::map<std::string, std::pair<int, int>> &placement,
+                    const std::map<std::string, std::string> &id_to_name,
+                    const std::string &filename) {
+    std::ofstream out;
+    out.open(filename, std::ofstream::out);
+
+    // write the header
+    std::string header = "Block Name\t\t\tX\tY\t\t#Block ID";
+    out << header << endl;
+    for (uint32_t i = 0; i < header.length(); i++) {
+        out << "-";
+    }
+    out << endl;
+    // write the connect
+    for (auto const &[blk_id, pos] : placement) {
+        auto const [x, y] = pos;
+        out << id_to_name.at(blk_id) << "\t\t" << x << "\t"
+            << y << "\t\t#" << blk_id << endl;
+    }
+
+    out.close();
+}
+
+std::map<std::string, std::string>
+load_id_to_name(const std::string &filename) {
+    if (!::exists(filename))
+        throw ::runtime_error(filename + " does not exist");
+    ::ifstream in;
+    in.open(filename);
+
+    ::string line;
+    std::map<std::string, std::string> id_to_name;
+    bool in_section = false;
+    while(std::getline(in, line)) {
+        trim(line);
+        if (in_section) {
+            if (line[0] == '#') {
+                continue;
+            } else if (line.empty()) {
+                break;
+            }
+            auto tokens = get_tokens(line);
+            if (tokens.size() != 2)
+                throw ::runtime_error("expected line " + line);
+            auto blk_id = tokens[0];
+            auto name = tokens[1];
+            id_to_name.insert({blk_id, name});
+            continue;
+        }
+        in_section = line == "ID to Names:";
+    }
+    return id_to_name;
 }

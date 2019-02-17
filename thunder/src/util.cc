@@ -181,3 +181,52 @@ compute_centroids(const std::map<std::string,
     }
     return result;
 }
+
+std::map<std::string, std::vector<std::string>>
+reduce_cluster_graph(const ::map<::string, std::vector<::string>> &netlist,
+                     const std::map<std::string, std::set<::string>> &clusters,
+                     const std::map<std::string,
+                                    std::pair<int, int>> &fixed_blocks,
+                     const ::string &cluster_id) {
+    std::map<std::string, std::vector<std::string>> result;
+    for (auto const &[net_id, net] : netlist) {
+        std::vector<::string> new_net;
+        // brute force searching for net ids
+        for (auto const &blk : net) {
+            ::string id;
+            for (auto const &[c_id, c_set] : clusters) {
+                if (c_set.find(blk) != c_set.end()) {
+                    id = c_id;
+                    break;
+                }
+            }
+            if (id.length() == 0) {
+                // maybe in the fixed blks
+                if (fixed_blocks.find(blk) != fixed_blocks.end())
+                    id = blk;
+            }
+            if (id.length() == 0) {
+                throw std::runtime_error("cannot find blk " + blk);
+            }
+
+            if (id == cluster_id) {
+                new_net.emplace_back(blk);
+            } else {
+                // use the cluster id instead
+                new_net.emplace_back(id);
+            }
+        }
+        result.insert({net_id, new_net});
+    }
+    return result;
+}
+
+std::map<std::string, std::pair<int, int>>
+get_cluster_fixed_pos(const ::map<::string, ::pair<int, int>> &fixed_blocks,
+                      const std::map<::string, ::pair<int, int>> &centroids) {
+    ::map<::string, ::pair<int, int>> blk_pos(fixed_blocks);
+    for (auto const &[c_id, loc] : centroids) {
+        blk_pos.insert({c_id, loc});
+    }
+    return blk_pos;
+}

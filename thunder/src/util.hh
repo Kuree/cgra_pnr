@@ -80,11 +80,19 @@ compute_centroids(const std::map<std::string,
                                                              int>>>> &clusters,
                   char clb_type);
 
-std::map<std::string, std::map<char, std::set<std::pair<int, int>>>>
-reduce_cluster_graphs(
-        const std::map<std::string,
-                       std::map<char, std::set<std::pair<int,
-                                                         int>>>> &clusters,
-        const std::map<std::string, std::set<std::string>> &netlist);
+std::map<std::string, std::vector<std::string>>
+reduce_cluster_graph(const std::map<std::string,
+                                    std::vector<std::string>> &netlist,
+                     const std::map<std::string,
+                                    std::set<std::string>> &clusters,
+                     const std::map<std::string,
+                             std::pair<int, int>> &fixed_blocks,
+                     const std::string &cluster_id);
+
+std::map<std::string, std::pair<int, int>>
+get_cluster_fixed_pos(const std::map<std::string,
+                                     std::pair<int, int>> &fixed_blocks,
+                      const std::map<std::string,
+                                     std::pair<int, int>> &centroids);
 
 #endif //THUNDER_UTIL_HH

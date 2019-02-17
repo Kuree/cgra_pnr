@@ -14,10 +14,10 @@ using std::set;
 
 
 ::map<std::string, std::pair<int, int>>  multi_place(
-        const ::map<int, ::set<::string>> &clusters,
-        const ::map<int, ::map<char, ::set<std::pair<int, int>>>> &cells,
-        const ::map<int, ::map<::string, ::vector<::string>>> &netlists,
-        const ::map<int, ::map<::string, ::pair<int, int>>> &fixed_blocks,
+        const ::map<::string, ::set<::string>> &clusters,
+        const ::map<::string, ::map<char, ::set<std::pair<int, int>>>> &cells,
+        const ::map<::string, ::map<::string, ::vector<::string>>> &netlists,
+        const ::map<::string, ::map<::string, ::pair<int, int>>> &fixed_blocks,
         char clb_type, bool fold_reg, uint32_t seed) {
 
     uint64_t num_clusters = clusters.size();
@@ -40,7 +40,7 @@ using std::set;
     ::vector<::map<std::string, std::pair<int, int>>> fixed_pos_args;
 
     for (auto const &iter : clusters) {
-        int cluster_id = iter.first;
+        ::string cluster_id = iter.first;
         auto const &cluster_set = clusters.at(cluster_id);
         auto cluster = ::vector<::string>(cluster_set.begin(),
                                           cluster_set.end());
@@ -102,10 +102,10 @@ using std::set;
 }
 
 ::map<std::string, std::pair<int, int>>  multi_place(
-        const ::map<int, ::set<::string>> &clusters,
-        const ::map<int, ::map<char, ::set<std::pair<int, int>>>> &cells,
-        const ::map<int, ::map<::string, ::vector<::string>>> &netlists,
-        const ::map<int, ::map<::string, ::pair<int, int>>> &fixed_blocks,
+        const ::map<::string, ::set<::string>> &clusters,
+        const ::map<::string, ::map<char, ::set<std::pair<int, int>>>> &cells,
+        const ::map<::string, ::map<::string, ::vector<::string>>> &netlists,
+        const ::map<::string, ::map<::string, ::pair<int, int>>> &fixed_blocks,
         char clb_type, bool fold_reg) {
     constexpr uint32_t seed = 0;
     return multi_place(clusters, cells, netlists, fixed_blocks, clb_type,

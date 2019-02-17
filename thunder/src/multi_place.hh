@@ -5,22 +5,22 @@
 #include <vector>
 
 std::map<std::string, std::pair<int, int>>  multi_place(
-        const std::map<int, std::set<std::string>> &clusters,
-        const std::map<int, std::map<char,
-                                     std::set<std::pair<int, int>>>> &cells,
-        const std::map<int, std::map<std::string,
-                                     std::vector<std::string>>> &netlists,
-        const std::map<int, std::map<std::string,
-                                     std::pair<int, int>>> &fixed_blocks,
+        const std::map<std::string, std::set<std::string>> &clusters,
+        const std::map<std::string, std::map<char,
+                                    std::set<std::pair<int, int>>>> &cells,
+        const std::map<std::string, std::map<std::string,
+                                    std::vector<std::string>>> &netlists,
+        const std::map<std::string, std::map<std::string,
+                                    std::pair<int, int>>> &fixed_blocks,
         char clb_type, bool fold_reg, uint32_t seed);
 
 std::map<std::string, std::pair<int, int>>  multi_place(
-        const std::map<int, std::set<std::string>> &clusters,
-        const std::map<int, std::map<char,
+        const std::map<std::string, std::set<std::string>> &clusters,
+        const std::map<std::string, std::map<char,
                 std::set<std::pair<int, int>>>> &cells,
-        const std::map<int, std::map<std::string,
+        const std::map<std::string, std::map<std::string,
                 std::vector<std::string>>> &netlists,
-        const std::map<int, std::map<std::string,
+        const std::map<std::string, std::map<std::string,
                 std::pair<int, int>>> &fixed_blocks,
         char clb_type, bool fold_reg);
 

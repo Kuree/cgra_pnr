@@ -165,9 +165,9 @@ std::set<char> Layout::get_layer_types() const {
     return result;
 }
 
-std::map<char, std::vector<std::pair<uint32_t, uint32_t>>>
+std::map<char, std::vector<std::pair<int, int>>>
 Layout::produce_available_pos() {
-    std::map<char, std::vector<std::pair<uint32_t, uint32_t>>> result;
+    std::map<char, std::vector<std::pair<int, int>>> result;
     for (uint32_t x = 0; x < width_; x++) {
         for (uint32_t y = 0; y < height_; y++) {
             auto blks = get_blk_types(x, y);

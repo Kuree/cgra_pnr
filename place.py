@@ -317,11 +317,12 @@ def detailed_placement_thunder_wrapper(args):
     fold_reg = args[0]["fold_reg"]
     seed = args[0]["seed"]
     for i in range(len(args)):
+        c_id = "x" + str(i)
         arg = args[i]
-        clusters[i] = arg["clusters"]
-        cells[i] = arg["cells"]
-        netlists[i] = arg["new_netlist"]
-        fixed_blocks[i] = arg["blk_pos"]
+        clusters[c_id] = arg["clusters"]
+        cells[c_id] = arg["cells"]
+        netlists[c_id] = arg["new_netlist"]
+        fixed_blocks[c_id] = arg["blk_pos"]
     return pythunder.detailed_placement(clusters, cells, netlists, fixed_blocks,
                                         clb_type,
                                         fold_reg,
