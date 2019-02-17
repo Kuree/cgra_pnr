@@ -7,6 +7,9 @@
 #include "../src/detailed.hh"
 
 using std::string;
+using std::map;
+using std::vector;
+using std::pair;
 constexpr uint32_t seed = 0;
 constexpr uint32_t partition_threshold = 10;
 
@@ -72,6 +75,39 @@ threshold_partition_netlist(const std::map<std::string,
     } else {
         // just use the set
         raw_clusters.insert({0, blks});
+    }
+}
+
+void
+check_placement(const ::map<::string,
+                            ::vector<::pair<::string, ::string>>> &raw_netlist,
+                const ::map<std::string, std::pair<int, int>> &placement,
+                const Layout &layout) {
+    // making sure the placement is correct
+    // first making sure we have every block placed
+    for (auto const &iter: raw_netlist) {
+        for (auto const &blk_pair : iter.second) {
+            if (placement.find(blk_pair.first) == placement.end())
+                throw std::runtime_error("unable to find blk " +
+                                         blk_pair.first);
+        }
+    }
+    // making sure the positions are correct
+    auto available_pos = layout.produce_available_pos();
+    ::map<char, std::set<::pair<int, int>>> pos_set;
+    for (auto const &[blk_type, pos_list] : available_pos) {
+        pos_set[blk_type] = std::set(pos_list.begin(), pos_list.end());
+    }
+    for (auto const &[blk_id, pos] : placement) {
+        char blk_type = blk_id[0];
+        // hack here
+        if (blk_type == 'i') blk_type = 'I';
+        auto const [x, y] = pos;
+        auto &blk_pos = pos_set.at(blk_type);
+        if (blk_pos.find(pos) == blk_pos.end())
+            throw std::runtime_error("over use position " + std::to_string(x)
+                                      + " " + std::to_string(y));
+        blk_pos.erase(pos);
     }
 }
 
@@ -152,6 +188,9 @@ int main(int argc, char *argv[]) {
     auto it = static_cast<uint32_t>(100 * pow(dp_result.size(), 1.33));
     global_refine.refine(it, 0.001, true);
     auto result = global_refine.realize();
+
+    // check the placement
+    check_placement(raw_netlist, result, layout);
 
     // save the result
     save_placement(result, id_to_name, result_filename);

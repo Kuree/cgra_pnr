@@ -83,6 +83,11 @@ def compute_area_usage(placement, board_layout):
         blk_type = board_layout.get_blk_type(x, y)
         result[blk_type][0] += 1
         pos_set.add(pos)
+    # remove entries
+    if " " in result:
+        result.pop(" ")
+    if "i" in result:
+        result.pop("i")
     return result
 
 

@@ -166,7 +166,7 @@ std::set<char> Layout::get_layer_types() const {
 }
 
 std::map<char, std::vector<std::pair<int, int>>>
-Layout::produce_available_pos() {
+Layout::produce_available_pos() const {
     std::map<char, std::vector<std::pair<int, int>>> result;
     for (uint32_t x = 0; x < width_; x++) {
         for (uint32_t y = 0; y < height_; y++) {

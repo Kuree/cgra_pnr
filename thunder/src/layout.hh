@@ -77,7 +77,7 @@ public:
     void set_priority_minor(char blk_type, uint32_t priority);
     std::set<char> get_layer_types() const;
     std::map<char, std::vector<std::pair<int, int>>>
-    produce_available_pos();
+    produce_available_pos() const;
 
     // masks
     const std::map<char, LayerMask> get_layer_masks() const

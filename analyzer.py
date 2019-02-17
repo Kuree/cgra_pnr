@@ -38,7 +38,7 @@ def main():
     usage = compute_area_usage(placement, board_layout)
     for entry in usage:
         percentage = usage[entry][0] / usage[entry][1] * 100
-        num_bar = int(percentage / 100 * scale)
+        num_bar = max(int(percentage / 100 * scale) - 2, 1)
         print("{0:4s} {1} {2} {3:.2f}%".format(entry.upper(),
                                                num_bar * '█',
                                                ' ' * (scale - num_bar - 2),

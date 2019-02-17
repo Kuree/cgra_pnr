@@ -48,7 +48,8 @@ if [ ${is_garnet} -eq "1" ]; then
     echo "Using layout file " ${layout}
 else
     echo "Using cgra_info file" ${cgra}
-    layout="${packed%.packed}.layout"
+    packed_dir=$(dirname ${packed})
+    layout="${packed_dir}/cgra.layout"
     python ${root_dir}/process_layout.py -i ${cgra} -o ${layout}
 fi
 

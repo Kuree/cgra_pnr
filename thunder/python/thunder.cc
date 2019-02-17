@@ -111,7 +111,7 @@ void init_pythunder(py::module &m) {
                  bool>())
             .def(py::init<::map<::string, ::pair<int, int>>,
                     ::map<::string, ::vector<std::string>>,
-                    ::map<char, ::vector<::pair<int, int>>>,
+                    ::map<char, ::set<::pair<int, int>>>,
                     ::map<::string, ::pair<int, int>>,
                     char,
                     bool>())
