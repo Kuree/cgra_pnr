@@ -501,7 +501,9 @@ def pack_netlists(raw_netlists, name_to_id, fold_reg=True):
 def change_name_to_id(instances):
     name_to_id = {}
     id_count = 0
-    for name in instances:
+    instances_name = list(instances.keys())
+    instances_name.sort()
+    for name in instances_name:
         attrs = instances[name]
         if "genref" not in attrs:
             assert ("modref" in attrs)

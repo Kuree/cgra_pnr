@@ -345,13 +345,14 @@ void save_placement(const std::map<std::string, std::pair<int, int>> &placement,
         out << "-";
     }
     out << endl;
-    // sort the list by blk_id (key)
-    ::vector<::string> blk_ids(placement.size());
-    uint32_t count = 0;
+    // sort the list by blk_id (int value)
+    auto cmp = [&id_to_name](::string a, ::string b) -> bool {
+        return id_to_name.at(a) < id_to_name.at(b);
+    };
+    std::set<::string, decltype(cmp)> blk_ids(cmp);
     for (auto const &iter: placement) {
-        blk_ids[count++] = iter.first;
+        blk_ids.insert(iter.first);
     }
-    std::sort(blk_ids.begin(), blk_ids.end());
 
     // write the connect
     for (auto const &blk_id : blk_ids) {

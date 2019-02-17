@@ -35,7 +35,12 @@ prefixed_placement(const std::map<std::string,
     // place IO on CGRA
     // we are not doing masks now and current CGRA has some bug with
     // using two 1bit tiles. assigning all of them to the 16-bit for now
-    std::set<std::string> working_set;
+    auto cmp = [](::string a, ::string b) -> bool {
+        int value_a = std::stoi(a.substr(1));
+        int value_b = std::stoi(b.substr(1));
+        return value_a < value_b;
+    };
+    std::set<std::string, decltype(cmp)> working_set(cmp);
     for (const auto &iter: netlist) {
         for (auto const &blk : iter.second) {
             if (blk[0] == 'i' || blk[0] == 'I')
@@ -43,17 +48,13 @@ prefixed_placement(const std::map<std::string,
         }
     }
 
-    // sort the working set
-    ::vector<::string> fixed_blocks(working_set.begin(), working_set.end());
-    std::sort(fixed_blocks.begin(), fixed_blocks.end());
-
     const auto &io_layout = layout.get_layer('I');
     const auto available_pos = io_layout.produce_available_pos();
-    if (available_pos.size() < fixed_blocks.size())
+    if (available_pos.size() < working_set.size())
         throw std::runtime_error("unable to assign all IO tiles");
     uint32_t pos_index = 0;
     std::map<std::string, std::pair<int, int>> result;
-    for (auto const &blk_id : fixed_blocks) {
+    for (auto const &blk_id : working_set) {
         auto const &pos = available_pos[pos_index++];
         result[blk_id] = pos;
     }
