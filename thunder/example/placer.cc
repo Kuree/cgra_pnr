@@ -8,6 +8,7 @@
 
 using std::string;
 constexpr uint32_t seed = 0;
+constexpr uint32_t partition_threshold = 10;
 
 std::map<std::string, std::vector<std::string>>
 convert_netlist(const std::map<::string,
@@ -52,6 +53,28 @@ prefixed_placement(const std::map<std::string,
     return result;
 }
 
+void
+threshold_partition_netlist(const std::map<std::string,
+                                           std::vector<std::string>> &netlist,
+                       std::map<int, std::set<std::string>> &raw_clusters) {
+
+    // if we only have a few blks, don't bother doing a partition
+    // get the clusters
+    // count the number of blocks
+    std::set<std::string> blks;
+    for (auto const &iter : netlist) {
+        for (auto const &blk : iter.second) {
+            blks.insert(blk);
+        }
+    }
+    if (blks.size() > partition_threshold) {
+        raw_clusters = partition_netlist(netlist);
+    } else {
+        // just use the set
+        raw_clusters.insert({0, blks});
+    }
+}
+
 int main(int argc, char *argv[]) {
     if (argc != 4) {
         std::cerr << "Usage: " << argv[0] << " <cgra.layout> "
@@ -68,9 +91,9 @@ int main(int argc, char *argv[]) {
 
     // remove unnecessary information
     auto netlist = convert_netlist(raw_netlist);
+    std::map<int, std::set<std::string>> raw_clusters;
+    threshold_partition_netlist(netlist, raw_clusters);
 
-    // get the clusters
-    const auto raw_clusters = partition_netlist(netlist);
     // get fixed pos
     const auto fixed_pos = prefixed_placement(netlist, layout);
 
@@ -89,7 +112,7 @@ int main(int argc, char *argv[]) {
                 num_blks += 1;
         }
     }
-    double fill_ratio = fmin(0.99, num_blks /num_blks_layout);
+    double fill_ratio = fmax(0.99, num_blks /num_blks_layout);
     gp.anneal_param_factor = 1 / (1 - fill_ratio);
     std::cout << "Use anneal_param_factor " << gp.anneal_param_factor
               << std::endl;
