@@ -52,7 +52,7 @@ protected:
     // graph independent look tables for computing routing cost
     std::map<std::shared_ptr<Node>, std::set<std::shared_ptr<Node>>>
     node_connections_;
-    std::unordered_map<std::shared_ptr<Node>, int> node_net_ids_;
+    std::unordered_map<std::shared_ptr<Node>, std::set<int>> node_net_ids_;
 
     std::map<std::shared_ptr<Node>, uint32_t> node_history_;
 
@@ -123,6 +123,9 @@ protected:
 
     double get_presence_cost(const std::shared_ptr<Node> &node,
                              const std::shared_ptr<Node> &pre_node);
+
+    void rip_up_net(int net_id);
+    bool node_owned_net(int net_id, std::shared_ptr<Node> node);
 
 private:
     std::vector<int> squash_net(int src_id);

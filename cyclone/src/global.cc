@@ -52,9 +52,12 @@ void GlobalRouter::route() {
         overflowed_ = false;
 
         // clear the routing resources, i.e. rip up all the nets
-        clear_connections();
+        //clear_connections();
 
         for (const auto &net_id : reordered_netlist) {
+            // TODO:
+            //     rip up linked reg-net as well
+            rip_up_net(net_id);
             route_net(net_id, it);
         }
 
@@ -192,8 +195,8 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
                     }
                     if (node_connections_.at(n).size() == 1
                         && *node_connections_.at(n).begin() == node
-                        && (node_net_ids_.at(n) == -1
-                            || node_net_ids_.at(n) == net.id)) {
+                        && (node_net_ids_.at(n).empty()
+                            || node_owned_net(net.id, n))) {
                         empty = true;
                         break;
                     }
@@ -290,7 +293,7 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
 GlobalRouter::create_cost_function(double an,
                                    uint32_t it,
                                    int net_id) {
-    return [&, an, it](const ::shared_ptr<Node> &node1,
+    return [&, an, it, net_id](const ::shared_ptr<Node> &node1,
                const ::shared_ptr<Node> &node2) -> double {
         // based of the PathFinder paper
         auto pn = get_presence_cost(node2, node1);
@@ -298,8 +301,9 @@ GlobalRouter::create_cost_function(double an,
          * this is a new entry compared to PathFiner paper since we need to
          * prevent registers's switchbox been used for other nets.
          */
-        if (node_net_ids_.at(node2) > -1 && node_net_ids_.at(node2) != net_id)
+        if (!node_owned_net(net_id, node2)) {
             pn += 1;
+        }
         auto pn_factor = init_pn_ * pow(pn_factor_, it);
         pn *= pn_factor;
         auto dn = node1->get_edge_cost(node2);
@@ -324,6 +328,7 @@ GlobalRouter::get_free_switch(const std::pair<uint32_t, uint32_t> &p) {
             // see it's been used or not
             if (!node_connections_.at(node).empty())
                 return false;
+            return true;
             // one of it's connections has to be free
             for (auto const &n : *node) {
                 if (node_connections_.at(n).empty())
@@ -372,7 +377,7 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
     // found all nodes width that tile
     ::set<::shared_ptr<Node>> tile_nodes;
     for (auto const &node : segment) {
-        if (node->x == pin.x && node->y == pin.y)
+        //if (node->x == pin.x && node->y == pin.y)
             tile_nodes.insert(node);
     }
 

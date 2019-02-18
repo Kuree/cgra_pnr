@@ -29,18 +29,18 @@ Router::Router(const RoutingGraph &g) : graph_(g) {
             for (const auto &sb : side_sbs) {
                 node_connections_.insert({sb, {}});
                 node_history_.insert({sb, {}});
-                node_net_ids_.insert({sb, -1});
+                node_net_ids_.insert({sb, {}});
             }
         }
         for (auto const &port : tile.ports) {
             node_connections_.insert({port.second, {}});
             node_history_.insert({port.second, {}});
-            node_net_ids_.insert({port.second, -1});
+            node_net_ids_.insert({port.second, {}});
         }
         for (auto const &reg : tile.registers) {
             node_connections_.insert({reg.second, {}});
             node_history_.insert({reg.second, {}});
-            node_net_ids_.insert({reg.second, -1});
+            node_net_ids_.insert({reg.second, {}});
         }
     }
 }
@@ -343,7 +343,7 @@ void Router::assign_net_segment(const ::vector<::shared_ptr<Node>> &segment,
         assign_connection(node, segment[i - 1]);
     }
     for (const auto &node : segment) {
-        node_net_ids_[node] = net_id;
+        node_net_ids_[node].insert(net_id);
     }
 }
 
@@ -378,6 +378,40 @@ Router::realize() const {
     return result;
 }
 
+void Router::rip_up_net(int net_id) {
+    if (current_routes.find(net_id) == current_routes.end())
+        return;
+    auto const &route = current_routes.at(net_id);
+    for (const auto &segment : route) {
+        auto nodes = segment.second;
+        // remove it from the presence cost
+        for (uint32_t i = 1; i < nodes.size(); i++) {
+            auto const &node = nodes[i];
+            auto const &pre_node = nodes[i - 1];
+            node_connections_.at(node).erase(pre_node);
+        }
+        // also remove it from node_net_ids;
+        for (const auto &node : nodes) {
+            auto &lst = node_net_ids_.at(node);
+            if (lst.find(net_id) != lst.end())
+                lst.erase(net_id);
+        }
+    }
+    // remove it from current_routes
+    current_routes.erase(net_id);
+}
+
+
+bool Router::node_owned_net(int net_id, std::shared_ptr<Node> node) {
+    if (node_net_ids_.at(node).empty()) {
+        return true;
+    }
+    if (node_net_ids_.at(node).size() == 1) {
+        return net_id == *node_net_ids_.at(node).begin();
+    }
+    return false;
+}
+
 void Router::assign_connection(const std::shared_ptr<Node> &node,
                                const std::shared_ptr<Node> &pre_node) {
     node_connections_.at(node).insert(pre_node);
@@ -391,13 +425,8 @@ void Router::assign_history(std::shared_ptr<Node> &end) {
 }
 
 void Router::clear_connections() {
-    for (auto &iter : node_connections_) {
-        iter.second.clear();
-    }
-    for (auto &iter: node_net_ids_) {
-        iter.second = -1;
-    }
-    current_routes.clear();
+    for (uint32_t net_id = 0; net_id < netlist_.size(); net_id++)
+        rip_up_net(net_id);
 }
 
 uint32_t Router::get_history_cost(const std::shared_ptr<Node> &node) {
