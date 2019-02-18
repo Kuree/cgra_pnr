@@ -48,13 +48,21 @@ prefixed_placement(const std::map<std::string,
         }
     }
 
+    // 1 bit first. there is another bug in the hardware that the reset signal
+    // has to hold for at least 2 cycles to reset
+    std::vector<std::string> blocks(working_set.begin(), working_set.end());
+    // sort the blocks based on the tag
+    std::sort(blocks.begin(), blocks.end(), [](std::string a, std::string) {
+        return a[0] == 'i';
+    });
+
     const auto &io_layout = layout.get_layer('I');
     const auto available_pos = io_layout.produce_available_pos();
     if (available_pos.size() < working_set.size())
         throw std::runtime_error("unable to assign all IO tiles");
     uint32_t pos_index = 0;
     std::map<std::string, std::pair<int, int>> result;
-    for (auto const &blk_id : working_set) {
+    for (auto const &blk_id : blocks) {
         auto const &pos = available_pos[pos_index++];
         result[blk_id] = pos;
     }
