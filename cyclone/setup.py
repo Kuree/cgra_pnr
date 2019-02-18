@@ -60,7 +60,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name='pycyclone',
-    version='0.0.2',
+    version='0.3.0',
     author='Keyi Zhang',
     author_email='keyi@stanford.edu',
     description='Fast CGRA Routing',
