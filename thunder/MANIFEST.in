@@ -1,0 +1,5 @@
+include CMakeLists.txt
+recursive-include src *.cc *.hh *.h *.hpp CMakeLists.txt
+recursive-include python *.cc *.hh *.h CMakeLists.txt *.cmake *.cmake.in CMakeList.txt
+recursive-include example *.cc *.txt
+recursive-include lib *.cc *.hh *.h *.cpp CMakeLists.txt *.cmake
