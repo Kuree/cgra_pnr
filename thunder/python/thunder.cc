@@ -160,7 +160,8 @@ void init_detailed_placement(py::module &m) {
              const ::map<::string, ::map<char, std::set<std::pair<int, int>>>>&,
              const ::map<::string, ::map<::string, std::vector<std::string>>>&,
              const ::map<::string, ::map<::string, std::pair<int, int>>>&,
-             char, bool, uint32_t>(&multi_place));
+             char, bool, uint32_t>(&multi_place))
+      .def("detailed_placement", &detailed_placement);
 }
 
 PYBIND11_MODULE(pythunder, m) {

@@ -170,26 +170,11 @@ int main(int argc, char *argv[]) {
     gp.anneal();
 
     auto gp_result = gp.realize();
-    auto centroids = compute_centroids(gp_result, layout.get_clb_type());
-    // substitutes the clusters
-    auto cluster_fixed_pos = get_cluster_fixed_pos(fixed_pos,
-                                                   centroids);
-    std::map<std::string, std::map<std::string,
-             std::vector<std::string>>> multi_netlists;
-    // need to replicate the fix pos as well
-    std::map<std::string, std::map<std::string,
-             std::pair<int, int>>> multi_fixed_pos;
-    for (const auto &iter : clusters) {
-        auto cluster_netlist = reduce_cluster_graph(netlist,
-                                                    clusters,
-                                                    cluster_fixed_pos,
-                                                    iter.first);
-        multi_netlists[iter.first] = cluster_netlist;
-        multi_fixed_pos[iter.first] = cluster_fixed_pos;
-    }
-    // multi-core placement
-    auto dp_result = multi_place(clusters, gp_result, multi_netlists,
-                                 multi_fixed_pos, layout.get_clb_type(), true);
+    map<string, pair<int, int>> dp_result = detailed_placement(clusters,
+                                                               netlist,
+                                                               fixed_pos,
+                                                               gp_result,
+                                                               layout);
 
     // global refinement
     auto global_refine = DetailedPlacer(dp_result,

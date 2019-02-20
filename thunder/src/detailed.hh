@@ -115,6 +115,7 @@ private:
 
     uint32_t estimate_num_swaps() const;
 
+    std::map<std::string, std::pair<int, int>> fixed_pos_;
 };
 
 

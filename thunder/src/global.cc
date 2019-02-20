@@ -27,14 +27,14 @@ void ClusterBox::assign(const ClusterBox &box) {
     nets = box.nets;
 }
 
-GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
-                           ::map<::string, ::vector<::string>> netlists,
-                           std::map<std::string, std::pair<int, int>> fixed_pos,
+GlobalPlacer::GlobalPlacer(const ::map<::string, ::set<::string>> &clusters,
+                           const ::map<::string, ::vector<::string>> &netlists,
+                           const ::map<::string, ::pair<int, int>> &fixed_pos,
                            const Layout &board_layout) :
                            clb_type_(board_layout.get_clb_type()),
-                           clusters_(::move(clusters)),
+                           clusters_(clusters),
                            netlists_(),
-                           fixed_pos_(::move(fixed_pos)),
+                           fixed_pos_(fixed_pos),
                            board_layout_(board_layout),
                            reduced_board_layout_(),
                            boxes_(),
@@ -51,7 +51,7 @@ GlobalPlacer::GlobalPlacer(::map<std::string, ::set<::string>> clusters,
     create_boxes();
 
     // setup reduced netlist
-    auto [nets, intra_count] = this->collapse_netlist(::move(netlists));
+    auto [nets, intra_count] = this->collapse_netlist(netlists);
     netlists_ = nets;
     intra_count_ = intra_count;
 
@@ -328,6 +328,9 @@ void GlobalPlacer::get_clb_types_() {
         if (board_layout_.get_priority_major(blk_type) == priority_major)
             clb_types_.insert(blk_type);
     }
+
+    // set the margin here
+    clb_margin_ = board_layout_.get_margin();
 }
 
 void GlobalPlacer::solve() {

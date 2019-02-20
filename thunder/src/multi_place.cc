@@ -111,3 +111,34 @@ using std::set;
     return multi_place(clusters, cells, netlists, fixed_blocks, clb_type,
                        fold_reg, seed);
 }
+
+std::map<std::string, std::pair<int, int>>
+detailed_placement(const std::map<std::string, std::set<std::string>> &clusters,
+                   const std::map<std::string, std::vector<std::string>> &netlist,
+                   const std::map<std::string, std::pair<int, int>> &fixed_pos,
+                   const std::map<std::string,
+                                  std::map<char,
+                                  std::set<std::pair<int, int>>>> &gp_result,
+                   const Layout &layout) {
+    auto centroids = compute_centroids(gp_result, layout.get_clb_type());
+    // substitutes the clusters
+    auto cluster_fixed_pos = get_cluster_fixed_pos(fixed_pos,
+                                                   centroids);
+    map<string, map<string,
+            vector<string>>> multi_netlists;
+    // need to replicate the fix pos as well
+    map<string, map<string,
+            pair<int, int>>> multi_fixed_pos;
+    for (const auto &iter : clusters) {
+        auto cluster_netlist = reduce_cluster_graph(netlist,
+                                                    clusters,
+                                                    cluster_fixed_pos,
+                                                    iter.first);
+        multi_netlists[iter.first] = cluster_netlist;
+        multi_fixed_pos[iter.first] = cluster_fixed_pos;
+    }
+    // multi-core placement
+    auto dp_result = multi_place(clusters, gp_result, multi_netlists,
+                                 multi_fixed_pos, layout.get_clb_type(), true);
+    return dp_result;
+}

@@ -36,9 +36,10 @@ struct ClusterMove {
 
 class GlobalPlacer : public SimAnneal {
 public:
-    GlobalPlacer(std::map<std::string, std::set<std::string>> clusters,
-                 std::map<std::string, std::vector<std::string>> netlists,
-                 std::map<std::string, std::pair<int, int>> fixed_pos,
+    GlobalPlacer(const std::map<std::string, std::set<std::string>> &clusters,
+                 const std::map<std::string,
+                                std::vector<std::string>> &netlists,
+                 const std::map<std::string, std::pair<int, int>> &fixed_pos,
                  const Layout &board_layout);
 
     void solve();
@@ -120,7 +121,6 @@ private:
     ClusterMove current_move_ = {};
     ClusterMove backup_move = {};
 
-    // TODO: add it abck to board info
     uint32_t clb_margin_ = 1;
 };
 

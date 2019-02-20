@@ -41,7 +41,8 @@ DetailedPlacer
                  clb_type_(clb_type),
                  fold_reg_(fold_reg),
                  reg_no_pos_(),
-                 loc_instances_() {
+                 loc_instances_(),
+                 fixed_pos_(fixed_pos) {
     // intelligently set the fold reg option
     set_fold_reg(cluster_blocks, fold_reg);
 
@@ -279,6 +280,10 @@ void DetailedPlacer
             continue;
         // regular blocks
         for (const auto &blk_name : iter.second) {
+            // it may be fixed blk as well
+            if (fixed_pos_.find(blk_name) != fixed_pos_.end()) {
+                continue;
+            }
             auto pos = available_pos[blk_type].back();
             available_pos[blk_type].pop_back();
             Instance instance(blk_name, pos, (int)instances_.size());
