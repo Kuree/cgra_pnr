@@ -177,28 +177,30 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         visited.insert(head);
 
         for (auto const &node : *head) {
-            if (visited.find(node) != visited.end())
+            if (visited.find(node.lock()) != visited.end())
                 continue;
 
             double tentative_score = g_score.at(head)
-                                     + head->get_edge_cost(node)
-                                     + cost_f(head, node);
-            if (open_set.find(node) == open_set.end()) {
-                g_score[node] = tentative_score;
-                f_score[node] = g_score.at(node) + h_f(node);
-                working_set.push(node);
-                open_set.insert(node);
-            } else if (g_score.find(node) != g_score.end() &&
-                       tentative_score >= g_score.at(node)) {
+                                     + head->get_edge_cost(node.lock())
+                                     + cost_f(head, node.lock());
+            if (open_set.find(node.lock()) == open_set.end()) {
+                g_score[node.lock()] = tentative_score;
+                f_score[node.lock()] = g_score.at(node.lock())
+                                       + h_f(node.lock());
+                working_set.push(node.lock());
+                open_set.insert(node.lock());
+            } else if (g_score.find(node.lock()) != g_score.end() &&
+                       tentative_score >= g_score.at(node.lock())) {
                 continue;
             } else {
-                g_score[node] = tentative_score;
-                f_score[node] = g_score.at(node) + h_f(node);
+                g_score[node.lock()] = tentative_score;
+                f_score[node.lock()] = g_score.at(node.lock())
+                                       + h_f(node.lock());
                 // a duplicated copy
-                working_set.push(node);
+                working_set.push(node.lock());
             }
 
-            trace.insert({node, head});
+            trace.insert({node.lock(), head});
         }
 
     }

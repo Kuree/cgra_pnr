@@ -189,14 +189,14 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
                 // it has at least one free switch box connections
                 bool empty = false;
                 for (auto const &n : *node) {
-                    if (node_connections_.at(n).empty()) {
+                    if (node_connections_.at(n.lock()).empty()) {
                         empty = true;
                         break;
                     }
-                    if (node_connections_.at(n).size() == 1
-                        && *node_connections_.at(n).begin() == node
-                        && (node_net_ids_.at(n).empty()
-                            || node_owned_net(net.id, n))) {
+                    if (node_connections_.at(n.lock()).size() == 1
+                        && *node_connections_.at(n.lock()).begin() == node
+                        && (node_net_ids_.at(n.lock()).empty()
+                            || node_owned_net(net.id, n.lock()))) {
                         empty = true;
                         break;
                     }
@@ -332,13 +332,13 @@ GlobalRouter::get_free_switch(const std::pair<uint32_t, uint32_t> &p) {
             // two hope check to see if there is any register nodes
             ::set<std::shared_ptr<Node>> first_hop;
             for (auto const &n : *node) {
-                if (n->type == NodeType::Register)
+                if (n.lock()->type == NodeType::Register)
                     return true;
-                first_hop.insert(n);
+                first_hop.insert(n.lock());
             }
             for (auto const &n : first_hop) {
                 for (auto const &nn : *n) {
-                    if (nn->type == NodeType::Register)
+                    if (nn.lock()->type == NodeType::Register)
                         return true;
                 }
             }
@@ -398,12 +398,12 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
     ::shared_ptr<Node> pre_node = nullptr;
     for (const auto &node : segment) {
         for (const auto &next : *node) {
-            if (next->type == NodeType::Register) {
-                if (!node_connections_.at(next).empty()) {
+            if (next.lock()->type == NodeType::Register) {
+                if (!node_connections_.at(next.lock()).empty()) {
                     continue;
                 } else {
                     pre_node = node;
-                    reg_node = next;
+                    reg_node = next.lock();
                     break;
                 }
             }
@@ -423,7 +423,7 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
     auto index = segment.size();
     for (auto const &next_node : *reg_node) {
         for (index = 0; index < segment.size(); index++) {
-            if (segment[index] == next_node) {
+            if (segment[index] == next_node.lock()) {
                 break;
             }
         }

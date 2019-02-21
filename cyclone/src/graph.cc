@@ -19,6 +19,11 @@ constexpr auto gsv = get_side_value;
 constexpr auto gii = get_io_int;
 constexpr auto giv = get_io_value;
 
+bool operator<(const std::weak_ptr<Node> &a,
+               const std::weak_ptr<Node> &b) {
+    return a.lock() < b.lock();
+};
+
 Node::Node(NodeType type, const std::string &name, uint32_t x, uint32_t y)
     : type(type), name(name), x(x), y(y) { }
 
@@ -30,7 +35,7 @@ Node::Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
            uint32_t width, uint32_t track)
         : type(type), name(name), width(width), track(track), x(x), y(y) { }
 
-Node::Node(const Node &node) {
+Node::Node(const Node &node) : enable_shared_from_this() {
     type = node.type;
     name = node.name;
     x = node.x;
@@ -41,11 +46,12 @@ Node::Node(const Node &node) {
 void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t wire_delay) {
     neighbors_.insert(node);
     edge_cost_[node] = node->delay + wire_delay;
-    node->conn_in_.insert(this);
+    node->conn_in_.insert(weak_from_this());
 }
 
 uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
-    if (neighbors_.find(node) == neighbors_.end())
+    std::weak_ptr<Node> n = node;
+    if (neighbors_.find(n) == neighbors_.end())
         return 0xFFFFFF;
     else
         return edge_cost_[node];
@@ -56,9 +62,9 @@ void Node::remove_edge(const std::shared_ptr<Node> &node) {
         neighbors_.erase(node);
         edge_cost_.erase(node);
     }
-    if (node->conn_in_.find(this) != node->conn_in_.end()) {
+    if (node->conn_in_.find(weak_from_this()) != node->conn_in_.end()) {
         // remove the incoming connection as well
-        node->conn_in_.erase(this);
+        node->conn_in_.erase(weak_from_this());
     }
 }
 
@@ -166,14 +172,14 @@ Switch::get_sbs_by_side(const SwitchBoxSide &side) const {
 void Switch::remove_sb_nodes(SwitchBoxSide side, SwitchBoxIO io) {
     // first remove the connections and nodes
     for (auto &sb : sbs_[gsv(side)][giv(io)]) {
-        auto nodes_to_remove = ::set<::shared_ptr<Node>>(sb->begin(),
-                                                         sb->end());
+        auto nodes_to_remove = ::set<std::weak_ptr<Node>>(sb->begin(),
+                                                          sb->end());
         for (const auto &node : nodes_to_remove) {
-            sb->remove_edge(node);
+            sb->remove_edge(node.lock());
         }
         auto conn_ins = sb->get_conn_in();
         for (const auto &node : conn_ins) {
-            node->remove_edge(sb);
+            node.lock()->remove_edge(sb);
         }
     }
     sbs_[gsv(side)][giv(io)].clear();

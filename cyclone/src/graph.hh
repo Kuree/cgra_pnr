@@ -7,6 +7,8 @@
 #include <vector>
 #include <iostream>
 
+class Node;
+
 enum NodeType {
     SwitchBox,
     Port,
@@ -26,7 +28,11 @@ enum class SwitchBoxIO {
     SB_OUT = 1
 };
 
-class Node {
+bool operator< (const std::weak_ptr<Node> &a,
+                const std::weak_ptr<Node> &b);
+
+
+class Node: std::enable_shared_from_this<Node> {
 public:
     Node() = default;
     // Note
@@ -56,16 +62,14 @@ public:
     uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
 
     // helper function to allow iteration
-    std::set<std::shared_ptr<Node>>::iterator begin() const
+    std::set<std::weak_ptr<Node>>::iterator begin() const
     { return neighbors_.begin(); }
-    std::set<std::shared_ptr<Node>>::iterator end() const
+    std::set<std::weak_ptr<Node>>::iterator end() const
     { return neighbors_.end(); }
-    std::set<std::shared_ptr<Node>>::iterator
-    find(const std::shared_ptr<Node> &node) { return neighbors_.find(node); }
     uint64_t size() { return neighbors_.size(); }
 
     // used in creating mux in hardware
-    const std::set<Node*> get_conn_in() const { return conn_in_; }
+    const std::set<std::weak_ptr<Node>> get_conn_in() const { return conn_in_; }
 
     virtual std::string to_string() const;
     friend std::ostream& operator<<(std::ostream &s, const Node &node) {
@@ -81,14 +85,14 @@ protected:
          uint32_t width);
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
          uint32_t width, uint32_t track);
+
     // TODO: change this to std::weak_ptr to avoid memory leak due to circular
     // TODO: reference.
-    std::set<std::shared_ptr<Node>> neighbors_;
+    std::set<std::weak_ptr<Node>> neighbors_;
     std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
 
 private:
-    std::set<Node*>conn_in_;
-
+    std::set<std::weak_ptr<Node>>conn_in_;
 };
 
 class RegisterMuxNode : public Node {
@@ -196,6 +200,7 @@ private:
     internal_wires_;
 
     std::vector<std::shared_ptr<SwitchBoxNode>> sbs_[SIDES][IOS];
+
 };
 
 struct Tile {
