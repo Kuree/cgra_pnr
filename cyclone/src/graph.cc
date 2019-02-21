@@ -44,8 +44,9 @@ Node::Node(const Node &node) : enable_shared_from_this() {
 }
 
 void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t wire_delay) {
-    neighbors_.insert(node);
-    edge_cost_[node] = node->delay + wire_delay;
+    std::weak_ptr<Node> n = node;
+    neighbors_.insert(n);
+    edge_cost_[n] = node->delay + wire_delay;
     node->conn_in_.insert(weak_from_this());
 }
 

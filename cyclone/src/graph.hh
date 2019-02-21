@@ -32,7 +32,7 @@ bool operator< (const std::weak_ptr<Node> &a,
                 const std::weak_ptr<Node> &b);
 
 
-class Node: std::enable_shared_from_this<Node> {
+class Node: public std::enable_shared_from_this<Node> {
 public:
     Node() = default;
     // Note
@@ -89,7 +89,8 @@ protected:
     // TODO: change this to std::weak_ptr to avoid memory leak due to circular
     // TODO: reference.
     std::set<std::weak_ptr<Node>> neighbors_;
-    std::map<std::shared_ptr<Node>, uint32_t> edge_cost_;
+    std::map<std::weak_ptr<Node>, uint32_t,
+             std::owner_less<std::weak_ptr<Node>>> edge_cost_;
 
 private:
     std::set<std::weak_ptr<Node>>conn_in_;

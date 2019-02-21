@@ -15,8 +15,8 @@ const int Switch::SIDES;
 const int Switch::IOS;
 
 // just to be lazy with meta programming
-template<class T, class D>
-void init_node_class(py::class_<T, D> &class_) {
+template<class T>
+void init_node_class(py::class_<T, std::shared_ptr<T>> &class_) {
     class_
         .def_readwrite("type", &T::type)
         .def_readwrite("name", &T::name)
@@ -97,12 +97,12 @@ void init_graph(py::module &m) {
         .export_values();
 
     // the generic node type
-    py::class_<Node, std::shared_ptr<Node>> node(m, "Node");
+    py::class_<Node, std::shared_ptr<Node>, std::enable_shared_from_this<Node>> node(m, "Node");
     // init_node_class<Node>(node);
     node.def(py::init<>());
 
     py::class_<PortNode, std::shared_ptr<PortNode>> p_node(m, "PortNode", node);
-    init_node_class<PortNode, std::shared_ptr<PortNode>>(p_node);
+    init_node_class<PortNode>(p_node);
     p_node
         .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t>())
         .def(py::init<const std::string &, uint32_t, uint32_t>())
@@ -114,7 +114,7 @@ void init_graph(py::module &m) {
 
     py::class_<RegisterNode, std::shared_ptr<RegisterNode>>
     r_node(m, "RegisterNode", node);
-    init_node_class<RegisterNode, std::shared_ptr<RegisterNode>>(r_node);
+    init_node_class<RegisterNode>(r_node);
     r_node
         .def(py::init<const std::string &, uint32_t, uint32_t, uint32_t,
                       uint32_t>())
@@ -126,7 +126,7 @@ void init_graph(py::module &m) {
 
     py::class_<SwitchBoxNode, std::shared_ptr<SwitchBoxNode>>
     sb_node(m, "SwitchBoxNode", node);
-    init_node_class<SwitchBoxNode, std::shared_ptr<SwitchBoxNode>>(sb_node);
+    init_node_class<SwitchBoxNode>(sb_node);
     sb_node
         .def(py::init<uint32_t, uint32_t, uint32_t, uint32_t, SwitchBoxSide,
                       SwitchBoxIO>())
