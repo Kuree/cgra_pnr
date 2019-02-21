@@ -58,15 +58,20 @@ class CMakeBuild(build_ext):
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
 
+current_directory = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(current_directory, 'README.md')) as f:
+    long_description = f.read()
+
 setup(
     name='pycyclone',
-    version='0.3.1',
+    version='0.3.2',
     author='Keyi Zhang',
     author_email='keyi@stanford.edu',
     description='Fast CGRA Routing',
-    long_description='',
     url="https://github.com/Kuree/cgra_pnr/tree/master/cyclone",
     ext_modules=[CMakeExtension('pycyclone')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
+    long_description=long_description,
+    long_description_content_type='text/markdown',
 )
