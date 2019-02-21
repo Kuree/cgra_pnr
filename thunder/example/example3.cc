@@ -13,7 +13,7 @@ using std::pair;
 
 int main() {
     auto layout = Layout();
-    uint32_t size = 3;
+    uint32_t size = 2;
     // 3x3 layout
     auto layer = Layer('p', size, size);
     for (uint32_t x = 0; x < size; x++)
