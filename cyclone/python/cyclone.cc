@@ -97,7 +97,7 @@ void init_graph(py::module &m) {
         .export_values();
 
     // the generic node type
-    py::class_<Node, std::shared_ptr<Node>, std::enable_shared_from_this<Node>> node(m, "Node");
+    py::class_<Node, std::shared_ptr<Node>> node(m, "Node");
     // init_node_class<Node>(node);
     node.def(py::init<>());
 
