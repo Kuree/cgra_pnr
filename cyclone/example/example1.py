@@ -2,7 +2,7 @@ from __future__ import print_function
 import sys
 from pycyclone import RoutingGraph, SwitchBoxNode, PortNode, SwitchBoxSide
 from pycyclone import GlobalRouter, SwitchBoxIO, Switch
-from pycyclone.util import gsi, gii, get_uniform_sb_wires
+from pycyclone.util import gsi, gii, get_disjoint_sb_wires
 from pycyclone.io import dump_routing_graph
 
 WIDTH = 1
@@ -15,7 +15,7 @@ SWITCH_ID = 0
 def main():
     # constructing the routing graph
     switchbox = Switch(0, 0, NUM_TRACK, WIDTH, SWITCH_ID,
-                       get_uniform_sb_wires(NUM_TRACK))
+                       get_disjoint_sb_wires(NUM_TRACK))
     # 2 x 2 board with 2 routing tracks
     g = RoutingGraph(SIZE, SIZE, switchbox)
     # each tile has 2 ports, "in" and "out"

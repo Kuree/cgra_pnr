@@ -26,7 +26,6 @@ public:
     void assign_net_segment(const std::vector<std::shared_ptr<Node>> &segment,
                             int net_id);
     void assign_history();
-    void clear_connections();
     std::map<std::string, std::vector<std::vector<std::shared_ptr<Node>>>>
     realize() const;
 

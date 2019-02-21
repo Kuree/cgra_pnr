@@ -424,11 +424,6 @@ void Router::assign_history(std::shared_ptr<Node> &end) {
     node_history_.at(end)++;
 }
 
-void Router::clear_connections() {
-    for (uint32_t net_id = 0; net_id < netlist_.size(); net_id++)
-        rip_up_net(net_id);
-}
-
 uint32_t Router::get_history_cost(const std::shared_ptr<Node> &node) {
     uint32_t result = node_history_.at(node);
     return result;
