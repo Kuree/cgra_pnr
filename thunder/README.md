@@ -14,7 +14,7 @@ To install from source, simply do
 ```
 mkdir build
 cd build
-cmake && make -j
+cmake .. && make -j
 ```
 
 Thunder also has a complete Python binding available, to use the Python binding, simply do
