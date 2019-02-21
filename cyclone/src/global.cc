@@ -328,11 +328,19 @@ GlobalRouter::get_free_switch(const std::pair<uint32_t, uint32_t> &p) {
             // see it's been used or not
             if (!node_connections_.at(node).empty())
                 return false;
-            return true;
-            // one of it's connections has to be free
+
+            // two hope check to see if there is any register nodes
+            ::set<std::shared_ptr<Node>> first_hop;
             for (auto const &n : *node) {
-                if (node_connections_.at(n).empty())
+                if (n->type == NodeType::Register)
                     return true;
+                first_hop.insert(n);
+            }
+            for (auto const &n : first_hop) {
+                for (auto const &nn : *n) {
+                    if (nn->type == NodeType::Register)
+                        return true;
+                }
             }
 
             return false;
