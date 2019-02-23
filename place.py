@@ -288,7 +288,10 @@ def perform_global_placement(fixed_blk_pos, netlists,
     # compute the anneal parameter here
     total_blocks = layout.get_layer(layout.get_clb_type()).produce_available_pos()
     fill_ratio = min(0.99, len(blk_set) / len(total_blocks))
-    gp.anneal_param_factor = 1 / (1 - fill_ratio)
+    base_factor = 1.0
+    if fill_ratio > 0.8:
+        base_factor = 1.2
+    gp.anneal_param_factor = base_factor / (1 - fill_ratio)
     print("use anneal param factor:", gp.anneal_param_factor)
     gp.solve()
     gp.anneal()

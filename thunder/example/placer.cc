@@ -163,7 +163,10 @@ int main(int argc, char *argv[]) {
         }
     }
     double fill_ratio = fmax(0.99, num_blks /num_blks_layout);
-    gp.anneal_param_factor = 1 / (1 - fill_ratio);
+    double base_factor = 1;
+    if (fill_ratio > 0.8)
+        base_factor = 1.2;
+    gp.anneal_param_factor = base_factor / (1 - fill_ratio);
     std::cout << "Use anneal_param_factor " << gp.anneal_param_factor
               << std::endl;
     gp.solve();
