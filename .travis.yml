@@ -38,8 +38,8 @@ after_success:
     - echo password=$PYPI_PASSWORD                     >> ~/.pypirc
 
 before_deploy:
-    - cd thunder && python setup.py bdist_wheel
-    - cd cyclone && python setup.py bdist_wheel
+    - cd thunder && python setup.py bdist_wheel && cd ..
+    - cd cyclone && python setup.py bdist_wheel && cd ..
 
 deploy:
   - provider: script
@@ -50,6 +50,7 @@ deploy:
       condition: $TRAVIS_PYTHON_VERSION = "2.7"
   - provider: releases
     api_key: $GITHUB_TOKEN
+    file_glob: true
     file:
         - thunder/dist/*.whl
         - cyclone/dist/*.whl
