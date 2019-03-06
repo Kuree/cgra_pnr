@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.0)
 project(thunder)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -pthread \
-    -funroll-all-loops")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -funroll-all-loops")
+
+find_package(Threads)
 
 set(HEADER_LIBRARY src/include/randutils.hpp
                    src/include/tqdm.h
@@ -25,4 +26,4 @@ add_subdirectory(lib/leidenalg)
 add_subdirectory(python)
 add_subdirectory(example)
 
-target_link_libraries(thunder stdc++fs leidenalg)
+target_link_libraries(thunder stdc++fs leidenalg ${CMAKE_THREAD_LIBS_INIT})

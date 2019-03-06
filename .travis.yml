@@ -37,6 +37,10 @@ after_success:
     - echo username=keyi                               >> ~/.pypirc
     - echo password=$PYPI_PASSWORD                     >> ~/.pypirc
 
+before_deploy:
+    - cd thunder && python setup.py bdist_wheel
+    - cd cyclone && python setup.py bdist_wheel
+
 deploy:
   - provider: script
     script: /bin/sh scripts/deploy.sh

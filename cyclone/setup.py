@@ -59,7 +59,7 @@ class CMakeBuild(build_ext):
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
 
 current_directory = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(current_directory, 'README.md')) as f:
+with open(os.path.join(current_directory, 'README.rst')) as f:
     long_description = f.read()
 
 setup(
@@ -73,5 +73,5 @@ setup(
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
     long_description=long_description,
-    long_description_content_type='text/markdown',
+    long_description_content_type='text/x-rst',
 )
