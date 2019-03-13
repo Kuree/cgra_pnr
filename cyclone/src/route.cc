@@ -42,6 +42,11 @@ Router::Router(const RoutingGraph &g) : graph_(g) {
             node_history_.insert({reg.second, {}});
             node_net_ids_.insert({reg.second, {}});
         }
+        for (auto const &reg_mux: tile.rmux_nodes) {
+            node_connections_.insert({reg_mux.second, {}});
+            node_history_.insert({reg_mux.second, {}});
+            node_net_ids_.insert({reg_mux.second, {}});
+        }
     }
 }
 

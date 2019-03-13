@@ -349,16 +349,18 @@ RegisterNode create_reg_from_tokens(const ::vector<::string> &tokens) {
     return RegisterNode(tokens[1], values[1], values[2], values[3], values[0]);
 }
 
-RegisterMuxNode create_generic_from_tokens(const ::vector<::string> &tokens) {
+RegisterMuxNode create_rmux_from_tokens(const ::vector<::string> &tokens) {
     if (tokens[0] != RegisterMuxNode::TOKEN)
         throw ::runtime_error("export GENERIC, got " + tokens[0]);
     if (tokens.size() < 6)
         throw ::runtime_error("expect at least 6 entries for reg");
-    ::vector<uint32_t> values(4);
+    ::vector<uint32_t> values(5);
     // track, x, y, width
-    for (uint32_t i = 0; i < 4; i++)
-        values[i] = stou(tokens[i + 2]);
-    return RegisterMuxNode(tokens[1], values[1], values[2], values[3], values[0]);
+    for (uint32_t i = 0; i < 5; i++)
+        values[i] = stou(tokens[i + 1]);
+    ::string rmux_name = ::to_string(values[0]) + "_" + ::to_string(values[3]);
+    return RegisterMuxNode(rmux_name, values[1], values[2], values[4],
+                           values[0]);
 }
 
 SwitchBoxNode create_sb_from_tokens(const ::vector<::string> &tokens) {
@@ -405,7 +407,7 @@ void connect_nodes(Node &from, std::ifstream &in, RoutingGraph &g) {
             auto port = create_port_from_tokens(line_tokens);
             g.add_edge(from, port);
         } else if (line_tokens[0] == RegisterMuxNode::TOKEN) {
-            auto node = create_generic_from_tokens(line_tokens);
+            auto node = create_rmux_from_tokens(line_tokens);
             g.add_edge(from, node);
         } else {
             throw ::runtime_error("unknown node type " + line_tokens[0]);
@@ -494,7 +496,7 @@ RoutingGraph load_routing_graph(const std::string &filename) {
             auto reg = create_reg_from_tokens(line_tokens);
             connect_nodes(reg, in, g);
         } else if (line_tokens[0] == RegisterMuxNode::TOKEN) {
-            auto generic = create_generic_from_tokens(line_tokens);
+            auto generic = create_rmux_from_tokens(line_tokens);
             connect_nodes(generic, in, g);
         }
     }

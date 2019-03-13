@@ -113,7 +113,7 @@ void GlobalPlacer::setup_reduced_layout() {
 
     // sanity check
     for (auto const &y : reduced_board_layout_) {
-        if (y.size() != reduced_board_layout_[layout_height / 2].size())
+        if (y.size() != reduced_board_layout_[clb_margin_].size())
             throw std::runtime_error("failed layout check at " +
                                      std::to_string(y.size()));
     }
