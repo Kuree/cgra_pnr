@@ -358,7 +358,7 @@ RegisterMuxNode create_rmux_from_tokens(const ::vector<::string> &tokens) {
     // track, x, y, width
     for (uint32_t i = 0; i < 5; i++)
         values[i] = stou(tokens[i + 1]);
-    ::string rmux_name = ::to_string(values[0]) + "_" + ::to_string(values[3]);
+    ::string rmux_name = ::to_string(values[3]) + "_" + ::to_string(values[0]);
     return RegisterMuxNode(rmux_name, values[1], values[2], values[4],
                            values[0]);
 }
