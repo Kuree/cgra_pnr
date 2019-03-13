@@ -316,7 +316,11 @@ def generate_netlists(connections, instances):
                 continue
             if port == "data.in.0":
                 port = "data0"
+            elif port == "in0":
+                port = "data0"
             elif port == "data.in.1":
+                port = "data1"
+            elif port == "in1":
                 port = "data1"
             elif port == "in" and "io1_" in v:
                 port = "inb"
@@ -340,8 +344,16 @@ def generate_netlists(connections, instances):
                 port = "out"
             elif port == "bit.out" or (port == "out" and "io1in" in v):
                 port = "outb"
+            elif port == "res":
+                port = "res"
+            elif port == "res_p":
+                port = "res_p"
             elif "valid" in port:
                 port = "valid"
+            elif port == "io2f_16":
+                port = "io2f_16"
+            elif port == "f2io_16":
+                port = "f2io_16"
             else:
                 raise Exception("Unrecognized port " + port + " for name " +
                                 v)
@@ -511,8 +523,12 @@ def change_name_to_id(instances):
                 blk_type = "b"
             elif attrs["modref"] == u"cgralib.BitIO":
                 blk_type = "i"
+            elif attrs["modref"] == "lassen.PE":
+                blk_type = "p"
+            elif attrs["modref"] == "peak.io16":
+                blk_type = "I"
             else:
-                raise Exception("Unknown instance type " + name)
+                raise Exception("Unknown instance type " + str(attrs))
         else:
             # TODO: stupid 1 bit IO thing need to take care of
             instance_type = attrs["genref"]
