@@ -312,15 +312,11 @@ def generate_netlists(connections, instances):
             blk_id = name_to_id[blk_name]
             port = ".".join(raw_names[1:])
             # FIXME: don't care about these so far
-            if port == "ren" or port == "cg_en":
+            if port == "ren" or port == "cg_en" or port == "clk_en":
                 continue
-            if port == "data.in.0":
+            if port == "data.in.0" or port == "data0" or port == "in0":
                 port = "data0"
-            elif port == "in0":
-                port = "data0"
-            elif port == "data.in.1":
-                port = "data1"
-            elif port == "in1":
+            elif port == "data.in.1" or port == "data1" or port == "in1":
                 port = "data1"
             elif port == "in" and "io1_" in v:
                 port = "inb"
@@ -344,15 +340,15 @@ def generate_netlists(connections, instances):
                 port = "out"
             elif port == "bit.out" or (port == "out" and "io1in" in v):
                 port = "outb"
-            elif port == "res":
+            elif port == "res" or port == "alu_res":
                 port = "res"
             elif port == "res_p":
                 port = "res_p"
             elif "valid" in port:
                 port = "valid"
-            elif port == "io2f_16":
+            elif port == "io2f_16" or port == "tofab":
                 port = "io2f_16"
-            elif port == "f2io_16":
+            elif port == "f2io_16" or port == "fromfab":
                 port = "f2io_16"
             else:
                 raise Exception("Unrecognized port " + port + " for name " +
@@ -523,9 +519,9 @@ def change_name_to_id(instances):
                 blk_type = "b"
             elif attrs["modref"] == u"cgralib.BitIO":
                 blk_type = "i"
-            elif attrs["modref"] == "lassen.PE":
+            elif attrs["modref"] == "alu_ns.PE":
                 blk_type = "p"
-            elif attrs["modref"] == "peak.io16":
+            elif attrs["modref"] == "alu_ns.io16":
                 blk_type = "I"
             else:
                 raise Exception("Unknown instance type " + str(attrs))
@@ -555,7 +551,9 @@ def read_netlist_json(netlist_filename):
     with open(netlist_filename) as f:
         raw_data = json.load(f)
     namespace = raw_data["namespaces"]
-    design = namespace["global"]["modules"]["DesignTop"]
+    # load design names
+    top = raw_data["top"].split(".")[-1]
+    design = namespace["global"]["modules"][top]
     instances = design["instances"]
     connections = design["connections"]
     # the standard json input is not a netlist
@@ -567,7 +565,9 @@ def load_unmapped_netlist(netlist_filename):
     with open(netlist_filename) as f:
         data = json.load(f)
 
-    design = data["namespaces"]["global"]["modules"]["DesignTop"]
+    # load design names
+    top = data["top"].split(".")[-1]
+    design = data["namespaces"]["global"]["modules"][top]
     instances = design["instances"]
     connections = design["connections"]
 

@@ -84,7 +84,8 @@ def group_reg_nets(netlists):
 
 
 def is_conn_out(raw_name):
-    port_names = ["out", "outb", "valid", "rdata", "res", "res_p", "io2f_16"]
+    port_names = ["out", "outb", "valid", "rdata", "res", "res_p", "io2f_16",
+                  "alu_res", "tofab"]
     if isinstance(raw_name, six.text_type):
         raw_name = raw_name.split(".")
     if len(raw_name) > 1:
@@ -97,7 +98,7 @@ def is_conn_out(raw_name):
 
 def is_conn_in(raw_name):
     port_names = ["in", "wen", "cg_en", "ren", "wdata", "in0", "in1", "in",
-                  "inb", "data0", "data1", "io2f_16"]
+                  "inb", "data0", "data1", "io2f_16", "clk_en", "fromfab"]
     if isinstance(raw_name, six.text_type):
         raw_name = raw_name.split(".")
     if len(raw_name) > 1:
