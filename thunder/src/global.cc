@@ -899,10 +899,10 @@ GlobalPlacer::realize() {
                 std::sort(cell_index.begin(), cell_index.end(),
                           [=](const auto &p1,
                               const auto &p2) {
-                              return abs(c_x - cells[p1].first)
-                                     + abs(c_y - cells[p1].second) <
-                                     abs(c_x - cells[p2].first) +
-                                     abs(c_y - cells[p2].second);
+                              return std::abs(c_x - cells[p1].first)
+                                     + std::abs(c_y - cells[p1].second) <
+                                     std::abs(c_x - cells[p2].first) +
+                                     std::abs(c_y - cells[p2].second);
                           });
                 for (uint32_t i = 0; i < cells.size(); i++) {
                     uint32_t ii = cell_index[i];
