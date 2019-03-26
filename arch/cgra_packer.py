@@ -340,8 +340,10 @@ def generate_netlists(connections, instances):
                 port = "out"
             elif port == "bit.out" or (port == "out" and "io1in" in v):
                 port = "outb"
-            elif port == "res" or port == "alu_res":
+            elif port == "res":
                 port = "res"
+            elif port == "alu_res":
+                port = "alu_res"
             elif port == "res_p":
                 port = "res_p"
             elif "valid" in port:
@@ -519,9 +521,9 @@ def change_name_to_id(instances):
                 blk_type = "b"
             elif attrs["modref"] == u"cgralib.BitIO":
                 blk_type = "i"
-            elif attrs["modref"] == "alu_ns.PE":
+            elif attrs["modref"] == "alu_ns.PE" or attrs["modref"] == "lassen.PE":
                 blk_type = "p"
-            elif attrs["modref"] == "alu_ns.io16":
+            elif attrs["modref"] == "alu_ns.io16" or attrs["modref"] == "lassen.io16":
                 blk_type = "I"
             else:
                 raise Exception("Unknown instance type " + str(attrs))

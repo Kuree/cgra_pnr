@@ -91,19 +91,19 @@ def is_conn_out(raw_name):
     if len(raw_name) > 1:
         raw_name = raw_name[1:]
     for name in port_names:
-        if name in raw_name:
+        if name == raw_name[-1]:
             return True
     return False
 
 
 def is_conn_in(raw_name):
     port_names = ["in", "wen", "cg_en", "ren", "wdata", "in0", "in1", "in",
-                  "inb", "data0", "data1", "io2f_16", "clk_en", "fromfab"]
+                  "inb", "data0", "data1", "f2io_16", "clk_en", "fromfab"]
     if isinstance(raw_name, six.text_type):
         raw_name = raw_name.split(".")
     if len(raw_name) > 1:
         raw_name = raw_name[1:]
     for name in port_names:
-        if name in raw_name:
+        if name == raw_name[-1]:
             return True
     return False

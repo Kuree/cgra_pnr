@@ -49,7 +49,7 @@ prefixed_placement(const std::map<std::string,
     }
 
     // 1 bit first. there is another bug in the hardware that the reset signal
-    // has to hold for at least 2 cycles to reset
+    // has to be placed first
     std::vector<std::string> blocks(working_set.begin(), working_set.end());
     // sort the blocks based on the tag
     std::sort(blocks.begin(), blocks.end(), [](std::string a, std::string) {
