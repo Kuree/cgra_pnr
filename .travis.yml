@@ -49,16 +49,6 @@ deploy:
       branch: master
       tags: true
       condition: $TRAVIS_PYTHON_VERSION = "2.7"
-  - provider: releases
-    api_key: $GITHUB_TOKEN
-    file_glob: true
-    skip_cleanup: true
-    file:
-        - thunder/dist/*.whl
-        - cyclone/dist/*.whl
-    on:
-      branch: master
-      tags: true
 
 notifications:
   email:
