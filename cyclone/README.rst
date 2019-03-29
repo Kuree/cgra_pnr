@@ -2,6 +2,7 @@ Cyclone
 -------
 
 |PyPI version|
+|PyPI - Wheel|
 
 Cyclone is a CGRA router as part of PnR system.
 
@@ -33,3 +34,4 @@ You can see the example code in ``example`` folder.
 
 .. |PyPI version| image:: https://badge.fury.io/py/pycyclone.svg
    :target: https://badge.fury.io/py/pycyclone
+.. |PyPI - Wheel| image:: https://img.shields.io/pypi/wheel/pycyclone.svg

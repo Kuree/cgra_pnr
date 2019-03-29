@@ -2,6 +2,7 @@ CGRA PnR
 --------
 [![Build Status](https://travis-ci.org/Kuree/cgra_pnr.svg?branch=master)](https://travis-ci.org/Kuree/cgra_pnr)
 [![Documentation Status](https://readthedocs.org/projects/cgra-pnr/badge/?version=dev)](https://cgra-pnr.readthedocs.io/en/dev/?badge=dev)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B17)
 
 Generic place and route tool for CGRA.
 ## Getting started
@@ -24,17 +25,26 @@ $ pip install thunder/
 $ pip install cyclone/
 $ pip install -r requirements.txt
 ```
+It also has C++ native binaries interface, to use them, simply do
+```
+$ ./install.sh
+```
+
 #### Use CGRA PnR in other projects
 The placement engine, `thunder`, can be used outside this repo. Simply do
 ```
-pip install -e git+https://github.com/Kuree/cgra_pnr#egg=pkg\&subdirectory=thunder
+pip install pythunder
 ```
 Usage of this library can be found in `place.py`.
 
 The routing engine, `cyclone`, can also be used outside this repo. Simply do
 ```
-pip install -e git+https://github.com/Kuree/cgra_pnr#egg=pkg\&subdirectory=cyclone
+pip install pycyclone
 ```
+
+By default PyPI will have the latest release version of binary wheels for linux
+systems. This is built through `manylinux` build
+[here](https://github.com/Kuree/cgra_pnr_build)
 
 ### Usage
 ```
@@ -90,7 +100,3 @@ It supports both `VPR` and `bookshelf` format. As a result, it can place any
 packed version of VPR benchmark or ISPD FPGA benchmark. However, because it's
 not designed to place generic netlists, it may not obtain an optimal solution,
 or may be very slow to converge.
-### Work in progress
-1. ~~Integrate DAG kernel based partition.~~
-2. ~~Use register folding instead of wasting PE tiles for registers that drives more than one net.~~ Done
-3. ~~reimplement in C++ for efficiency.~~

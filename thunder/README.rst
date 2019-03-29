@@ -2,6 +2,7 @@ Thunder
 -------
 
 |PyPI version|
+|PyPI - Wheel|
 
 Thunder is a high-performance CGRA placement engine. It is uses
 multi-processing to speed up the placement. Users can also use AWS
@@ -36,3 +37,4 @@ You can see the example code in ``example`` folder.
 
 .. |PyPI version| image:: https://badge.fury.io/py/pythunder.svg
    :target: https://badge.fury.io/py/pythunder
+.. |PyPI - Wheel| image:: https://img.shields.io/pypi/wheel/pythunder.svg
