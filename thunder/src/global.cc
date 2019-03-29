@@ -460,7 +460,6 @@ void GlobalPlacer::solve() {
                                     (double)clusters_.size())
                                    * 1.4 , 2) * hpwl_param_ *
                           anneal_param_factor;
-    printf("Use anneal param: %f\n", anneal_param_);
 
     this->curr_energy = init_energy();
 }
@@ -884,8 +883,8 @@ GlobalPlacer::realize() {
         if (needed > 0) {
             // find exterior set
             int effort;
-            for (effort = 0;
-                 effort < (int) height / 2; effort++) {
+            auto radius = static_cast<int>(std::max(height, width));
+            for (effort = 0; effort < radius; effort++) {
                 if (needed <= 0)
                     break;
                 ::vector<::pair<int, int>> cells;
@@ -916,6 +915,9 @@ GlobalPlacer::realize() {
                         break;
                 }
             }
+            if (effort > static_cast<int>(height / 2))
+                std::cerr << "WARN: exhaustive search used. "
+                          << "results may not be optimal" << std::endl;
             if (needed > 0)
                  throw std::runtime_error("cannot find enough space "
                                           "de-overlapping");
