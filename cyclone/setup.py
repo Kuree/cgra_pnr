@@ -3,6 +3,7 @@ import re
 import sys
 import platform
 import subprocess
+import shutil
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
@@ -58,13 +59,20 @@ class CMakeBuild(build_ext):
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
 
+        # copy the binary over
+        binaries = [os.path.join(self.build_temp, "example", "router")]
+        for binary in binaries:
+            assert os.path.isfile(binary)
+            print(extdir, binary)
+            shutil.copy(binary, extdir)
+
 current_directory = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(current_directory, 'README.rst')) as f:
     long_description = f.read()
 
 setup(
     name='pycyclone',
-    version='0.3.6',
+    version='0.3.7',
     author='Keyi Zhang',
     author_email='keyi@stanford.edu',
     description='Fast CGRA Routing',
@@ -72,6 +80,7 @@ setup(
     ext_modules=[CMakeExtension('pycyclone')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
+    scripts=["python/router"],
     long_description=long_description,
     long_description_content_type='text/x-rst',
 )
