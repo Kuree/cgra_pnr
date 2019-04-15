@@ -20,7 +20,6 @@ add_library(thunder src/anneal.cc src/anneal.hh src/util.cc
             src/io.cc src/io.hh
             ${HEADER_LIBRARY})
 
-
 add_subdirectory(python/pybind11)
 add_subdirectory(lib/leidenalg)
 add_subdirectory(python)
