@@ -859,8 +859,9 @@ GlobalPlacer::realize() {
     }
     // fill in the one based one which one needs most
     ::vector<int> cluster_ids;
+    cluster_ids.reserve(overlap_stats.size());
     for (const auto &iter : overlap_stats)
-        cluster_ids.emplace_back(iter.first);
+            cluster_ids.emplace_back(iter.first);
 
     std::sort(cluster_ids.begin(), cluster_ids.end(), [&](auto &val1,
                                                           auto &val2) {

@@ -59,7 +59,7 @@ DetailedPlacer
     this->compute_reg_no_pos(cluster_blocks, netlist, blk_id_dict);
 
     // legalize the regs
-    this->legalize_reg();
+    this->legalize_reg(available_pos);
 
     // set up the net
     process_netlist(netlist, blk_id_dict);
@@ -375,8 +375,9 @@ DetailedPlacer::init_place_reg(const ::vector<::string> &cluster_blocks,
     }
 }
 
-void DetailedPlacer::legalize_reg() {
-    ::set<Point> available_pos;
+void DetailedPlacer::legalize_reg(const ::map<char, ::vector<::pair<int,
+        int>>> &available_pos) {
+    ::set<Point> available_pos_r;
     ::set<int> finished_set;
     ::set<int> working_set;
 
@@ -384,9 +385,12 @@ void DetailedPlacer::legalize_reg() {
     for (auto const &ins : instances_) {
         if (ins.name[0] != REG_BLK_TYPE)
             continue;
-        available_pos.insert(ins.pos);
         working_set.insert(ins.id);
     }
+
+    auto const &pos_list = available_pos.at(REG_BLK_TYPE);
+    for (auto const &pos: pos_list)
+        available_pos_r.insert({pos.first, pos.second});
 
     // focus on the regs that drives nets
     for (auto const id : working_set) {
@@ -394,7 +398,7 @@ void DetailedPlacer::legalize_reg() {
             continue;
         // find a suitable position
         bool found = false;
-        for (auto const &pos : available_pos) {
+        for (auto const &pos : available_pos_r) {
             bool use = true;
             for (auto const blk_id : reg_no_pos_[id]) {
                 if (instances_[blk_id].pos == pos) {
@@ -406,7 +410,7 @@ void DetailedPlacer::legalize_reg() {
                 instances_[id].pos = pos;
                 found = true;
                 finished_set.insert(id);
-                available_pos.erase(pos);
+                available_pos_r.erase(pos);
                 break;
             }
         }
@@ -419,9 +423,9 @@ void DetailedPlacer::legalize_reg() {
     for (auto const id : working_set) {
         if (finished_set.find(id) != finished_set.end())
             continue;
-        Point pos = *available_pos.begin();
+        Point pos = *available_pos_r.begin();
         instances_[id].pos = pos;
-        available_pos.erase(pos);
+        available_pos_r.erase(pos);
     }
 
 }

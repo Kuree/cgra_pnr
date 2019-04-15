@@ -6,6 +6,8 @@
 #include "../src/multi_place.hh"
 #include "../src/detailed.hh"
 
+constexpr uint32_t dim_threshold = 4;
+
 using std::string;
 using std::map;
 using std::vector;
@@ -148,31 +150,50 @@ int main(int argc, char *argv[]) {
     const auto fixed_pos = prefixed_placement(netlist, layout);
 
     auto clusters = convert_clusters(raw_clusters, fixed_pos);
-    // global placement
-    auto gp = GlobalPlacer(clusters, netlist, fixed_pos, layout);
-    gp.set_seed(seed);
-    // compute the anneal param based on some heuristics
-    uint64_t num_blks_layout = layout.get_layer(layout.get_clb_type()).
-                               produce_available_pos().size();
-    double num_blks = 0;
-    const char clb_type = layout.get_clb_type();
-    for (auto const &iter: clusters) {
-        for (const auto &blk: iter.second) {
-            if (blk[0] == clb_type)
-                num_blks += 1;
+    // notice that if there is only one cluster and the board is very small
+    // we just do it flat
+    ::map<::string, ::map<char, std::set<::pair<int, int>>>> gp_result;
+    const auto &size = layout.get_size();
+    if (clusters.size() == 1
+        && (size.first <= dim_threshold && size.second <= dim_threshold)) {
+        for (auto const &it: clusters) {
+            auto const &cluster_id = it.first;
+            auto const &pos_collections = layout.produce_available_pos();
+            gp_result[cluster_id] = {};
+            for (auto const &[blk_type, pos]: pos_collections) {
+                gp_result[cluster_id][blk_type] =
+                        std::set<::pair<int, int>>(pos.begin(), pos.end());
+            }
         }
-    }
-    double fill_ratio = fmax(0.99, num_blks /num_blks_layout);
-    double base_factor = 1;
-    if (fill_ratio > 0.8)
-        base_factor = 1.2;
-    gp.anneal_param_factor = base_factor / (1 - fill_ratio);
-    std::cout << "Use anneal_param_factor " << gp.anneal_param_factor
-              << std::endl;
-    gp.solve();
-    gp.anneal();
 
-    auto gp_result = gp.realize();
+    } else {
+        // global placement
+        auto gp = GlobalPlacer(clusters, netlist, fixed_pos, layout);
+        gp.set_seed(seed);
+        // compute the anneal param based on some heuristics
+        uint64_t num_blks_layout = layout.get_layer(layout.get_clb_type()).
+                produce_available_pos().size();
+        double num_blks = 0;
+        const char clb_type = layout.get_clb_type();
+        for (auto const &iter: clusters) {
+            for (const auto &blk: iter.second) {
+                if (blk[0] == clb_type)
+                    num_blks += 1;
+            }
+        }
+        double fill_ratio = fmax(0.99, num_blks /num_blks_layout);
+        double base_factor = 1;
+        if (fill_ratio > 0.8)
+            base_factor = 1.2;
+        gp.anneal_param_factor = base_factor / (1 - fill_ratio);
+        std::cout << "Use anneal_param_factor " << gp.anneal_param_factor
+                  << std::endl;
+        gp.solve();
+        gp.anneal();
+
+        gp_result = gp.realize();
+    }
+
     map<string, pair<int, int>> dp_result = detailed_placement(clusters,
                                                                netlist,
                                                                fixed_pos,

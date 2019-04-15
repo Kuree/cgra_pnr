@@ -83,7 +83,8 @@ private:
                                      std::vector<std::string>> &nets,
                             std::map<std::string, int> &blk_id_dict);
 
-    void legalize_reg();
+    void legalize_reg(const std::map<char, std::vector<std::pair<int,
+                            int>>> &available_pos);
 
     void process_netlist(const std::map<std::string,
                                         std::vector<std::string>> &netlist,
