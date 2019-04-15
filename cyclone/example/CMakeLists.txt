@@ -5,4 +5,5 @@ add_executable(example2 example2.cc)
 target_link_libraries(example2 cyclone)
 
 add_executable(router router.cc)
-target_link_libraries(router cyclone)
+target_link_libraries(router PRIVATE cyclone)
+target_link_libraries(router PUBLIC -static-libgcc -static-libstdc++)

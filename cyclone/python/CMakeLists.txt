@@ -2,7 +2,6 @@ set(PYBIND11_CPP_STANDARD -std=c++17)
 # for some reason it gives LTO errors on my laptop with release mode
 pybind11_add_module(pycyclone cyclone.cc)
 
-#target_link_libraries(pythunder PRIVATE pybind11::module)
 set_target_properties(pycyclone PROPERTIES LINK_SEARCH_START_STATIC 1)
 set_target_properties(pycyclone PROPERTIES LINK_SEARCH_END_STATIC 1)
 set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
