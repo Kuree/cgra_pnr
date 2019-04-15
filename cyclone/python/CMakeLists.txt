@@ -3,7 +3,10 @@ set(PYBIND11_CPP_STANDARD -std=c++17)
 pybind11_add_module(pycyclone cyclone.cc)
 
 #target_link_libraries(pythunder PRIVATE pybind11::module)
-set(CMAKE_EXE_LINKER_FLAGS " -static")
+set_target_properties(pycyclone PROPERTIES LINK_SEARCH_START_STATIC 1)
+set_target_properties(pycyclone PROPERTIES LINK_SEARCH_END_STATIC 1)
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+
 target_link_libraries(pycyclone PRIVATE cyclone)
 target_link_libraries(pycyclone PUBLIC -static-libgcc -static-libstdc++)
 
