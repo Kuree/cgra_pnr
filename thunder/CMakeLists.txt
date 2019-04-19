@@ -11,6 +11,8 @@ if (UNROLL)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -funroll-all-loops")
 endif()
 
+CHECK_CXX_COMPILER_FLAG(-static-libgcc STATIC)
+
 find_package(Threads REQUIRED)
 
 set(HEADER_LIBRARY src/include/randutils.hpp

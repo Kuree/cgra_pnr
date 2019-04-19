@@ -7,7 +7,10 @@ set_target_properties(pycyclone PROPERTIES LINK_SEARCH_END_STATIC 1)
 set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 
 target_link_libraries(pycyclone PRIVATE cyclone)
-target_link_libraries(pycyclone PUBLIC -static-libgcc -static-libstdc++)
+CHECK_CXX_COMPILER_FLAG(-static-libgcc STATIC)
+if (${STATIC})
+    target_link_libraries(pycyclone PUBLIC -static-libgcc -static-libstdc++)
+endif()
 
 set_target_properties(pycyclone PROPERTIES PREFIX "${PYTHON_MODULE_PREFIX}"
         SUFFIX "${PYTHON_MODULE_EXTENSION}" COMPILE_FLAGS "-Wno-register")
