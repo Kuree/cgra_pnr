@@ -32,4 +32,4 @@ add_subdirectory(lib/leidenalg)
 add_subdirectory(python)
 add_subdirectory(example)
 
-target_link_libraries(thunder stdc++fs leidenalg ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(thunder leidenalg ${CMAKE_THREAD_LIBS_INIT})

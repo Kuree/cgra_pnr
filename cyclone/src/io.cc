@@ -6,7 +6,6 @@
 #include <functional>
 #include <sstream>
 #include <unordered_set>
-#include <experimental/filesystem>
 
 using std::ifstream;
 using std::map;
@@ -17,7 +16,6 @@ using std::runtime_error;
 using std::make_pair;
 using std::endl;
 using std::to_string;
-using std::experimental::filesystem::exists;
 
 //constexpr auto gsv = get_side_value;
 constexpr auto gsi = get_side_int;
@@ -49,6 +47,11 @@ static inline void rtrim(std::string &s) {
 static inline void trim(std::string &s) {
     ltrim(s);
     rtrim(s);
+}
+
+inline bool exists(const std::string &filename) {
+    std::ifstream in(filename);
+    return in.good();
 }
 
 ::vector<::string> get_tokens(const ::string &line) {
