@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <map>
+#include <unordered_map>
 #include "graph.hh"
 #include "net.hh"
 
