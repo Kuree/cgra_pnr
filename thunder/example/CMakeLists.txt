@@ -7,5 +7,7 @@ target_link_libraries(example2 thunder)
 add_executable(example3 example3.cc)
 target_link_libraries(example3 thunder)
 
+MESSAGE(STATUS ${STATIC_FLAG})
+
 add_executable(placer placer.cc)
 target_link_libraries(placer thunder)

@@ -11,8 +11,8 @@ if (${UNROLL})
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -funroll-all-loops")
 endif()
 
-CHECK_CXX_COMPILER_FLAG(-static-libgcc STATIC)
-if (${STATIC})
+CHECK_CXX_COMPILER_FLAG(-static-libgcc COMPILER_STATIC)
+if (${COMPILER_STATIC})
     set(STATIC_FLAG "-static-libgcc -static-libstdc++")
 endif()
 
