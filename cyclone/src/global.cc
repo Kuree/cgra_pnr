@@ -205,7 +205,7 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
                     continue;
 
                 // has to be an in switch box so that we can switch tracks
-                auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(node);
+                auto sb = std::dynamic_pointer_cast<SwitchBoxNode>(node);
                 if (sb->io == SwitchBoxIO::SB_OUT)
                     continue;
 

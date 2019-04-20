@@ -202,10 +202,10 @@ void print_conn(std::ofstream &out, const std::string &pad,
                          if (n1->type == NodeType::SwitchBox &&
                              n2->type == NodeType::SwitchBox) {
                              auto sb1 =
-                                     std::reinterpret_pointer_cast
+                                     std::dynamic_pointer_cast
                                              <SwitchBoxNode>(n1);
                              auto sb2 =
-                                     std::reinterpret_pointer_cast
+                                     std::dynamic_pointer_cast
                                              <SwitchBoxNode>(n2);
                              return sb1->side > sb2->side;
                          } else {
@@ -218,10 +218,10 @@ void print_conn(std::ofstream &out, const std::string &pad,
                          if (n1->type == NodeType::SwitchBox &&
                              n2->type == NodeType::SwitchBox) {
                              auto sb1 =
-                                     std::reinterpret_pointer_cast
+                                     std::dynamic_pointer_cast
                                              <SwitchBoxNode>(n1);
                              auto sb2 =
-                                     std::reinterpret_pointer_cast
+                                     std::dynamic_pointer_cast
                                              <SwitchBoxNode>(n2);
                              return sb1->io > sb2->io;
                          } else {
