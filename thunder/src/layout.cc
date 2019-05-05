@@ -4,6 +4,10 @@
 using std::vector;
 using std::runtime_error;
 
+// FIXME
+constexpr char REGISTER = 'r';
+
+
 Layer::Layer(char blk_type, uint32_t width,
              uint32_t height) : blk_type(blk_type),
                                 layout_(height, ::vector<bool>(width, false)) {}
@@ -116,7 +120,8 @@ char Layout::get_blk_type(uint32_t x, uint32_t y) const {
     for (auto const &[blk_type, layer]: layers_) {
         if (layer[{x, y}] &&
             layers_priority_major_.at(blk_type) >= priority_major &&
-            layers_priority_minor_.at(blk_type) >= priority_minor) {
+            layers_priority_minor_.at(blk_type) >= priority_minor &&
+            blk_type != REGISTER) {
             blk = blk_type;
             priority_major = layers_priority_major_.at(blk_type);
             priority_minor = layers_priority_minor_.at(blk_type);

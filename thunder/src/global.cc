@@ -399,8 +399,10 @@ void GlobalPlacer::solve() {
                 auto &box = boxes_[i];
                 if (box.fixed)
                     continue;
-                box.cx += direction[i].first * step_size;
-                box.cy += direction[i].second * step_size;
+                if (!std::isnan(direction[i].first) && !std::isinf(direction[i].first))
+                    box.cx += direction[i].first * step_size;
+                if (!std::isnan(direction[i].second) && !std::isinf(direction[i].second))
+                    box.cy += direction[i].second * step_size;
 
                 // set bound
                 // and a look-ahead legalization
