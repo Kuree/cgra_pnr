@@ -72,7 +72,7 @@ with open(os.path.join(current_directory, 'README.rst')) as f:
 
 setup(
     name='pythunder',
-    version='0.3.13',
+    version='0.3.14',
     author='Keyi Zhang',
     author_email='keyi@stanford.edu',
     description='Fast CGRA Placement',
