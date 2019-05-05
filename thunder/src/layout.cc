@@ -4,9 +4,6 @@
 using std::vector;
 using std::runtime_error;
 
-// FIXME
-constexpr char REGISTER = 'r';
-
 
 Layer::Layer(char blk_type, uint32_t width,
              uint32_t height) : blk_type(blk_type),
@@ -186,16 +183,48 @@ Layout::produce_available_pos() const {
     return result;
 }
 
-uint32_t Layout::get_margin() {
-    // we assume that it is symmetrical
-    auto clb_type = get_clb_type();
-    uint32_t margin;
+std::tuple<uint32_t, uint32_t, uint32_t, uint32_t> Layout::get_layout_margin() {
+    uint32_t margin_top = 0, margin_right = 0, margin_bottom = 0,
+             margin_left = 0;
+
     uint64_t size = width_ > height_? height_ : width_;
-    for (margin = 0; margin < size; margin++) {
-        if (get_blk_type(margin, margin) == clb_type)
+    size /= 2;
+
+    for (uint32_t i = 0; i < height_; i++) {
+        // get margin top
+        const auto blk_type = get_blk_type(size, i);
+        if (get_priority_major(blk_type) > DEFAULT_PRIORITY / 2) {
+            margin_top = i;
             break;
+        }
     }
-    return margin;
+    for (int i = height_ - 1; i >= 0; i--) {
+        // get margin bottom
+        const auto blk_type = get_blk_type(size, i);
+        if (get_priority_major(blk_type) > DEFAULT_PRIORITY / 2) {
+            margin_bottom = height_ - i - 1;
+            break;
+        }
+    }
+    for (uint32_t i = 0; i < width_; i++) {
+        // get margin left
+        const auto blk_type = get_blk_type(i, size);
+        if (get_priority_major(blk_type) > DEFAULT_PRIORITY / 2) {
+            margin_left = i;
+            break;
+        }
+    }
+    for (int i = width_ - 1; i >= 0; i--) {
+        // get margin bottom
+        const auto blk_type = get_blk_type(size, i);
+        if (get_priority_major(blk_type) > DEFAULT_PRIORITY / 2) {
+            margin_right = width_ - i - 1;
+            break;
+        }
+    }
+
+    return std::make_tuple(margin_top, margin_right, margin_bottom,
+            margin_left);
 }
 
 char Layout::get_clb_type() const {

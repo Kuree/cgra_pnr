@@ -6,6 +6,10 @@
 #include <set>
 #include <iostream>
 
+
+// FIXME
+constexpr char REGISTER = 'r';
+
 class Layer {
 public:
     char blk_type;
@@ -84,7 +88,7 @@ public:
     { return layer_masks_; }
     void add_layer_mask(const LayerMask &mask);
 
-    uint32_t get_margin();
+    std::tuple<uint32_t, uint32_t, uint32_t, uint32_t> get_layout_margin();
     char get_clb_type() const;
 
     std::pair<uint32_t, uint32_t> get_size() const { return {width_, height_}; }

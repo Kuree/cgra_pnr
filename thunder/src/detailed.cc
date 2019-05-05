@@ -251,7 +251,7 @@ void DetailedPlacer::set_fold_reg(const ::vector<::string> &cluster_blocks,
     if (fold_reg) {
         bool found_reg = false;
         for (auto const & blk_id : cluster_blocks) {
-            if (blk_id[0] == 'r') {
+            if (blk_id[0] == REG_BLK_TYPE) {
                 found_reg = true;
                 break;
             }
@@ -276,7 +276,7 @@ void DetailedPlacer
 
         char blk_type = iter.first;
         // register has to be done differently
-        if (fold_reg_ && blk_type == 'r')
+        if (fold_reg_ && blk_type == REG_BLK_TYPE)
             continue;
         // regular blocks
         for (const auto &blk_name : iter.second) {
@@ -367,11 +367,12 @@ DetailedPlacer::init_place_reg(const ::vector<::string> &cluster_blocks,
         // next pass to create dummy registers
         for (uint32_t i = reg_count; i < positions.size(); i++) {
             const auto & pos = positions[i];
-            Instance ins(::string(1, 'r'), pos, (int) instances_.size());
+            Instance ins(::string(1, REG_BLK_TYPE), pos,
+                         (int) instances_.size());
             instances_.emplace_back(ins);
         }
         uint64_t end_index = instances_.size() - 1;
-        instance_type_index_.insert({'r', {start_index, end_index}});
+        instance_type_index_.insert({REG_BLK_TYPE, {start_index, end_index}});
     }
 }
 

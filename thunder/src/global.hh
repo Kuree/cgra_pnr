@@ -121,7 +121,11 @@ private:
     ClusterMove current_move_ = {};
     ClusterMove backup_move = {};
 
-    uint32_t clb_margin_ = 1;
+    // margins
+    uint32_t margin_top_ = 0;
+    uint32_t margin_right_ = 0;
+    uint32_t margin_bottom_ = 0;
+    uint32_t margin_left_ = 0;
 };
 
 

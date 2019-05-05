@@ -82,10 +82,10 @@ void GlobalPlacer::setup_reduced_layout() {
 
     // create the new reduced_board and mapping between the new one and the old
     // one
-    for (uint32_t y = clb_margin_; y < layout_height - clb_margin_; y++) {
+    for (uint32_t y = margin_top_; y < layout_height - margin_bottom_; y++) {
         reduced_board_layout_.emplace_back(::vector<char>());
         uint32_t new_x = 0;
-        for (uint32_t x = clb_margin_; x < layout_width - clb_margin_; x++) {
+        for (uint32_t x = margin_left_; x < layout_width - margin_right_; x++) {
             auto blk_type = board_layout_.get_blk_type(x, y);
             // if it's not the clb types, then we hide them
             if (clb_types_.find(blk_type) == clb_types_.end() &&
@@ -96,7 +96,7 @@ void GlobalPlacer::setup_reduced_layout() {
                 }
                 hidden_columns[blk_type].insert(new_x + 0.5);
             } else {
-                auto new_y = y - clb_margin_;
+                auto new_y = y - margin_top_;
                 assert (new_x == reduced_board_layout_[new_y].size());
                 reduced_board_layout_[new_y].emplace_back(blk_type);
                 if (column_mapping_.find(new_x) == column_mapping_.end()) {
@@ -113,7 +113,7 @@ void GlobalPlacer::setup_reduced_layout() {
 
     // sanity check
     for (auto const &y : reduced_board_layout_) {
-        if (y.size() != reduced_board_layout_[clb_margin_].size())
+        if (y.size() != reduced_board_layout_[margin_left_].size())
             throw std::runtime_error("failed layout check at " +
                                      std::to_string(y.size()));
     }
@@ -330,7 +330,8 @@ void GlobalPlacer::get_clb_types_() {
     }
 
     // set the margin here
-    clb_margin_ = board_layout_.get_margin();
+    std::tie(margin_top_, margin_right_, margin_bottom_, margin_left_) =
+            board_layout_.get_layout_margin();
 }
 
 void GlobalPlacer::solve() {
@@ -411,9 +412,9 @@ void GlobalPlacer::solve() {
                 // bound them up
                 xmin = std::max<double>(xmin, 0);
                 xmin = std::min<double>(xmin, reduced_width_ - box.width);
-                ymin = std::max<double>(ymin, clb_margin_);
+                ymin = std::max<double>(ymin, margin_top_);
                 ymin = std::min<double>(ymin, reduced_height_ - box.height
-                                              - clb_margin_);
+                                              - margin_bottom_);
                 box.cx = xmin + box.width / 2.0;
                 box.cy = ymin + box.height / 2.0;
                 box.xmin = xmin;
@@ -1116,8 +1117,8 @@ void GlobalPlacer::bound_box(ClusterBox &box) {
                                 reduced_width_ - box.width);
     box.xmin = std::max<double>(0, box.xmin);
     box.ymin = std::min<double>(std::round(box.ymin),
-                                reduced_height_ - box.height - clb_margin_);
-    box.ymin = std::max<double>(clb_margin_, box.ymin);
+                                reduced_height_ - box.height - margin_bottom_);
+    box.ymin = std::max<double>(margin_top_, box.ymin);
     box.xmax = box.xmin + box.width;
     box.ymax = box.ymin + box.height;
     box.cx = box.xmin + box.width / 2.0;
