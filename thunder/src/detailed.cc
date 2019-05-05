@@ -26,10 +26,10 @@ bool operator< (const DetailedMove &m1, const DetailedMove &m2) {
 }
 
 DetailedPlacer
-::DetailedPlacer(::vector<::string> cluster_blocks,
+::DetailedPlacer(const ::vector<::string> &cluster_blocks,
                  ::map<::string, ::vector<::string>> netlist,
                  ::map<char, ::vector<::pair<int, int>>> available_pos,
-                 ::map<::string, ::pair<int, int>> fixed_pos,
+                 const ::map<::string, ::pair<int, int>> &fixed_pos,
                  char clb_type,
                  bool fold_reg) :
                  SimAnneal(),

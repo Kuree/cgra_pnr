@@ -12,11 +12,11 @@ bool operator< (const DetailedMove &m1, const DetailedMove &m2);
 
 class DetailedPlacer: public SimAnneal {
 public:
-    DetailedPlacer(std::vector<std::string> cluster_blocks,
+    DetailedPlacer(const std::vector<std::string> &cluster_blocks,
                    std::map<std::string, std::vector<std::string>> netlist,
                    std::map<char,
                             std::vector<std::pair<int, int>>> available_pos,
-                   std::map<std::string, std::pair<int, int>> fixed_pos,
+                   const std::map<std::string, std::pair<int, int>> &fixed_pos,
                    char clb_type,
                    bool fold_reg);
     DetailedPlacer(std::map<std::string, std::pair<int, int>> init_placement,
