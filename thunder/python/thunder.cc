@@ -77,7 +77,7 @@ void init_layout(py::module &m) {
             .def("get_layer_masks", &Layout::get_layer_masks)
             .def("add_layer_mask", &Layout::add_layer_mask)
             .def("get_clb_type", &Layout::get_clb_type)
-            .def("get_margin", &Layout::get_margin)
+            .def("get_layout_margin", &Layout::get_layout_margin)
             .def("height", &Layout::height)
             .def("width", &Layout::width)
             .def("__repr__", &Layout::layout_repr);
