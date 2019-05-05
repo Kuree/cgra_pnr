@@ -137,14 +137,15 @@ std::vector<char> Layout::get_blk_types(uint32_t x, uint32_t y) const {
     // first pass to find out the max priority
     for (const auto &[blk_type, layer]: layers_) {
         if (layer[{x, y}] &&
-            layers_priority_major_.at(blk_type) > priority_major) {
+            layers_priority_major_.at(blk_type) > priority_major &&
+            blk_type != REGISTER) {
             priority_major = layers_priority_major_.at(blk_type);
         }
     }
     // second pass to find all blk types has the same priority major
     for (const auto &[blk_type, layer]: layers_) {
         if (layer[{x, y}] &&
-            layers_priority_major_.at(blk_type) == priority_major) {
+            layers_priority_major_.at(blk_type) >= priority_major) {
             results.emplace_back(blk_type);
         }
     }
