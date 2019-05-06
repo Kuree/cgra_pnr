@@ -51,7 +51,7 @@ def build_routing_graph(routing_resource, layout):
     layout_width = layout.width()
     layout_height = layout.height()
     clb_type = layout.get_clb_type()
-    margin = layout.get_margin()
+    margin = layout.get_layout_margin()[0]
 
     sb_16 = Switch(0, 0, NUM_TRACK, 16, SWITCH_ID,
                    get_disjoint_sb_wires(NUM_TRACK))
