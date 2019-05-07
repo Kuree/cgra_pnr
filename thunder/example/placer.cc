@@ -1,3 +1,4 @@
+#include <sstream>
 #include "../src/io.hh"
 #include "../src/graph.hh"
 #include "../src/global.hh"
@@ -14,6 +15,7 @@ using std::vector;
 using std::pair;
 constexpr uint32_t seed = 0;
 constexpr uint32_t partition_threshold = 10;
+constexpr double partial_reconfigure_ratio = 0.5;
 
 std::map<std::string, std::vector<std::string>>
 convert_netlist(const std::map<::string,
@@ -33,10 +35,16 @@ convert_netlist(const std::map<::string,
 std::map<std::string, std::pair<int, int>>
 prefixed_placement(const std::map<std::string,
                                   std::vector<std::string>> &netlist,
-                   const Layout &layout) {
+                   const Layout &layout,
+                   const std::pair<bool, ::string> &fix_loc) {
+    auto const &[use_prefix, placement_filename] = fix_loc;
+    std::map<std::string, std::pair<int, int>> result;
+    if (use_prefix) {
+        result = load_placement(placement_filename);
+    }
     // place IO on CGRA
-    // we are not doing masks now and current CGRA has some bug with
-    // using two 1bit tiles. assigning all of them to the 16-bit for now
+    // UPDATE: I'm not sure if CoreIR has fixed the bug where enable has high
+    // priority over enable.
     auto cmp = [](::string a, ::string b) -> bool {
         int value_a = std::stoi(a.substr(1));
         int value_b = std::stoi(b.substr(1));
@@ -45,7 +53,8 @@ prefixed_placement(const std::map<std::string,
     std::set<std::string, decltype(cmp)> working_set(cmp);
     for (const auto &iter: netlist) {
         for (auto const &blk : iter.second) {
-            if (blk[0] == 'i' || blk[0] == 'I')
+            if ((blk[0] == 'i' || blk[0] == 'I')
+                && result.find(blk) == result.end())
                 working_set.insert(blk);
         }
     }
@@ -63,7 +72,6 @@ prefixed_placement(const std::map<std::string,
     if (available_pos.size() < working_set.size())
         throw std::runtime_error("unable to assign all IO tiles");
     uint32_t pos_index = 0;
-    std::map<std::string, std::pair<int, int>> result;
     for (auto const &blk_id : blocks) {
         auto const &pos = available_pos[pos_index++];
         result[blk_id] = pos;
@@ -129,19 +137,62 @@ check_placement(const ::map<::string,
     }
 }
 
+void print_help_message(char *argv[]) {
+    std::cerr << "Usage: " << argv[0] << " [-h] [-f] <cgra.layout> "
+              << "<netlist.packed> <result.place>" << std::endl;
+}
+
+// parse the command line options
+std::tuple<::string, ::string, ::string, bool>
+parse_cli_args(int argc, char *argv[]) {
+    bool use_prefix = false;
+    std::vector<::string> args;
+    for (int i = 1; i < argc; i++) {
+        if (::string(argv[i]).empty())
+            continue;
+        if (argv[i][0] != '-') {
+            args.emplace_back(argv[i]);
+        } else if (argv[i][1] == 'h') {
+            return std::make_tuple("", "", "", false);
+        } else if (argv[i][1] == 'f') {
+            use_prefix = true;
+        }
+    }
+    if (args.size() != 3)
+        return std::make_tuple("", "", "", false);
+    else
+        return std::make_tuple(args[0], args[1], args[2], use_prefix);
+}
+
+bool early_termination(const std::map<::string, std::pair<int, int>> &prefix,
+                       const std::map<int, std::set<::string>> & raw_c) {
+    uint32_t count = 0;
+    for (const auto &iter: raw_c) {
+        count += iter.second.size();
+    }
+    return count <= prefix.size();
+}
+
+uint32_t blk_count(const std::map<int, std::set<std::string>> &clusters) {
+    std::unordered_set<::string> blks;
+    for (auto const &it: clusters) {
+        for (auto const &blk : it.second)
+            blks.emplace(blk);
+    }
+    return blks.size();
+}
+
 int main(int argc, char *argv[]) {
-    if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " <cgra.layout> "
-                  << "<netlist.packed> <result.place>" << std::endl;
+    auto const [layout_file, netlist_file, result_filename, use_prefix] =
+            parse_cli_args(argc, argv);
+    if (layout_file.empty() || netlist_file.empty()
+        || result_filename.empty()) {
+        print_help_message(argv);
         return EXIT_FAILURE;
     }
-    auto layout = load_layout(argv[1]);
-    auto raw_netlist = load_netlist(argv[2]).first;
-    auto id_to_name = load_id_to_name(argv[2]);
-    std::string result_filename = argv[3];
-
-    // all available pos
-    auto available_pos = layout.produce_available_pos();
+    auto layout = load_layout(layout_file);
+    auto raw_netlist = load_netlist(netlist_file).first;
+    auto id_to_name = load_id_to_name(netlist_file);
 
     // remove unnecessary information
     auto netlist = convert_netlist(raw_netlist);
@@ -149,24 +200,39 @@ int main(int argc, char *argv[]) {
     threshold_partition_netlist(netlist, raw_clusters);
 
     // get fixed pos
-    const auto fixed_pos = prefixed_placement(netlist, layout);
+    const auto fixed_pos = prefixed_placement(netlist,
+                                              layout, {use_prefix,
+                                                       result_filename});
+    const double total_blk_count = blk_count(raw_clusters);
+    const double fixed_ratio = fixed_pos.size() / total_blk_count;
+
+    // decide if we ned to terminate early
+    // in most case it's an error
+    if (early_termination(fixed_pos, raw_clusters)) {
+        std::cerr << "Nothing to be done" << std::endl;
+        return EXIT_FAILURE;
+    }
 
     auto clusters = convert_clusters(raw_clusters, fixed_pos);
     // notice that if there is only one cluster and the board is very small
     // we just do it flat
     ::map<::string, ::map<char, std::set<::pair<int, int>>>> gp_result;
     const auto &size = layout.get_size();
-    if (clusters.size() == 1
-        && (size.first <= dim_threshold && size.second <= dim_threshold)) {
+    if ((clusters.size() == 1
+          && (size.first <= dim_threshold && size.second <= dim_threshold))
+        || (fixed_ratio >= partial_reconfigure_ratio))  {
+        // merge into one-single cluster, if more than one
+        std::map<std::string, std::set<std::string>> new_cluster;
         for (auto const &it: clusters) {
-            auto const &cluster_id = it.first;
-            auto const &pos_collections = layout.produce_available_pos();
-            gp_result[cluster_id] = {};
-            for (auto const &[blk_type, pos]: pos_collections) {
-                gp_result[cluster_id][blk_type] =
-                        std::set<::pair<int, int>>(pos.begin(), pos.end());
-            }
+            new_cluster["x0"].insert(it.second.begin(), it.second.end());
         }
+        auto const &pos_collections = layout.produce_available_pos();
+        gp_result["x0"] = {};
+        for (auto const &[blk_type, pos]: pos_collections) {
+            gp_result["x0"][blk_type] =
+                    std::set<::pair<int, int>>(pos.begin(), pos.end());
+        }
+        clusters = new_cluster;
 
     } else {
         // global placement
@@ -205,7 +271,7 @@ int main(int argc, char *argv[]) {
     // global refinement
     auto global_refine = DetailedPlacer(dp_result,
                                         netlist,
-                                        available_pos,
+                                        layout.produce_available_pos(),
                                         fixed_pos,
                                         layout.get_clb_type(),
                                         true);

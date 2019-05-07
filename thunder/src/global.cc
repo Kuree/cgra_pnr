@@ -795,6 +795,12 @@ GlobalPlacer::realize() {
         }
     }
 
+    // set fixed location to false
+    for (const auto &iter: fixed_pos_) {
+        auto const &[x, y] = iter.second;
+        bboard[y][x] = false;
+    }
+
     for (const auto &iter : boxes) {
         ::set<Point> overlapped_cells;
         int box_index = iter.first;
@@ -839,15 +845,18 @@ GlobalPlacer::realize() {
             // remap them
             const int new_x = (int)column_mapping_[pos.x];
             const int new_y = pos.y;
+            // if the position is pre-fixed (used), continue
+            if (!bboard[new_y][new_x])
+                continue;
+
             auto blk_type = board_layout_.get_blk_type(
                     static_cast<uint32_t>(new_x), static_cast<uint32_t>(new_y));
-            // TODO: FIX THIS
-            if (blk_type == 'r')
+            if (blk_type == REGISTER)
                 continue;
             if (blk_type != clb_type_) {
-                printf("new_y: %d new_x: %d %c\n", new_y, new_x,
-                       blk_type);
-                printf("pos x: %d y: %d\n", pos.x, pos.y);
+                // printf("new_y: %d new_x: %d %c\n", new_y, new_x,
+                //         blk_type);
+                // printf("pos x: %d y: %d\n", pos.x, pos.y);
                 throw std::runtime_error("error in assign clb cells "
                     "got cell type " + std::string(1, blk_type));
             }

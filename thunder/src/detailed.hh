@@ -62,6 +62,8 @@ protected:
     uint32_t num_blocks_ = 0;
     uint32_t num_swap_ = 0;
 
+    bool has_clb_fixed_ = false;
+
 private:
     void init_place_regular(const std::vector<std::string> &cluster_blocks,
                             std::map<std::string, int> &blk_id_dict,
@@ -105,11 +107,15 @@ private:
             std::map<std::string, std::pair<int, int>> &init_placement,
             std::map<char, std::vector<std::pair<int, int>>> &available_pos,
             const std::vector<std::string> &cluster_blocks,
-            std::map<std::string, int> &blk_id_dict);
+            std::map<std::string, int> &blk_id_dict,
+            const std::map<std::string, std::pair<int, int>> &fixed_pos);
 
     void set_bounds(
             const std::map<char,
                            std::vector<std::pair<int, int>>> &available_pos);
+
+    void check_clb_fixed(const std::map<std::string,
+                                        std::pair<int, int>> &fixed_pos);
 
     void sa_setup();
     void index_loc() ;

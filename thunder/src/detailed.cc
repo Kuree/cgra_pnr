@@ -73,6 +73,9 @@ DetailedPlacer
 
     // set bounds
     set_bounds(available_pos);
+
+    // check if clb fixed
+    check_clb_fixed(fixed_pos);
 }
 
 void DetailedPlacer::set_seed(uint32_t seed) {
@@ -143,7 +146,7 @@ DetailedPlacer
 
     // copy all the blocks
     copy_init_placement(init_placement, available_pos, cluster_blocks,
-                        blk_id_dict);
+                        blk_id_dict, fixed_pos);
 
     // compute reg no pos
     this->compute_reg_no_pos(cluster_blocks, netlist, blk_id_dict);
@@ -160,16 +163,22 @@ DetailedPlacer
 
     // set bounds
     set_bounds(available_pos);
+
+    // check if clb fixed
+    check_clb_fixed(fixed_pos);
 }
 
 void DetailedPlacer
 ::copy_init_placement(::map<::string, ::pair<int, int>> &init_placement,
                       ::map<char, ::vector<::pair<int, int>>> &available_pos,
                       const ::vector<::string> &cluster_blocks,
-                      ::map<::string, int> &blk_id_dict) {
+                      ::map<::string, int> &blk_id_dict,
+                      const ::map<::string,
+                                  ::pair<int, int>> &fixed_pos) {
     ::map<char, ::vector<::string>> blk_counts;
     ::map<char, int64_t> empty_spaces;
     compute_blk_pos(cluster_blocks, available_pos, blk_counts, empty_spaces);
+
 
     // create instances as well as dummies
     // also set up the pos index
@@ -182,10 +191,15 @@ void DetailedPlacer
         }
         for (const auto &ins_iter : blk_counts[blk_type]) {
             auto const pos = Point(init_placement[ins_iter]);
-            if (working_set.find(pos) == working_set.end())
+            if (working_set.find(pos) == working_set.end()) {
+                // we need to be extra careful as it might be prefixed
+                if (fixed_pos.find(ins_iter) != fixed_pos.end()) {
+                    continue;
+                }
                 throw ::runtime_error("pos " + std::string(pos) +
                                       " for blk " + ins_iter +
-                                      " not in working set");
+                                      " not in working set. possible over-use");
+            }
             Instance ins(ins_iter, pos,
                          (int) instances_.size());
             instances_.emplace_back(ins);
@@ -215,6 +229,7 @@ void DetailedPlacer
     for (const auto & iter : fixed_pos) {
         Instance ins(iter.first, Point(iter.second), (int) instances_.size());
         blk_id_dict.insert({ins.name, ins.id});
+        ins.fixed = true;
         instances_.emplace_back(ins);
         assert (blk_id_dict[ins.name] == ins.id);
     }
@@ -270,6 +285,28 @@ void DetailedPlacer
     ::map<char, int64_t> empty_spaces;
     compute_blk_pos(cluster_blocks, available_pos, blk_counts, empty_spaces);
 
+    std::map<char, std::set<std::pair<int, int>>> fixed_pos;
+    for (auto const &ins: instances_) {
+        if (ins.fixed) {
+            fixed_pos[ins.name[0]].emplace(std::pair(ins.pos.x, ins.pos.y));
+        }
+    }
+
+    // we need to look through the available_pos and see
+    // TODO:
+    //  make it more performant
+    for (auto const &[blk_type, pos_set] : fixed_pos) {
+        if (available_pos.find(blk_type) == available_pos.end())
+            continue;
+        auto &pos_list = available_pos.at(blk_type);
+        for (auto const &pos : pos_set) {
+            auto iter = std::find(pos_list.begin(), pos_list.end(), pos);
+            if (iter != pos_list.end()) {
+                pos_list.erase(iter);
+            }
+        }
+    }
+
     // create instances for each block (except registers) as well as dummies
     for (const auto &iter : blk_counts) {
         uint64_t start_index = instances_.size();
@@ -280,13 +317,9 @@ void DetailedPlacer
             continue;
         // regular blocks
         for (const auto &blk_name : iter.second) {
-            // it may be fixed blk as well
-            if (fixed_pos_.find(blk_name) != fixed_pos_.end()) {
-                continue;
-            }
             auto pos = available_pos[blk_type].back();
             available_pos[blk_type].pop_back();
-            Instance instance(blk_name, pos, (int)instances_.size());
+            Instance instance(blk_name, pos, (int) instances_.size());
             instances_.emplace_back(instance);
             blk_id_dict.insert({blk_name, instance.id});
             assert (blk_id_dict[instance.name] == instance.id);
@@ -328,6 +361,11 @@ void DetailedPlacer
         char blk_type = iter.first;
         int64_t empty_space = available_pos[blk_type].size() -
                               iter.second.size();
+        // remove the fixed locations from empty_space
+        for (auto const &iter_: fixed_pos_) {
+            if (iter_.first[0] == blk_type)
+                empty_space--;
+        }
         if (empty_space < 0)
             throw ::runtime_error("Not enough block pos for " +
                                   ::string(1, blk_type) + " got " +
@@ -348,6 +386,7 @@ DetailedPlacer::init_place_reg(const ::vector<::string> &cluster_blocks,
         uint64_t start_index = instances_.size();
         ::vector<Point> positions;
         auto reg_positions = available_pos[REG_BLK_TYPE];
+        positions.reserve(reg_positions.size());
         for (const auto &pos : reg_positions) {
             positions.emplace_back(pos);
         }
@@ -489,6 +528,16 @@ bool DetailedPlacer::is_reg_net(const Instance &ins, const Point &next_pos) {
     return true;
 }
 
+void DetailedPlacer::check_clb_fixed(const std::map<std::string,
+        std::pair<int, int>> &fixed_pos) {
+    for (auto const &iter : fixed_pos) {
+        if (iter.first[0] == clb_type_) {
+            has_clb_fixed_ = true;
+            return;
+        }
+    }
+}
+
 void DetailedPlacer::move() {
 #if DEBUG
     double real_hpwl = get_hpwl(this->netlist_, this->instances_);
@@ -505,8 +554,11 @@ void DetailedPlacer::move() {
         const auto &instance = instances_[id];
         const auto blk_type = instance.name[0];
         auto pos = std::make_pair(instance.pos.x, instance.pos.y);
-        if (loc_instances_[blk_type][pos] != id)
+        if (loc_instances_[blk_type][pos] != id) {
+            std::cout << instance.name << " "
+                      << instances_[loc_instances_[blk_type][pos]].id << "\n";
             throw ::runtime_error("loc checking is wrong");
+        }
     }
 
 #endif
@@ -515,6 +567,9 @@ void DetailedPlacer::move() {
             instance_ids_[detail_rand_.uniform<uint64_t>
                           (0, instance_ids_.size() - 1)];
     auto curr_ins = instances_[curr_ins_id];
+    if (curr_ins.fixed)
+        return;
+
     // only swap with the same type
     char blk_type = curr_ins.name[0];
     // search for x, y that is within the d_limit
@@ -546,6 +601,13 @@ void DetailedPlacer::move() {
         throw ::runtime_error("unexpected move selection error");
 
     if (curr_ins.name == next_ins.name)
+        return;
+
+    // can't be a fixed instance
+    // we also need to some optimization to avoid unnecessary look up
+    // which is the case in most of the time. Unless you want to do
+    // partial reconfiguration
+    if (has_clb_fixed_ && next_ins.fixed)
         return;
 
     // check if it's legal in reg net

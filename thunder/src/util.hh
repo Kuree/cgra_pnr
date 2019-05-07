@@ -30,6 +30,7 @@ struct Instance {
     struct Point pos;
     int id = -1;
     std::vector<int> nets;
+    bool fixed = false;
 
     Instance() = default;
     Instance(const std::string &name, const struct Point &pos,

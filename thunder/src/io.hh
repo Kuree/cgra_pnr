@@ -22,4 +22,9 @@ void save_placement(const std::map<std::string, std::pair<int, int>> &placement,
 std::map<std::string, std::string>
 load_id_to_name(const std::string &filename);
 
+// TODO:
+//  Merge cyclone and thunder IO functions
+std::map<std::string, std::pair<int, int>>
+load_placement(const std::string &filename);
+
 #endif //THUNDER_IO_HH

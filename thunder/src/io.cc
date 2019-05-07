@@ -396,3 +396,36 @@ load_id_to_name(const std::string &filename) {
     }
     return id_to_name;
 }
+
+
+std::map<std::string, std::pair<int, int>>
+load_placement(const std::string &filename) {
+    if (!::exists(filename))
+        throw ::runtime_error(filename + " does not exist");
+    ::ifstream in;
+    in.open(filename);
+
+    ::string line;
+    uint32_t line_num = 0;
+    std::map<std::string, std::pair<int, int>> placement;
+
+    while(std::getline(in, line)) {
+        if (line_num < 2) {
+            line_num++;
+            continue;
+        }
+        trim(line);
+
+        auto tokens = get_tokens(line);
+        if (tokens.size() != 4)
+            throw ::runtime_error("unable to process line " + line);
+        auto x = std::stoi(tokens[1]);
+        auto y = std::stoi(tokens[2]);
+        auto blk_id = tokens[3].substr(1, ::string::npos);
+
+        placement.insert({blk_id, {x, y}});
+        line_num++;
+    }
+
+    return placement;
+}
