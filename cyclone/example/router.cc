@@ -1,9 +1,16 @@
 #include <iostream>
+#include <fstream>
+#include <cstdio>
 #include "../src/graph.hh"
 #include "../src/io.hh"
 #include "../src/global.hh"
 
 using namespace std;
+
+inline bool exists(const std::string &filename) {
+    std::ifstream in(filename);
+    return in.good();
+}
 
 void print_help(const string &program_name) {
     cerr << "Usage: " << endl;
@@ -23,6 +30,14 @@ int main(int argc, char *argv[]) {
     auto [netlist, track_mode] = load_netlist(packed_filename);
     auto placement = load_placement(placement_filename);
     auto output_file = argv[argc - 1];
+
+    // delete the old file if exists
+    if (exists(output_file)) {
+        if (!std::remove(output_file)) {
+            cerr << "Unable to clear output file" << endl;
+            return EXIT_FAILURE;
+        }
+    }
 
     for (int arg_index = 3; arg_index < argc - 1; arg_index += 2) {
         uint32_t bit_width = static_cast<uint32_t>(stoi(argv[arg_index]));
