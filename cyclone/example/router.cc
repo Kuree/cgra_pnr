@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
 
     // delete the old file if exists
     if (exists(output_file)) {
-        if (!std::remove(output_file)) {
+        if (std::remove(output_file)) {
             cerr << "Unable to clear output file" << endl;
             return EXIT_FAILURE;
         }
