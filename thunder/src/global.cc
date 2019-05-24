@@ -846,6 +846,10 @@ GlobalPlacer::realize() {
             const int new_x = (int)column_mapping_[pos.x];
             const int new_y = pos.y;
             // if the position is pre-fixed (used), continue
+            if (new_y >= static_cast<int>(bboard.size()))
+                continue;
+            if (new_x >= static_cast<int>(bboard[new_y].size()))
+                continue;
             if (!bboard[new_y][new_x])
                 continue;
 
@@ -1122,12 +1126,12 @@ void GlobalPlacer::move() {
 void GlobalPlacer::bound_box(ClusterBox &box) {
     if (box.fixed)
         return;
-    box.xmin = std::min<double>(std::round(box.xmin),
-                                reduced_width_ - box.width);
-    box.xmin = std::max<double>(0, box.xmin);
-    box.ymin = std::min<double>(std::round(box.ymin),
-                                reduced_height_ - box.height - margin_bottom_);
-    box.ymin = std::max<double>(margin_top_, box.ymin);
+    box.xmin = std::min<int>(box.xmin,
+                             reduced_width_ - box.width);
+    box.xmin = std::max<int>(0, box.xmin);
+    box.ymin = std::min<int>(box.ymin,
+                             reduced_height_ - box.height - margin_bottom_);
+    box.ymin = std::max<int>(margin_top_, box.ymin);
     box.xmax = box.xmin + box.width;
     box.ymax = box.ymin + box.height;
     box.cx = box.xmin + box.width / 2.0;

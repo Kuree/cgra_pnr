@@ -216,7 +216,7 @@ std::tuple<uint32_t, uint32_t, uint32_t, uint32_t> Layout::get_layout_margin() {
     }
     for (int i = width_ - 1; i >= 0; i--) {
         // get margin bottom
-        const auto blk_type = get_blk_type(size, i);
+        const auto blk_type = get_blk_type(i, size);
         if (get_priority_major(blk_type) > DEFAULT_PRIORITY / 2) {
             margin_right = width_ - i - 1;
             break;
