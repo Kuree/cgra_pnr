@@ -1126,12 +1126,12 @@ void GlobalPlacer::move() {
 void GlobalPlacer::bound_box(ClusterBox &box) {
     if (box.fixed)
         return;
-    box.xmin = std::min<int>(box.xmin,
+    box.xmin = std::min<int>(static_cast<int>(box.xmin),
                              reduced_width_ - box.width);
-    box.xmin = std::max<int>(0, box.xmin);
-    box.ymin = std::min<int>(box.ymin,
+    box.xmin = std::max<int>(0, static_cast<int>(box.xmin));
+    box.ymin = std::min<int>(static_cast<int>(box.ymin),
                              reduced_height_ - box.height - margin_bottom_);
-    box.ymin = std::max<int>(margin_top_, box.ymin);
+    box.ymin = std::max<int>(margin_top_, static_cast<int>(box.ymin));
     box.xmax = box.xmin + box.width;
     box.ymax = box.ymin + box.height;
     box.cx = box.xmin + box.width / 2.0;
