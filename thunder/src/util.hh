@@ -78,8 +78,7 @@ std::map<std::string, std::pair<int, int>>
 compute_centroids(const std::map<std::string,
                                  std::map<char,
                                           std::set<std::pair<int,
-                                                             int>>>> &clusters,
-                  char clb_type);
+                                                             int>>>> &clusters);
 
 std::map<std::string, std::vector<std::string>>
 reduce_cluster_graph(const std::map<std::string,

@@ -120,7 +120,7 @@ detailed_placement(const std::map<std::string, std::set<std::string>> &clusters,
                                   std::map<char,
                                   std::set<std::pair<int, int>>>> &gp_result,
                    const Layout &layout) {
-    auto centroids = compute_centroids(gp_result, layout.get_clb_type());
+    auto centroids = compute_centroids(gp_result);
     // substitutes the clusters
     auto cluster_fixed_pos = get_cluster_fixed_pos(fixed_pos,
                                                    centroids);

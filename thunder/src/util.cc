@@ -161,22 +161,26 @@ filter_clusters(const std::map<int, std::set<std::string>> &clusters,
 }
 
 std::map<std::string, std::pair<int, int>>
-compute_centroids(const std::map<std::string,
-                                 std::map<char,
-                                           std::set<std::pair<int,
-                                                              int>>>> &clusters,
-                  char clb_type) {
+compute_centroids(const ::map<std::string,
+                              ::map<char,
+                                    std::set<std::pair<int, int>>>> &clusters) {
     std::map<std::string, std::pair<int, int>> result;
     for (auto const &[cluster_id, positions] : clusters) {
         int x_sum = 0;
         int y_sum = 0;
-        auto pos = positions.at(clb_type);
-        for (auto const &[x, y] : pos) {
-            x_sum += x;
-            y_sum += y;
+        int num_blks = 0;
+        // for some special case there won't be any clb in the cluster
+        // use all the blocks here
+        for (auto const &iter: positions) {
+            auto const &pos = iter.second;
+            for (auto const &[x, y] : pos) {
+                x_sum += x;
+                y_sum += y;
+                num_blks++;
+            }
         }
-        auto c_x = static_cast<int>(x_sum / pos.size());
-        auto c_y = static_cast<int>(x_sum / pos.size());
+        auto c_x = static_cast<int>(x_sum / num_blks);
+        auto c_y = static_cast<int>(x_sum / num_blks);
         result[cluster_id] = {c_x, c_y};
     }
     return result;
