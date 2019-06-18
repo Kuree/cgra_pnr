@@ -455,7 +455,9 @@ void DetailedPlacer::legalize_reg(const ::map<char, ::vector<::pair<int,
             }
         }
         if (!found) {
-            throw ::runtime_error("cannot find pos for " + instances_[id].name);
+            std::cerr << "WARN: cannot find pos for "
+                      << instances_[id].name + " result may not be routable"
+                      << std::endl;
         }
     }
 
