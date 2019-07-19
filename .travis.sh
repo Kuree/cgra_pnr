@@ -17,7 +17,7 @@ for file in "${design_files[@]}"
 do
     echo "Downloading $file"
     rm -f ${file}.json
-    wget "https://cdn.rawgit.com/StanfordAHA/CGRAGenerator/master/bitstream/bsbuilder/testdir/examples/${file}.json"
+    wget "https://cdn.jsdelivr.net/gh/StanfordAHA/CGRAGenerator@master/bitstream/bsbuilder/testdir/examples/${file}.json"
     echo "Running PnR tools on ${file}"
     ./scripts/pnr_flow.sh $cgra $file.json
 done
