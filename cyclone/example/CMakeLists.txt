@@ -8,4 +8,3 @@ add_executable(router router.cc)
 target_link_libraries(router PRIVATE cyclone)
 
 target_link_libraries(router PUBLIC ${STATIC_FLAG})
-

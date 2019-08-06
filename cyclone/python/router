@@ -3,9 +3,10 @@
 import sys
 import os
 import pycyclone
+import subprocess
 
 
 path = os.path.abspath(os.path.dirname(pycyclone.__file__))
-placer_binary = os.path.join(path, "router")
-os.system(" ".join([placer_binary] + sys.argv[1:]))
+router_binary = os.path.join(path, "router")
+subprocess.call([router_binary] + sys.argv[1:])
 

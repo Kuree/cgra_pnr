@@ -58,7 +58,7 @@ if [ ${is_garnet} -eq "1" ]; then
         exit 1
     fi
     graphs=$(awk -F "=" '/graph/ {print $2}' ${cgra})
-    ${router} ${packed} ${place} ${graphs[@]} ${route}
+    ${router} --pd ${packed} ${place} ${graphs[@]} ${route}
     echo "Save result to ${route}"
 else
     # dump the graph files
@@ -70,7 +70,7 @@ else
     if [ -f ${router} ]; then
         echo "Using C++ implementation"
         rm -rf ${route}
-        ${router} ${packed} ${place} 1 ${graph_dir}/1bit.graph \
+        ${router} --pd ${packed} ${place} 1 ${graph_dir}/1bit.graph \
             16 ${graph_dir}/16bit.graph ${route}
     else
         echo "Using Python binding. Results may be undeterministic."
