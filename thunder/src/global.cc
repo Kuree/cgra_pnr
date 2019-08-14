@@ -980,7 +980,9 @@ GlobalPlacer::realize() {
             // TODO: fix MEM assignment
             // for now add 2 extra
             result[boxes_[index].id][blk_type] = {};
-            for (int i = 0; i < iter.second + 2; i++) {
+            auto total_num_blocks = std::min(static_cast<int>(cells.size()),
+                                                              iter.second + 2);
+            for (int i = 0; i < total_num_blocks; i++) {
                 auto cell_i = blk_index[i];
                 auto cell = cells[cell_i];
                 result[boxes_[index].id][blk_type].insert(cell);
