@@ -45,7 +45,7 @@ prefixed_placement(const std::map<std::string,
     // place IO on CGRA
     // UPDATE: I'm not sure if CoreIR has fixed the bug where enable has high
     // priority over enable.
-    auto cmp = [](::string a, ::string b) -> bool {
+    auto cmp = [](const ::string &a, const ::string &b) -> bool {
         int value_a = std::stoi(a.substr(1));
         int value_b = std::stoi(b.substr(1));
         return value_a < value_b;
@@ -63,7 +63,7 @@ prefixed_placement(const std::map<std::string,
     // has to be placed first
     std::vector<std::string> blocks(working_set.begin(), working_set.end());
     // sort the blocks based on the tag
-    std::sort(blocks.begin(), blocks.end(), [](std::string a, std::string) {
+    std::sort(blocks.begin(), blocks.end(), [](const std::string &a, const std::string&) {
         return a[0] == 'i';
     });
 
@@ -167,10 +167,17 @@ parse_cli_args(int argc, char *argv[]) {
 bool early_termination(const std::map<::string, std::pair<int, int>> &prefix,
                        const std::map<int, std::set<::string>> & raw_c) {
     uint32_t count = 0;
+    uint32_t prefix_size = 0;
     for (const auto &iter: raw_c) {
         count += iter.second.size();
+
+        // compute the actual prefix size
+        for (const auto &it_: prefix) {
+            if (iter.second.find(it_.first) != iter.second.end())
+                prefix_size++;
+        }
     }
-    return count <= prefix.size();
+    return count <= prefix_size;
 }
 
 uint32_t blk_count(const std::map<int, std::set<std::string>> &clusters) {

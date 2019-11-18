@@ -348,11 +348,17 @@ void save_placement(const std::map<std::string, std::pair<int, int>> &placement,
     }
     out << endl;
     // sort the list by blk_id (int value)
-    auto cmp = [&id_to_name](::string a, ::string b) -> bool {
+    auto cmp = [&id_to_name](const ::string &a, const ::string &b) -> bool {
         return id_to_name.at(a) < id_to_name.at(b);
     };
     std::set<::string, decltype(cmp)> blk_ids(cmp);
     for (auto const &iter: placement) {
+        if (id_to_name.find(iter.first) == id_to_name.end()) {
+            std::cerr << iter.first << " not used. "
+                << "Possibly a dead block" << std::endl;
+            // never gets placed. continue
+            continue;
+        }
         blk_ids.insert(iter.first);
     }
 
