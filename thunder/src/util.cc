@@ -140,7 +140,8 @@ convert_clusters(const std::map<int, std::set<std::string>> &clusters,
             if (fixed_pos.find(blk) == fixed_pos.end())
                 blks.insert(blk);
         }
-        result[cluster_id] = blks;
+        if (!blks.empty())
+            result[cluster_id] = blks;
     }
     return result;
 }
