@@ -20,7 +20,6 @@ if [[ "$OS" == "linux" ]]; then
 
 elif [[ "$OS" == "osx" ]]; then
     python --version
-
     cd thunder && CXX=g++-8 python setup.py bdist_wheel
     pip install dist/*.whl
     cd ..
