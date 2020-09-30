@@ -1,0 +1,40 @@
+name: Linux Wheel Deploy
+
+#on:
+#  push:
+#    tags:
+#      - '*'
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Checkout submodules
+      shell: bash
+      run: |
+        auth_header="$(git config --local --get http.https://github.com/.extraheader)"
+        git submodule sync --recursive
+        git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
+    - name: Build wheel and test wheel
+      shell: bash
+      env:
+        BUILD_WHEEL: true
+        OS: linux
+        PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      run: |
+        source ./scripts/ci.sh
+    - name: Build and deploy other wheels
+      shell: bash
+      env:
+        BUILD_WHEEL: true
+        OS: linux
+      run: |
+        source ./scripts/deploy.sh
+    - uses: actions/upload-artifact@v1
+      with:
+        name: Python wheels
+        path: wheelhouse/

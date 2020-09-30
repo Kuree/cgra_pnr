@@ -1,0 +1,328 @@
+Netlists:
+e0: (m119, data_out_0)	(p0, data0)	(p144, data1)	(r124, reg)
+e1: (p1, alu_res)	(p0, data1)
+e2: (p0, alu_res)	(p139, data0)
+e3: (I84, io2f_16)	(p1, data0)	(p12, data0)	(m119, data_in_0)	(r120, reg)
+e4: (p108, alu_res)	(p1, data1)
+e7: (p2, alu_res)	(p3, data0)
+e8: (r92, reg)	(p3, data1)	(p2, data1)
+e9: (p3, alu_res)	(p4, data0)
+e10: (m87, data_out_0)	(p4, data1)	(r92, reg)
+e11: (p4, alu_res)	(p5, data0)
+e13: (p5, alu_res)	(p6, data0)
+e14: (r90, reg)	(p6, data1)	(p5, data1)
+e15: (p6, alu_res)	(p7, data0)
+e16: (m87, data_out_1)	(p7, data1)	(r90, reg)
+e17: (p7, alu_res)	(p8, data0)
+e19: (p8, alu_res)	(p9, data0)
+e20: (r88, reg)	(p9, data1)	(p8, data1)
+e21: (p9, alu_res)	(p10, data0)
+e22: (p32, alu_res)	(p10, data1)	(m87, data_in_0)	(r88, reg)
+e23: (p10, alu_res)	(p35, data0)
+e24: (r121, reg)	(p11, data0)	(p141, data1)
+e25: (p12, alu_res)	(p11, data1)
+e26: (p11, alu_res)	(p142, data0)
+e27: (p111, alu_res)	(p12, data1)
+e30: (p13, alu_res)	(p14, data0)
+e31: (r99, reg)	(p14, data1)	(p13, data1)
+e32: (p14, alu_res)	(p15, data0)
+e33: (m94, data_out_0)	(p15, data1)	(r99, reg)
+e34: (p15, alu_res)	(p16, data0)
+e36: (p16, alu_res)	(p17, data0)
+e37: (r97, reg)	(p17, data1)	(p16, data1)
+e38: (p17, alu_res)	(p18, data0)
+e39: (m94, data_out_1)	(p18, data1)	(r97, reg)
+e40: (p18, alu_res)	(p19, data0)
+e42: (p19, alu_res)	(p20, data0)
+e43: (r95, reg)	(p20, data1)	(p19, data1)
+e44: (p20, alu_res)	(p21, data0)
+e45: (p33, alu_res)	(p21, data1)	(m94, data_in_0)	(r95, reg)
+e46: (p21, alu_res)	(p37, data0)
+e49: (p22, alu_res)	(p23, data0)
+e50: (r106, reg)	(p23, data1)	(p22, data1)
+e51: (p23, alu_res)	(p24, data0)
+e52: (m101, data_out_0)	(p24, data1)	(r106, reg)
+e53: (p24, alu_res)	(p25, data0)
+e55: (p25, alu_res)	(p26, data0)
+e56: (r104, reg)	(p26, data1)	(p25, data1)
+e57: (p26, alu_res)	(p27, data0)
+e58: (m101, data_out_1)	(p27, data1)	(r104, reg)
+e59: (p27, alu_res)	(p28, data0)
+e61: (p28, alu_res)	(p29, data0)
+e62: (r102, reg)	(p29, data1)	(p28, data1)
+e63: (p29, alu_res)	(p30, data0)
+e64: (p34, alu_res)	(p30, data1)	(m101, data_in_0)	(r102, reg)
+e65: (p30, alu_res)	(p36, data0)
+e66: (p35, alu_res)	(p31, data0)	(p115, data0)
+e67: (p36, alu_res)	(p31, data1)	(p115, data1)
+e68: (p31, alu_res)	(p116, data0)	(p116, data1)
+e69: (p110, alu_res)	(p32, data0)
+e71: (p113, alu_res)	(p33, data0)
+e73: (p114, alu_res)	(p34, data0)
+e78: (p37, alu_res)	(p117, data0)	(p117, data1)
+e79: (p116, alu_res)	(p38, data0)
+e81: (p38, alu_res)	(p146, data1)
+e83: (p127, res_p)	(p40, bit0)
+e84: (p128, res_p)	(p40, bit1)
+e85: (p40, res_p)	(p42, bit0)
+e87: (p129, res_p)	(p42, bit1)
+e88: (p42, res_p)	(p44, bit0)
+e90: (p130, res_p)	(p44, bit1)
+e91: (p44, res_p)	(p46, bit0)
+e93: (p131, res_p)	(p46, bit1)
+e94: (p46, res_p)	(p48, bit0)
+e96: (p132, res_p)	(p48, bit1)
+e97: (p48, res_p)	(p50, bit0)
+e99: (p133, res_p)	(p50, bit1)
+e100: (p50, res_p)	(p52, bit0)
+e102: (p134, res_p)	(p52, bit1)
+e103: (p52, res_p)	(p54, bit0)
+e105: (p126, res_p)	(p54, bit1)
+e106: (p54, res_p)	(p118, bit0)
+e118: (p146, alu_res)	(p134, data0)	(m55, data_in_0)	(r56, reg)
+e120: (r60, reg)	(p128, data0)	(p127, data0)
+e121: (m55, data_out_0)	(p129, data0)	(r60, reg)
+e123: (r58, reg)	(p126, data1)	(p127, data1)	(p128, data1)	(p129, data1)	(p130, data1)	(p131, data1)	(p132, data1)	(p133, data1)	(p134, data1)	(p130, data0)
+e124: (m55, data_out_1)	(p131, data0)	(r58, reg)
+e126: (r56, reg)	(p133, data0)	(p132, data0)
+e127: (r125, reg)	(p139, data1)	(p142, data1)
+e128: (r124, reg)	(p112, data0)	(r125, reg)
+e130: (m119, data_out_1)	(p108, data0)	(r122, reg)
+e131: (r120, reg)	(p111, data0)	(r121, reg)
+e132: (p109, alu_res)	(p140, data1)
+e133: (p135, alu_res)	(p110, data0)	(p110, data1)	(p113, data0)
+e134: (p112, alu_res)	(p143, data1)
+e135: (p136, alu_res)	(p113, data1)	(p114, data0)	(p114, data1)
+e136: (p115, alu_res)	(p145, data0)
+e137: (p117, alu_res)	(p145, data1)
+e138: (p118, alu_res)	(I83, f2io_16)
+e139: (p137, alu_res)	(p135, data0)
+e140: (p138, alu_res)	(p136, data0)
+e141: (p141, alu_res)	(p137, data0)
+e142: (p144, alu_res)	(p138, data0)
+e143: (p139, alu_res)	(p140, data0)
+e144: (p140, alu_res)	(p141, data0)
+e145: (p142, alu_res)	(p143, data0)
+e146: (p143, alu_res)	(p144, data0)
+e147: (p145, alu_res)	(p146, data0)
+e148: (r122, reg)	(p109, data0)
+e149: (i86, io2f_1)	(m55, flush)	(m87, flush)	(m94, flush)	(m101, flush)	(m119, flush)
+e150: (m55, stencil_valid)	(i85, f2io_1)
+
+ID to Names:
+p0: add_316_321_322$binop
+p1: add_317_320_321$binop
+p2: add_339_340_341$binop
+p3: add_342_343_344$binop
+p4: add_345_346_347$binop
+p5: add_348_349_350$binop
+p6: add_351_352_353$binop
+p7: add_354_355_356$binop
+p8: add_357_358_359$binop
+p9: add_360_361_362$binop
+p10: add_363_364_365$binop
+p11: add_366_371_372$binop
+p12: add_367_370_371$binop
+p13: add_391_392_393$binop
+p14: add_394_395_396$binop
+p15: add_397_398_399$binop
+p16: add_400_401_402$binop
+p17: add_403_404_405$binop
+p18: add_406_407_408$binop
+p19: add_409_410_411$binop
+p20: add_412_413_414$binop
+p21: add_415_416_417$binop
+p22: add_423_424_425$binop
+p23: add_426_427_428$binop
+p24: add_429_430_431$binop
+p25: add_432_433_434$binop
+p26: add_435_436_437$binop
+p27: add_438_439_440$binop
+p28: add_441_442_443$binop
+p29: add_444_445_446$binop
+p30: add_447_448_449$binop
+p31: add_452_454_455$binop
+p32: ashr_336_337_338$binop
+p33: ashr_388_389_390$binop
+p34: ashr_420_421_422$binop
+p35: ashr_450_451_452$binop
+p36: ashr_453_451_454$binop
+p37: ashr_457_451_458$binop
+p38: ashr_461_462_463$binop
+p40: bitand_467_469_470$lut$lut
+p42: bitand_470_472_473$lut$lut
+p44: bitand_473_475_476$lut$lut
+p46: bitand_476_478_479$lut$lut
+p48: bitand_479_481_482$lut$lut
+p50: bitand_482_484_485$lut$lut
+p52: bitand_485_487_488$lut$lut
+p54: bitand_488_489_490$lut$lut
+m55: cim
+r56: cim_reg_0_1
+r58: cim_reg_1_1
+r60: cim_reg_2_1
+I83: io16_out_0_0
+I84: io16in_in_arg_1_0_0
+i85: io1_valid
+i86: io1in_reset
+m87: lxx
+r88: lxx_reg_0_1
+r90: lxx_reg_1_1
+r92: lxx_reg_2_1
+m94: lxy
+r95: lxy_reg_0_1
+r97: lxy_reg_1_1
+r99: lxy_reg_2_1
+m101: lyy
+r102: lyy_reg_0_1
+r104: lyy_reg_1_1
+r106: lyy_reg_2_1
+p108: mul_318_319_320$binop
+p109: mul_325_319_326$binop
+p110: mul_335_335_336$binop
+p111: mul_368_369_370$binop
+p112: mul_375_369_376$binop
+p113: mul_385_387_388$binop
+p114: mul_419_419_420$binop
+p115: mul_452_454_456$binop
+p116: mul_455_455_461$binop
+p117: mul_458_458_459$binop
+p118: mux_4902550$mux
+m119: padded
+r120: padded_reg_0_1
+r121: padded_reg_0_2
+r122: padded_reg_1_1
+r124: padded_reg_2_1
+r125: padded_reg_2_2
+p126: sle1_466_489$compop
+p127: slt_465_466_467$binop
+p128: slt_468_466_469$binop
+p129: slt_471_466_472$binop
+p130: slt_474_466_475$binop
+p131: slt_477_466_478$binop
+p132: slt_480_466_481$binop
+p133: slt_483_466_484$binop
+p134: slt_486_466_487$binop
+p135: smax_331_332_333$binop
+p136: smax_381_382_383$binop
+p137: smin_329_330_331$binop
+p138: smin_379_380_381$binop
+p139: sub_322_323_324$binop
+p140: sub_324_326_327$binop
+p141: sub_327_328_329$binop
+p142: sub_372_373_374$binop
+p143: sub_374_376_377$binop
+p144: sub_377_378_379$binop
+p145: sub_456_459_460$binop
+p146: sub_460_463_464$binop
+
+Netlist Bus:
+e0: 16
+e1: 16
+e2: 16
+e3: 16
+e4: 16
+e7: 16
+e8: 16
+e9: 16
+e10: 16
+e11: 16
+e13: 16
+e14: 16
+e15: 16
+e16: 16
+e17: 16
+e19: 16
+e20: 16
+e21: 16
+e22: 16
+e23: 16
+e24: 16
+e25: 16
+e26: 16
+e27: 16
+e30: 16
+e31: 16
+e32: 16
+e33: 16
+e34: 16
+e36: 16
+e37: 16
+e38: 16
+e39: 16
+e40: 16
+e42: 16
+e43: 16
+e44: 16
+e45: 16
+e46: 16
+e49: 16
+e50: 16
+e51: 16
+e52: 16
+e53: 16
+e55: 16
+e56: 16
+e57: 16
+e58: 16
+e59: 16
+e61: 16
+e62: 16
+e63: 16
+e64: 16
+e65: 16
+e66: 16
+e67: 16
+e68: 16
+e69: 16
+e71: 16
+e73: 16
+e78: 16
+e79: 16
+e81: 16
+e83: 1
+e84: 1
+e85: 1
+e87: 1
+e88: 1
+e90: 1
+e91: 1
+e93: 1
+e94: 1
+e96: 1
+e97: 1
+e99: 1
+e100: 1
+e102: 1
+e103: 1
+e105: 1
+e106: 1
+e118: 16
+e120: 16
+e121: 16
+e123: 16
+e124: 16
+e126: 16
+e127: 16
+e128: 16
+e130: 16
+e131: 16
+e132: 16
+e133: 16
+e134: 16
+e135: 16
+e136: 16
+e137: 16
+e138: 16
+e139: 16
+e140: 16
+e141: 16
+e142: 16
+e143: 16
+e144: 16
+e145: 16
+e146: 16
+e147: 16
+e148: 16
+e149: 1
+e150: 1

@@ -1,0 +1,86 @@
+Netlists:
+e1: (p25, alu_res)	(p0, data1)
+e2: (p0, alu_res)	(p1, data0)
+e3: (p26, alu_res)	(p1, data1)
+e4: (p1, alu_res)	(p2, data0)
+e5: (p27, alu_res)	(p2, data1)
+e6: (p2, alu_res)	(p3, data0)
+e7: (p28, alu_res)	(p3, data1)
+e8: (p3, alu_res)	(p4, data0)
+e9: (p29, alu_res)	(p4, data1)
+e10: (p4, alu_res)	(p5, data0)
+e11: (p30, alu_res)	(p5, data1)
+e12: (p5, alu_res)	(p6, data0)
+e13: (p31, alu_res)	(p6, data1)
+e14: (p6, alu_res)	(p7, data0)
+e15: (p32, alu_res)	(p7, data1)
+e16: (p7, alu_res)	(p8, data0)
+e17: (p33, alu_res)	(p8, data1)
+e18: (p8, alu_res)	(p40, data0)
+e20: (p40, alu_res)	(I20, f2io_16)
+e30: (I21, io2f_16)	(p33, data1)	(r34, reg)	(m24, data_in_0)
+e31: (r34, reg)	(p32, data1)	(p31, data1)
+e33: (m24, data_out_0)	(p27, data1)	(r38, reg)
+e34: (r36, reg)	(p29, data1)	(p28, data1)
+e36: (m24, data_out_1)	(p30, data1)	(r36, reg)
+e37: (r38, reg)	(p26, data1)	(p25, data1)
+e39: (i23, io2f_1)	(m24, flush)
+e40: (m24, stencil_valid)	(i22, f2io_1)
+
+ID to Names:
+p0: add_307_311_312$binop
+p1: add_313_317_318$binop
+p2: add_319_323_324$binop
+p3: add_325_329_330$binop
+p4: add_331_335_336$binop
+p5: add_337_341_342$binop
+p6: add_343_347_348$binop
+p7: add_349_353_354$binop
+p8: add_355_359_360$binop
+I20: io16_out_0_0
+I21: io16in_in_arg_0_0_0
+i22: io1_valid
+i23: io1in_reset
+m24: lakemem
+p25: mul_308_310_311$binop
+p26: mul_314_316_317$binop
+p27: mul_320_322_323$binop
+p28: mul_326_328_329$binop
+p29: mul_332_334_335$binop
+p30: mul_338_340_341$binop
+p31: mul_344_346_347$binop
+p32: mul_350_352_353$binop
+p33: mul_356_358_359$binop
+r34: reg_0_1
+r36: reg_1_1
+r38: reg_2_1
+p40: rshift$binop
+
+Netlist Bus:
+e1: 16
+e2: 16
+e3: 16
+e4: 16
+e5: 16
+e6: 16
+e7: 16
+e8: 16
+e9: 16
+e10: 16
+e11: 16
+e12: 16
+e13: 16
+e14: 16
+e15: 16
+e16: 16
+e17: 16
+e18: 16
+e20: 16
+e30: 16
+e31: 16
+e33: 16
+e34: 16
+e36: 16
+e37: 16
+e39: 1
+e40: 1
