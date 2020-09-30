@@ -148,6 +148,33 @@ load_netlist(const std::string &filename) {
     return {netlist, track_mode};
 }
 
+void save_netlist(const std::map<std::string, std::vector<std::pair<std::string, std::string>>> &netlist,
+                  const std::map<std::string, uint32_t> &bus,
+                  const std::map<std::string, std::string> &id_to_name,
+                  const std::string &filename) {
+    std::ofstream stream(filename);
+    stream << "Netlists:\n";
+    for (auto const &[net_id, net]: netlist) {
+        stream << net_id << ": ";
+        for (auto const &[blk, port]: net) {
+            stream << "(" << blk << ", " << port << ") ";
+        }
+        stream << std::endl;
+    }
+    stream << std::endl;
+
+    stream << "ID to Names:\n";
+    for (auto const &[blk, name]: id_to_name) {
+        stream << blk << ": " << name << std::endl;
+    }
+    stream << std::endl;
+
+    stream << "Netlist Bus:\n";
+    for (auto const &[net_id, width]: bus) {
+        stream << net_id << ": " << width << std::endl;
+    }
+}
+
 
 void parse_layout(::ifstream &in, Layout &layout,
                   std::vector<::string> &tokens) {

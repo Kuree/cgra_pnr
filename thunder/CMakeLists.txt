@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(thunder)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -fPIC -Wno-deprecated-copy")
 
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG(-funroll-all-loops UNROLL)

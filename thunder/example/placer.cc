@@ -6,6 +6,7 @@
 #include "../src/util.hh"
 #include "../src/multi_place.hh"
 #include "../src/detailed.hh"
+#include "util.hh"
 
 constexpr uint32_t dim_threshold = 4;
 
@@ -14,23 +15,7 @@ using std::map;
 using std::vector;
 using std::pair;
 constexpr uint32_t seed = 0;
-constexpr uint32_t partition_threshold = 10;
 constexpr double partial_reconfigure_ratio = 0.5;
-
-std::map<std::string, std::vector<std::string>>
-convert_netlist(const std::map<::string,
-                               std::vector<std::pair<::string,
-                                                     ::string>>> &netlist) {
-    std::map<std::string, std::vector<std::string>> result;
-    for (auto &[net_id, net]: netlist) {
-        std::vector<::string> blks(net.size());
-        for (uint32_t i = 0; i < net.size(); i++) {
-            blks[i] = net[i].first;
-        }
-        result.insert({net_id, blks});
-    }
-    return result;
-}
 
 std::map<std::string, std::pair<int, int>>
 prefixed_placement(const std::map<std::string,
@@ -79,27 +64,7 @@ prefixed_placement(const std::map<std::string,
     return result;
 }
 
-void
-threshold_partition_netlist(const std::map<std::string,
-                                           std::vector<std::string>> &netlist,
-                       std::map<int, std::set<std::string>> &raw_clusters) {
 
-    // if we only have a few blks, don't bother doing a partition
-    // get the clusters
-    // count the number of blocks
-    std::set<std::string> blks;
-    for (auto const &iter : netlist) {
-        for (auto const &blk : iter.second) {
-            blks.insert(blk);
-        }
-    }
-    if (blks.size() > partition_threshold) {
-        raw_clusters = partition_netlist(netlist);
-    } else {
-        // just use the set
-        raw_clusters.insert({0, blks});
-    }
-}
 
 void
 check_placement(const ::map<::string,
