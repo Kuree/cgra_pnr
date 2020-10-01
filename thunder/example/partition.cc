@@ -301,6 +301,58 @@ index_port_width(const Netlist &netlist, const std::map<NetID, uint32_t> &bus_mo
     return port_width;
 }
 
+std::string get_new_net_id(const std::map<NetID, uint32_t> &bus_mode) {
+    uint64_t id = bus_mode.size();
+    std::string net_id;
+    do {
+        net_id = std::string("e" + std::to_string(id));
+        id++;
+    } while (bus_mode.find(net_id) != bus_mode.end());
+    return net_id;
+}
+
+std::pair<Port, std::set<Port>> extract_reset_ports(Netlist &netlist, std::map<BlockID, std::string> &id_to_names,
+                                                    const std::map<Port, uint32_t> &port_width,
+                                                    std::map<std::string, uint32_t> &bus_mode) {
+    std::set<Port> result;
+    // we assume there is only one reset net
+    Port reset = {"", ""};
+    for (auto const &[net_id, net]: netlist) {
+        auto const &src = net[0];
+        auto const &src_name = id_to_names.at(src.first);
+        auto width = port_width.at(src);
+        if (src_name.find("reset") != std::string::npos && width == 1) {
+            // this is the reset net
+            reset = src;
+            for (uint64_t i = 1; i < net.size(); i++) {
+                result.emplace(net[i]);
+            }
+
+            // remove the net
+            netlist.erase(net_id);
+            bus_mode.erase(net_id);
+            break;
+        }
+    }
+
+    return std::make_pair(reset, result);
+}
+
+void add_reset(Netlist &netlist, const Port &reset_port, std::set<BlockID> &cluster, const std::set<Port> &reset_blks,
+               std::map<NetID, uint32_t> &bus_mode) {
+    auto new_net_id = get_new_net_id(bus_mode);
+    auto net = std::vector<Port>();
+    net.emplace_back(reset_port);
+    for (auto const &port: reset_blks) {
+        if (cluster.find(port.first) != cluster.end()) {
+            net.emplace_back(port);
+        }
+    }
+    // add it to the netlist
+    netlist.emplace(new_net_id, net);
+    cluster.emplace(reset_port.first);
+    bus_mode.emplace(new_net_id, 1);
+}
 
 int main(int argc, char *argv[]) {
     auto[args, flag_values] = parse_argv(argc, argv);
@@ -314,6 +366,13 @@ int main(int argc, char *argv[]) {
 
     auto[netlist, bus_mode] = load_netlist(filename);
     auto id_to_name = load_id_to_name(filename);
+
+    // index port width
+    auto port_width = index_port_width(netlist, bus_mode);
+
+    // remove the reset
+    auto[reset_port, connected_reset_port] = extract_reset_ports(netlist, id_to_name, port_width, bus_mode);
+    bool has_reset = !reset_port.first.empty();
 
     std::map<int, std::set<std::string>> raw_clusters;
     if (flag_values.find('c') == flag_values.end()) {
@@ -336,18 +395,19 @@ int main(int argc, char *argv[]) {
         extra_ports[cluster_id] = ports;
     }
 
-    // index port width
-    auto port_width = index_port_width(netlist, bus_mode);
-
     // compute the connectivity
     auto io_mapping = get_io_mapping(netlist, id_to_name, extra_ports, port_width);
 
     // partition the netlist based on the clustering result, also fix the netlist
     // based on the clusters
     std::map<uint32_t, Netlist> partition_result;
-    for (auto const &[cluster_id, cluster]: raw_clusters) {
+    for (auto &[cluster_id, cluster]: raw_clusters) {
         auto cluster_netlist = create_cluster_netlist(netlist, cluster);
         fix_netlist(cluster_netlist, cluster, io_mapping, io_names, port_width);
+        if (has_reset) {
+            // need to reinsert the reset net
+            add_reset(cluster_netlist, reset_port, cluster, connected_reset_port, bus_mode);
+        }
         partition_result.emplace(cluster_id, cluster_netlist);
     }
 

@@ -1,0 +1,25 @@
+Netlists:
+e1: (I0, io2f_16)   (p0, data1)   (p0, data0)
+e2: (i1, io2f_1)    (p1, bit0)
+e3: (p0, alu_res)   (p1, data0)
+e4: (p1, alu_res)   (p1, data1)   (I2, f2io_16)
+e5: (i3, io2f_1)    (p0, bit1)    (p1, bit1)
+
+ID to Names:
+p0: add0
+p1: mux
+I0: input0
+i1: input1
+I2: output
+i3: reset
+
+Netlist Bus:
+e1: 16
+e2: 1
+e3: 16
+e4: 16
+e5: 1
+
+# notice that we have two partitions
+# so, (p0, alu_res) will be an external port (output)
+#     (p1, data0) will be an external port (input)
