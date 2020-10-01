@@ -62,7 +62,10 @@ compute_cut_edge(const std::set<std::string> &cluster, const Netlist &netlist) {
                 auto const &src = net[0];
                 if (cluster.find(src.first) == cluster.end()) {
                     // we have an input edge
-                    inputs.emplace(net[0]);
+                    for (uint64_t i = 1; i < net.size(); i++) {
+                        if (net[i].first == blk)
+                            inputs.emplace(net[i]);
+                    }
                 }
             }
         }
@@ -105,37 +108,147 @@ IOPortName get_io_port_name(const Netlist &netlist, const BusMode &bus) {
     return result;
 }
 
-bool is_connected(const Port &src, const Port &sink, const Netlist &netlist) {
+bool is_connected(const Port &a, const Port &b, const Netlist &netlist) {
     for (auto const &iter: netlist) {
         auto const &net = iter.second;
-        if (net[0] == src) {
-            for (uint64_t i = 1; i < net.size(); i++) {
-                if (net[i] == sink)
-                    return true;
+        auto has_a = false;
+        auto has_b = false;
+        for (auto const &blk: net) {
+            if (blk == a) has_a = true;
+            else if (blk == b) has_b = true;
+        }
+        if (has_a && has_b) return true;
+    }
+    return false;
+}
+
+Netlist create_cluster_netlist(const Netlist &netlist,
+                               const std::set<std::string> &blks) {
+    Netlist result;
+    for (auto const &[net_id, net]: netlist) {
+        for (auto const &port: net) {
+            if (blks.find(port.first) != blks.end()) {
+                result.emplace(net_id, net);
+                break;
             }
         }
     }
 
-
-    return false;
+    return result;
 }
 
+void fix_netlist(Netlist &netlist, const std::set<std::string> &blks,
+                 const std::map<Port, std::string> &io_mapping,
+                 const IOPortName &io_names,
+                 const std::map<Port, uint32_t> &port_width) {
+    for (auto &[net_id, net]: netlist) {
+        auto const &src = net[0];
+        if (blks.find(src.first) != blks.end()) {
+            // the source is internal
+            bool modified = false;
+            for (uint32_t i = 1; i < net.size(); i++) {
+                auto const &sink = net[i];
+                if (blks.find(sink.first) == blks.end()) {
+                    // this is an external sink
+                    if (io_mapping.find(sink) == io_mapping.end())
+                        throw std::runtime_error("invalid state checking io_mapping");
+                    auto const &new_port = io_mapping.at(sink);
+                    auto width = port_width.at(sink);
+                    // this is a sink
+                    auto port_name = io_names.at(width).second;
+                    net[i] = std::make_pair(new_port, port_name);
+                    modified = true;
+                }
+            }
+            // notice that we may have repeated entries in the net
+            if (modified) {
+                std::set<Port> sinks;
+                for (uint32_t i = 1; i < net.size(); i++) {
+                    sinks.emplace(net[i]);
+                }
+                net.clear();
+                net.reserve(1 + sinks.size());
+                net.emplace_back(src);
+                for (auto const &sink: sinks) net.emplace_back(sink);
+            }
+        } else {
+            // the src is an external port
+            // need to replace it with the external port
+            if (io_mapping.find(src) == io_mapping.end())
+                throw std::runtime_error("invalid state checking io_mapping");
+            auto const &io_src = io_mapping.at(src);
+            std::vector<Port> sinks;
+            sinks.reserve(net.size() - 1);
+            for (uint32_t i = 1; i < net.size(); i++) {
+                auto const &sink = net[i];
+                if (blks.find(sink.first) != blks.end()) {
+                    sinks.emplace_back(sink);
+                }
+            }
+            net.clear();
+            net.reserve(sinks.size() + 1);
+            // this is src
+            auto width = port_width.at(src);
+            auto port_name = io_names.at(width).first;
+            net.emplace_back(std::make_pair(io_src, port_name));
+            for (auto const &sink: sinks) {
+                net.emplace_back(sink);
+            }
+        }
+    }
+}
+
+std::pair<std::vector<std::string>,
+        std::unordered_map<char, std::string>>
+parse_argv(int argc, char *argv[]) {
+    std::vector<std::string> args;
+    std::unordered_map<char, std::string> flag_values;
+    int idx = 1;
+    std::string value;
+    char flag = '\0';
+    while (idx < argc) {
+        value = argv[idx];
+        if (value.length() == 2 && value[0] == '-') {
+            flag = value[1];
+        } else {
+            if (flag != '\0') {
+                flag_values.emplace(flag, value);
+            } else {
+                args.emplace_back(value);
+            }
+            flag = '\0';
+        }
+        idx++;
+    }
+    if (flag != '\0')
+        throw std::runtime_error("Invalid flag " + std::string(flag, 1));
+
+    return std::make_pair(args, flag_values);
+}
+
+
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
+    auto[args, flag_values] = parse_argv(argc, argv);
+    if (args.size() != 2) {
         std::cerr << "Usage " << argv[0] << "raw_netlist.packed output_dir"
                   << std::endl;
         return EXIT_FAILURE;
     }
-    std::string filename = argv[1];
-    std::string dirname = argv[2];
+    std::string filename = args[0];
+    std::string dirname = args[1];
 
     auto[netlist, bus_mode] = load_netlist(filename);
     auto id_to_name = load_id_to_name(filename);
 
     // remove unnecessary information
-    auto simplified_netlist = convert_netlist(netlist);
     std::map<int, std::set<std::string>> raw_clusters;
-    threshold_partition_netlist(simplified_netlist, raw_clusters);
+    if (flag_values.find('c') == flag_values.end()) {
+        auto simplified_netlist = convert_netlist(netlist);
+        threshold_partition_netlist(simplified_netlist, raw_clusters);
+    } else {
+        // manually read out the partition list
+        raw_clusters = read_partition_result(flag_values.at('c'));
+    }
 
     // get some meta info
     IOPortName io_names = get_io_port_name(netlist, bus_mode);
@@ -148,7 +261,85 @@ int main(int argc, char *argv[]) {
         extra_ports[cluster_id] = ports;
     }
 
-    // compute the connectivity
-    //
+    // function to add new IO ports
+    auto add_io = [&id_to_name](const std::string &name, uint32_t width) {
+        std::string prefix = width == 1 ? "1" : "I";
+        auto id = id_to_name.size();
+        std::string blk_id;
+        do {
+            blk_id = prefix + std::to_string(id);
+            id++;
+        } while (id_to_name.find(blk_id) != id_to_name.end());
+        id_to_name.emplace(blk_id, name);
+        return blk_id;
+    };
 
+    // index port width
+    std::map<Port, uint32_t> port_width;
+    for (auto const &[net_id, net]: netlist) {
+        auto width = bus_mode.at(net_id);
+        for (auto const &port: net)
+            port_width.emplace(port, width);
+    }
+
+
+    // compute the connectivity
+    std::map<Port, std::string> io_mapping;
+    for (auto const &[cluster_id_0, ports_0]: extra_ports) {
+        auto const &[inputs_0, outputs_0] = ports_0;
+        for (auto const &[cluster_id_1, ports_1]: extra_ports) {
+            if (cluster_id_0 == cluster_id_1) continue;
+            auto const &[inputs_1, outputs_1] = ports_1;
+            for (auto const &input: inputs_0) {
+                for (auto const &output: outputs_1) {
+                    if (is_connected(input, output, netlist)) {
+                        auto width = port_width.at(input);
+                        if (io_mapping.find(input) == io_mapping.end()) {
+                            auto blk = add_io("virtualized_io_" + id_to_name.at(input.first) + "_" + input.second,
+                                              width);
+                            io_mapping.emplace(input, blk);
+                        }
+                        auto input_id = io_mapping.at(input);
+                        io_mapping.emplace(output, input_id);
+                    }
+                }
+            }
+        }
+    }
+
+    // partition the netlist based on the clustering result, also fix the netlist
+    // based on the clusters
+    std::map<uint32_t, Netlist> partition_result;
+    for (auto const &[cluster_id, cluster]: raw_clusters) {
+        auto cluster_netlist = create_cluster_netlist(netlist, cluster);
+        fix_netlist(cluster_netlist, cluster, io_mapping, io_names, port_width);
+        partition_result.emplace(cluster_id, cluster_netlist);
+    }
+
+    // need to create_id_to_name as well
+    std::unordered_map<uint32_t, std::map<std::string, std::string>> partition_id_to_names;
+    for (auto const &[cluster_id, netlist]: partition_result) {
+        std::map<std::string, std::string> names;
+        for (auto const &iter: netlist) {
+            auto const &net = iter.second;
+            for (auto const &port: net) {
+                if (names.find(port.first) == names.end()) {
+                    names.emplace(port.first, id_to_name.at(port.first));
+                }
+            }
+        }
+        partition_id_to_names.emplace(cluster_id, names);
+    }
+
+    // write out the final result
+    if (!fs::dir_exists(dirname)) {
+        fs::mkdir_(dirname);
+    }
+
+    // write out the new netlist
+    for (auto const &[cluster_id, partition_netlist]: partition_result) {
+        auto fn = fs::join(dirname, std::to_string(cluster_id) + ".packed");
+        auto const &i2n = partition_id_to_names.at(cluster_id);
+        save_netlist(partition_netlist, bus_mode, i2n, fn);
+    }
 }

@@ -16,6 +16,8 @@ void save_netlist(const std::map<std::string, std::vector<std::pair<std::string,
                   const std::map<std::string, std::string> &id_to_name,
                   const std::string &filename);
 
+std::map<int, std::set<std::string>> read_partition_result(const std::string &filename);
+
 Layout load_layout(const std::string &filename);
 
 void dump_layout(const Layout &layout, const std::string &filename);
@@ -31,5 +33,13 @@ load_id_to_name(const std::string &filename);
 //  Merge cyclone and thunder IO functions
 std::map<std::string, std::pair<int, int>>
 load_placement(const std::string &filename);
+
+
+namespace fs {
+    bool exists(const std::string &filename);
+    bool dir_exists(const std::string &filename);
+    std::string join(const std::string &a, const std::string &b);
+    void mkdir_(const std::string &filename);
+}
 
 #endif //THUNDER_IO_HH

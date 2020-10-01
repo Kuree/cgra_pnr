@@ -6,6 +6,10 @@
 #include <functional>
 #include <sstream>
 #include <unordered_set>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <cstdio>
+
 
 using std::ifstream;
 using std::map;
@@ -49,10 +53,6 @@ inline uint32_t stou(const std::string &str) {
     return static_cast<uint32_t>(std::stoi(str));
 }
 
-inline bool exists(const std::string &filename) {
-    std::ifstream in(filename);
-    return in.good();
-}
 
 ::vector<::string> get_tokens(const ::string &line) {
     ::vector<::string> tokens;
@@ -72,9 +72,9 @@ inline bool exists(const std::string &filename) {
 }
 
 ::pair<::map<::string, ::vector<::pair<::string, ::string>>>,
-       ::map<::string, uint32_t>>
+        ::map<::string, uint32_t>>
 load_netlist(const std::string &filename) {
-    if (!::exists(filename))
+    if (!fs::exists(filename))
         throw ::runtime_error(filename + " does not exist");
     ::ifstream in;
     in.open(filename);
@@ -86,7 +86,7 @@ load_netlist(const std::string &filename) {
     ::map<::string, ::vector<::pair<::string, ::string>>> netlist;
     ::map<::string, uint32_t> track_mode;
 
-    while(std::getline(in, line)) {
+    while (std::getline(in, line)) {
         // we are only interested in the packed netlist section
         trim(line);
         if (line[0] == '#')
@@ -102,7 +102,7 @@ load_netlist(const std::string &filename) {
                 throw ::runtime_error("unable to process line " + line);
             const ::string &net_id = tokens[0];
             ::vector<::pair<::string, ::string>> net;
-            for (uint32_t i = 1; i < tokens.size(); i+= 2) {
+            for (uint32_t i = 1; i < tokens.size(); i += 2) {
                 ::string const &blk_id = tokens[i];
                 ::string const &port = tokens[i + 1];
                 net.emplace_back(make_pair(blk_id, port));
@@ -170,11 +170,30 @@ void save_netlist(const std::map<std::string, std::vector<std::pair<std::string,
     stream << std::endl;
 
     stream << "Netlist Bus:\n";
-    for (auto const &[net_id, width]: bus) {
+    for (auto const &iter: netlist) {
+        auto net_id = iter.first;
+        auto width = bus.at(net_id);
         stream << net_id << ": " << width << std::endl;
     }
 }
 
+std::map<int, std::set<std::string>> read_partition_result(const std::string &filename) {
+    std::map<int, std::set<std::string>> result;
+    std::ifstream in(filename);
+    std::string line;
+    int id = 0;
+    while (std::getline(in, line)) {
+        trim(line);
+        if (!line.empty()) {
+            // get tokens
+            auto tokens = get_tokens(line);
+            auto cluster = std::set<std::string>(tokens.begin(), tokens.end());
+            result.emplace(id++, cluster);
+        }
+    }
+
+    return result;
+}
 
 void parse_layout(::ifstream &in, Layout &layout,
                   std::vector<::string> &tokens) {
@@ -206,7 +225,7 @@ void parse_layout(::ifstream &in, Layout &layout,
         msg << "expect " << BEGIN << " got " << line;
         throw ::runtime_error(msg.str());
     }
-    while(std::getline(in, line)) {
+    while (std::getline(in, line)) {
         trim(line);
         if (line == END)
             break;
@@ -261,7 +280,7 @@ void parse_mask(::ifstream &in, Layout &layout,
     mask.blk_type = blk_type;
     mask.mask_blk_type = mask_blk_type;
 
-    while(std::getline(in, line)) {
+    while (std::getline(in, line)) {
         trim(line);
         if (line == END)
             break;
@@ -287,7 +306,7 @@ void parse_mask(::ifstream &in, Layout &layout,
 }
 
 Layout load_layout(const std::string &filename) {
-    if (!::exists(filename))
+    if (!fs::exists(filename))
         throw ::runtime_error(filename + " does not exist");
     ::ifstream in;
     in.open(filename);
@@ -298,7 +317,7 @@ Layout load_layout(const std::string &filename) {
     ::string line;
     // the first line has to be meta data line
     // we don't support comments yet
-    while(std::getline(in, line)) {
+    while (std::getline(in, line)) {
         trim(line);
         auto tokens = get_tokens(line);
         if (tokens[0] == "LAYOUT") {
@@ -317,7 +336,7 @@ void dump_layout(const Layout &layout, const std::string &filename) {
     std::ofstream out;
     out.open(filename, std::ofstream::out);
 
-    auto [width, height] = layout.get_size();
+    auto[width, height] = layout.get_size();
 
     auto blk_types = layout.get_layer_types();
 
@@ -345,10 +364,10 @@ void dump_layout(const Layout &layout, const std::string &filename) {
         const auto mask_type = mask.mask_blk_type;
         out << "MASK " << blk_type << " " << mask_type << endl << BEGIN << endl;
         for (const auto &[blk_pos, positions] : mask.mask_pos) {
-            auto [src_x, src_y] = blk_pos;
+            auto[src_x, src_y] = blk_pos;
             out << "(" << src_x << ", " << src_y << ")";
             for (uint32_t i = 0; i < positions.size(); i++) {
-                auto [x, y] = positions[i];
+                auto[x, y] = positions[i];
                 out << " (" << x << ", " << y << ") ";
                 if (i % 8 == 7 && i != positions.size() - 1) {
                     out << endl << "(" << src_x << ", " << src_y << ")";
@@ -382,7 +401,7 @@ void save_placement(const std::map<std::string, std::pair<int, int>> &placement,
     for (auto const &iter: placement) {
         if (id_to_name.find(iter.first) == id_to_name.end()) {
             std::cerr << iter.first << " not used. "
-                << "Possibly a dead block" << std::endl;
+                      << "Possibly a dead block" << std::endl;
             // never gets placed. continue
             continue;
         }
@@ -391,7 +410,7 @@ void save_placement(const std::map<std::string, std::pair<int, int>> &placement,
 
     // write the connect
     for (auto const &blk_id : blk_ids) {
-        auto const [x, y] = placement.at(blk_id);
+        auto const[x, y] = placement.at(blk_id);
         out << id_to_name.at(blk_id) << "\t\t" << x << "\t"
             << y << "\t\t#" << blk_id << endl;
     }
@@ -401,7 +420,7 @@ void save_placement(const std::map<std::string, std::pair<int, int>> &placement,
 
 std::map<std::string, std::string>
 load_id_to_name(const std::string &filename) {
-    if (!::exists(filename))
+    if (!fs::exists(filename))
         throw ::runtime_error(filename + " does not exist");
     ::ifstream in;
     in.open(filename);
@@ -409,7 +428,7 @@ load_id_to_name(const std::string &filename) {
     ::string line;
     std::map<std::string, std::string> id_to_name;
     bool in_section = false;
-    while(std::getline(in, line)) {
+    while (std::getline(in, line)) {
         trim(line);
         if (in_section) {
             if (line[0] == '#') {
@@ -433,7 +452,7 @@ load_id_to_name(const std::string &filename) {
 
 std::map<std::string, std::pair<int, int>>
 load_placement(const std::string &filename) {
-    if (!::exists(filename))
+    if (!fs::exists(filename))
         throw ::runtime_error(filename + " does not exist");
     ::ifstream in;
     in.open(filename);
@@ -442,7 +461,7 @@ load_placement(const std::string &filename) {
     uint32_t line_num = 0;
     std::map<std::string, std::pair<int, int>> placement;
 
-    while(std::getline(in, line)) {
+    while (std::getline(in, line)) {
         if (line_num < 2) {
             line_num++;
             continue;
@@ -461,4 +480,27 @@ load_placement(const std::string &filename) {
     }
 
     return placement;
+}
+
+namespace fs {
+    bool dir_exists(const std::string &filename) {
+        struct stat info{};
+        if (stat(filename.c_str(), &info) != 0)
+            return false;
+        return info.st_mode & S_IFDIR;  // NOLINT
+    }
+
+    bool exists(const std::string &filename) {
+        std::ifstream in(filename);
+        return in.good();
+    }
+
+    void mkdir_(const std::string &filename) {
+        auto ret = mkdir(filename.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH); // NOLINT
+        if (ret != 0) throw std::runtime_error("Unable to create a directory");
+    }
+
+    std::string join(const std::string &a, const std::string &b) {
+        return a + "/" + b;
+    }
 }
