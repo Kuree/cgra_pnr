@@ -45,3 +45,4 @@ add_subdirectory(python)
 add_subdirectory(example)
 
 target_link_libraries(thunder leidenalg ${CMAKE_THREAD_LIBS_INIT})
+target_include_directories(thunder PUBLIC ${IGRAPH_INCLUDES})

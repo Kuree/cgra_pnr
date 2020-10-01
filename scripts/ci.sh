@@ -27,6 +27,7 @@ elif [[ "$OS" == "osx" ]]; then
     pip install dist/*.whl
     cd ..
     pytest -v tests/
+    mkdir dist && cp thunder/dist/* dist/ && cp cyclone/dist/* dist/
 else
     python --version
     python -m pip install wheel pytest twine
