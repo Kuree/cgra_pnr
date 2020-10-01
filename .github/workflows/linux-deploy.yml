@@ -1,10 +1,10 @@
 name: Linux Wheel Deploy
 
-#on:
-#  push:
-#    tags:
-#      - '*'
-on: [push]
+on:
+  push:
+    tags:
+      - '*'
+#on: [push]
 
 jobs:
   build:
