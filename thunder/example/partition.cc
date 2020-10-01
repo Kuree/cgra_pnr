@@ -5,15 +5,18 @@
 #include <unordered_map>
 #include <unordered_set>
 
-using Netlist = std::map<std::string,
-        std::vector<std::pair<std::string, std::string>>>;
-using Port = std::pair<std::string, std::string>;
-using BusMode = std::map<std::string, uint32_t>;
-using IOPortName = std::unordered_map<uint32_t, std::pair<std::string, std::string>>;
+using NetID = std::string;
+using BlockID = std::string;
+using PortName = std::string;
+using Port = std::pair<BlockID, PortName>;
+using BusMode = std::map<NetID, uint32_t>;
+using IOPortName = std::unordered_map<uint32_t, Port>;
+using Netlist = std::map<NetID, std::vector<Port>>;
 
-std::unordered_map<std::string, std::unordered_set<std::string>>
+
+std::unordered_map<BlockID, std::unordered_set<NetID>>
 get_blk_to_sink_net(const Netlist &netlist) {
-    std::unordered_map<std::string, std::unordered_set<std::string>> result;
+    std::unordered_map<BlockID, std::unordered_set<NetID>> result;
     for (auto const &[net_id, net]: netlist) {
         auto blk_id = net[0].first;
         result[blk_id].emplace(net_id);
@@ -21,9 +24,9 @@ get_blk_to_sink_net(const Netlist &netlist) {
     return result;
 }
 
-std::unordered_map<std::string, std::unordered_set<std::string>>
+std::unordered_map<BlockID, std::unordered_set<NetID>>
 get_blk_to_src_net(const Netlist &netlist) {
-    std::unordered_map<std::string, std::unordered_set<std::string>> result;
+    std::unordered_map<BlockID, std::unordered_set<NetID>> result;
     for (auto const &[net_id, net]: netlist) {
         for (uint64_t i = 1; i < net.size(); i++) {
             auto const &blk_id = net[i].first;
@@ -123,7 +126,7 @@ bool is_connected(const Port &a, const Port &b, const Netlist &netlist) {
 }
 
 Netlist create_cluster_netlist(const Netlist &netlist,
-                               const std::set<std::string> &blks) {
+                               const std::set<BlockID> &blks) {
     Netlist result;
     for (auto const &[net_id, net]: netlist) {
         for (auto const &port: net) {
@@ -226,41 +229,12 @@ parse_argv(int argc, char *argv[]) {
     return std::make_pair(args, flag_values);
 }
 
-
-int main(int argc, char *argv[]) {
-    auto[args, flag_values] = parse_argv(argc, argv);
-    if (args.size() != 2) {
-        std::cerr << "Usage " << argv[0] << "raw_netlist.packed output_dir"
-                  << std::endl;
-        return EXIT_FAILURE;
-    }
-    std::string filename = args[0];
-    std::string dirname = args[1];
-
-    auto[netlist, bus_mode] = load_netlist(filename);
-    auto id_to_name = load_id_to_name(filename);
-
-    // remove unnecessary information
-    std::map<int, std::set<std::string>> raw_clusters;
-    if (flag_values.find('c') == flag_values.end()) {
-        auto simplified_netlist = convert_netlist(netlist);
-        threshold_partition_netlist(simplified_netlist, raw_clusters);
-    } else {
-        // manually read out the partition list
-        raw_clusters = read_partition_result(flag_values.at('c'));
-    }
-
-    // get some meta info
-    IOPortName io_names = get_io_port_name(netlist, bus_mode);
-
-    // write out the netlist
-    // given the partition result, we need to produce the new netlist
-    std::map<uint32_t, std::pair<std::set<Port>, std::set<Port>>> extra_ports;
-    for (auto const &[cluster_id, cluster]: raw_clusters) {
-        auto ports = compute_cut_edge(cluster, netlist);
-        extra_ports[cluster_id] = ports;
-    }
-
+std::map<Port, std::string>
+get_io_mapping(const Netlist &netlist,
+               std::map<BlockID, std::string> &id_to_name,
+               const std::map<uint32_t, std::pair<std::set<Port>, std::set<Port>>> &extra_ports,
+               const std::map<Port, uint32_t> &port_width) {
+    std::map<Port, std::string> io_mapping;
     // function to add new IO ports
     auto add_io = [&id_to_name](const std::string &name, uint32_t width) {
         std::string prefix = width == 1 ? "1" : "I";
@@ -273,18 +247,6 @@ int main(int argc, char *argv[]) {
         id_to_name.emplace(blk_id, name);
         return blk_id;
     };
-
-    // index port width
-    std::map<Port, uint32_t> port_width;
-    for (auto const &[net_id, net]: netlist) {
-        auto width = bus_mode.at(net_id);
-        for (auto const &port: net)
-            port_width.emplace(port, width);
-    }
-
-
-    // compute the connectivity
-    std::map<Port, std::string> io_mapping;
     for (auto const &[cluster_id_0, ports_0]: extra_ports) {
         auto const &[inputs_0, outputs_0] = ports_0;
         for (auto const &[cluster_id_1, ports_1]: extra_ports) {
@@ -306,18 +268,13 @@ int main(int argc, char *argv[]) {
             }
         }
     }
+    return io_mapping;
+}
 
-    // partition the netlist based on the clustering result, also fix the netlist
-    // based on the clusters
-    std::map<uint32_t, Netlist> partition_result;
-    for (auto const &[cluster_id, cluster]: raw_clusters) {
-        auto cluster_netlist = create_cluster_netlist(netlist, cluster);
-        fix_netlist(cluster_netlist, cluster, io_mapping, io_names, port_width);
-        partition_result.emplace(cluster_id, cluster_netlist);
-    }
-
-    // need to create_id_to_name as well
-    std::unordered_map<uint32_t, std::map<std::string, std::string>> partition_id_to_names;
+std::unordered_map<uint32_t, std::map<BlockID, std::string>>
+get_partition_id_to_names(const std::map<BlockID, std::string> &id_to_name,
+                          const std::map<uint32_t, Netlist> &partition_result) {
+    std::unordered_map<uint32_t, std::map<BlockID, std::string>> partition_id_to_names;
     for (auto const &[cluster_id, netlist]: partition_result) {
         std::map<std::string, std::string> names;
         for (auto const &iter: netlist) {
@@ -330,6 +287,72 @@ int main(int argc, char *argv[]) {
         }
         partition_id_to_names.emplace(cluster_id, names);
     }
+    return partition_id_to_names;
+}
+
+std::map<Port, uint32_t>
+index_port_width(const Netlist &netlist, const std::map<NetID, uint32_t> &bus_mode) {
+    std::map<Port, uint32_t> port_width;
+    for (auto const &[net_id, net]: netlist) {
+        auto width = bus_mode.at(net_id);
+        for (auto const &port: net)
+            port_width.emplace(port, width);
+    }
+    return port_width;
+}
+
+
+int main(int argc, char *argv[]) {
+    auto[args, flag_values] = parse_argv(argc, argv);
+    if (args.size() != 2) {
+        std::cerr << "Usage " << argv[0] << "raw_netlist.packed output_dir"
+                  << std::endl;
+        return EXIT_FAILURE;
+    }
+    std::string filename = args[0];
+    std::string dirname = args[1];
+
+    auto[netlist, bus_mode] = load_netlist(filename);
+    auto id_to_name = load_id_to_name(filename);
+
+    std::map<int, std::set<std::string>> raw_clusters;
+    if (flag_values.find('c') == flag_values.end()) {
+        // remove unnecessary information
+        auto simplified_netlist = convert_netlist(netlist);
+        threshold_partition_netlist(simplified_netlist, raw_clusters);
+    } else {
+        // manually read out the partition list
+        raw_clusters = read_partition_result(flag_values.at('c'));
+    }
+
+    // get some meta info
+    IOPortName io_names = get_io_port_name(netlist, bus_mode);
+
+    // write out the netlist
+    // given the partition result, we need to produce the new netlist
+    std::map<uint32_t, std::pair<std::set<Port>, std::set<Port>>> extra_ports;
+    for (auto const &[cluster_id, cluster]: raw_clusters) {
+        auto ports = compute_cut_edge(cluster, netlist);
+        extra_ports[cluster_id] = ports;
+    }
+
+    // index port width
+    auto port_width = index_port_width(netlist, bus_mode);
+
+    // compute the connectivity
+    auto io_mapping = get_io_mapping(netlist, id_to_name, extra_ports, port_width);
+
+    // partition the netlist based on the clustering result, also fix the netlist
+    // based on the clusters
+    std::map<uint32_t, Netlist> partition_result;
+    for (auto const &[cluster_id, cluster]: raw_clusters) {
+        auto cluster_netlist = create_cluster_netlist(netlist, cluster);
+        fix_netlist(cluster_netlist, cluster, io_mapping, io_names, port_width);
+        partition_result.emplace(cluster_id, cluster_netlist);
+    }
+
+    // need to create_id_to_name as well
+    auto partition_id_to_names = get_partition_id_to_names(id_to_name, partition_result);
 
     // write out the final result
     if (!fs::dir_exists(dirname)) {
