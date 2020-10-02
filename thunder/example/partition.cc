@@ -369,6 +369,16 @@ void add_reset(Netlist &netlist, const Port &reset_port, std::set<BlockID> &clus
     bus_mode.emplace(new_net_id, 1);
 }
 
+void fix_cluster_id(std::map<int, std::set<BlockID>> &clusters) {
+    std::map<int, std::set<BlockID>> temp;
+    for (auto const &iter: clusters) {
+        temp.emplace(temp.size(), iter.second);
+    }
+    clusters.clear();
+    for (auto const &iter: temp)
+        clusters.emplace(iter);
+}
+
 void fix_clusters(const Netlist &netlist, std::map<int, std::set<BlockID>> &raw_clusters) {
     std::unordered_set<int> visited_cluster;
     uint64_t cluster_size = 0;
@@ -408,7 +418,10 @@ void fix_clusters(const Netlist &netlist, std::map<int, std::set<BlockID>> &raw_
 
         cluster_size = raw_clusters.size();
     }
+
+    fix_cluster_id(raw_clusters);
 }
+
 
 int main(int argc, char *argv[]) {
     auto[args, flag_values] = parse_argv(argc, argv);
