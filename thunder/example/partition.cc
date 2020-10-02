@@ -434,7 +434,7 @@ int main(int argc, char *argv[]) {
     if (flag_values.find('c') == flag_values.end()) {
         // remove unnecessary information
         auto simplified_netlist = convert_netlist(netlist);
-        threshold_partition_netlist(simplified_netlist, raw_clusters);
+        threshold_partition_netlist(simplified_netlist, raw_clusters, 64);
     } else {
         // manually read out the partition list
         raw_clusters = read_partition_result(flag_values.at('c'));

@@ -66,10 +66,11 @@ get_cluster(igraph_t* graph,
 
 std::map<int, std::set<std::string>>
 partition_netlist(const std::map<std::string,
-        std::vector<std::string>> &netlists) {
+                                 std::vector<std::string>> &netlists,
+                  uint32_t num_iter) {
     igraph_t graph;
     auto const &id_to_blk = construct_igraph(&graph, netlists);
-    const auto &result = get_cluster(&graph, id_to_blk, 15, 0);
+    const auto &result = get_cluster(&graph, id_to_blk, num_iter, 0);
     igraph_destroy(&graph);
     return result;
 }

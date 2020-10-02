@@ -22,8 +22,9 @@ convert_netlist(const std::map<std::string, std::vector<std::pair<std::string, s
 
 inline void
 threshold_partition_netlist(const std::map<std::string,
-        std::vector<std::string>> &netlist,
-                            std::map<int, std::set<std::string>> &raw_clusters) {
+                                           std::vector<std::string>> &netlist,
+                            std::map<int, std::set<std::string>> &raw_clusters,
+                            uint32_t num_iter = 15) {
 
     // if we only have a few blks, don't bother doing a partition
     // get the clusters
@@ -35,7 +36,7 @@ threshold_partition_netlist(const std::map<std::string,
         }
     }
     if (blks.size() > partition_threshold) {
-        raw_clusters = partition_netlist(netlist);
+        raw_clusters = partition_netlist(netlist, num_iter);
     } else {
         // just use the set
         raw_clusters.insert({0, blks});

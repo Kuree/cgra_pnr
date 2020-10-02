@@ -21,6 +21,7 @@ get_cluster(igraph_t*,
 
 std::map<int, std::set<std::string>>
 partition_netlist(const std::map<std::string,
-                                 std::vector<std::string>> &netlists);
+                                 std::vector<std::string>> &netlists,
+                  uint32_t num_iter = 15);
 
 #endif //THUNDER_GRAPH_HH
