@@ -252,7 +252,7 @@ get_io_mapping(const Netlist &netlist,
     std::map<Port, std::string> io_mapping;
     // function to add new IO ports
     auto add_io = [&id_to_name](const std::string &name, uint32_t width) {
-        std::string prefix = width == 1 ? "1" : "I";
+        std::string prefix = width == 1 ? "i" : "I";
         auto id = id_to_name.size();
         std::string blk_id;
         do {
@@ -336,7 +336,7 @@ std::pair<Port, std::set<Port>> extract_reset_ports(Netlist &netlist, std::map<B
         auto const &src = net[0];
         auto const &src_name = id_to_names.at(src.first);
         auto width = port_width.at(src);
-        if (src_name.find("reset") != std::string::npos && width == 1) {
+        if (src_name.find("reset") != std::string::npos && width == 1 && src.first[0] == 'i') {
             // this is the reset net
             reset = src;
             for (uint64_t i = 1; i < net.size(); i++) {
@@ -422,6 +422,18 @@ void fix_clusters(const Netlist &netlist, std::map<int, std::set<BlockID>> &raw_
     fix_cluster_id(raw_clusters);
 }
 
+std::set<int, std::set<BlockID>> reduce_cluster(const std::set<int, std::set<BlockID>> &clusters,
+                                                const Netlist &netlist, uint32_t max_size) {
+    Netlist new_netlist;
+    std::set<int, std::set<BlockID>> result;
+
+    (void)clusters;
+    (void)netlist;
+    (void)max_size;
+
+    return result;
+}
+
 
 int main(int argc, char *argv[]) {
     auto[args, flag_values] = parse_argv(argc, argv);
@@ -448,6 +460,17 @@ int main(int argc, char *argv[]) {
         // remove unnecessary information
         auto simplified_netlist = convert_netlist(netlist);
         threshold_partition_netlist(simplified_netlist, raw_clusters, 64);
+
+        // we can also set the maximum partition size, in this case, we will try to figure out
+        // the best way to merge clusters to reduce the inter-cluster connections
+        if (flag_values.find('m') != flag_values.end()) {
+            auto size_raw = flag_values.at('m');
+            auto max_size = std::stoul(size_raw);
+            (void)max_size;
+            // we will reduce the cluster in a way to reduce inter-cluster connections as much as possible
+            // while make it legal and
+        }
+
     } else {
         // manually read out the partition list
         raw_clusters = read_partition_result(flag_values.at('c'));
