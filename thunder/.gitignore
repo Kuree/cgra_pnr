@@ -4,3 +4,4 @@ build
 thunder.egg-info
 *.so
 placer
+partition

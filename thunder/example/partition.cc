@@ -477,6 +477,11 @@ int main(int argc, char *argv[]) {
     }
     // make sure the clusters are legal
     fix_clusters(netlist, raw_clusters);
+    {
+        graph::Graph g(raw_clusters, netlist);
+        if (g.has_loop())
+            throw std::runtime_error("Failed to partition netlist");
+    }
 
     // get some meta info
     IOPortName io_names = get_io_port_name(netlist, bus_mode);

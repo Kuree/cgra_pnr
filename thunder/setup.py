@@ -59,8 +59,9 @@ class CMakeBuild(build_ext):
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
 
-        # copy the binary over
-        binaries = [os.path.join(self.build_temp, "example", "placer")]
+        # copy the binaries over
+
+        binaries = [os.path.join(self.build_temp, "example", b) for b in ("placer", "partition")]
         for binary in binaries:
             assert os.path.isfile(binary)
             print(extdir, binary)
@@ -80,7 +81,7 @@ setup(
     ext_modules=[CMakeExtension('pythunder')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
-    scripts=["python/placer"],
+    scripts=["python/placer", "python/partition"],
     long_description=long_description,
     long_description_content_type='text/x-rst',
 )

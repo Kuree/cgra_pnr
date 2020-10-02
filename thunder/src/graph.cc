@@ -1,7 +1,10 @@
 #include "graph.hh"
+#include <igraph/igraph.h>
 #include "../lib/leidenalg/include/ModularityVertexPartition.h"
 #include "../lib/leidenalg/include/GraphHelper.h"
 #include "../lib/leidenalg/include/Optimiser.h"
+
+
 
 std::map<uint32_t, std::string>
 construct_igraph(igraph_t *graph,
@@ -73,4 +76,120 @@ partition_netlist(const std::map<std::string,
     const auto &result = get_cluster(&graph, id_to_blk, num_iter, 0);
     igraph_destroy(&graph);
     return result;
+}
+
+namespace graph {
+    Node *Graph::get_node() {
+        nodes_.emplace_back(std::make_unique<Node>());
+        auto node = nodes_.back().get();
+        node->id = 0;
+        node->size = 0;
+        return node;
+    }
+
+    Edge * Graph::connect(Node *from, Node *to) {
+        edges_.emplace_back(std::make_unique<Edge>());
+        auto edge = edges_.back().get();
+        edge->weight = 0;
+        edge->from = from;
+        edge->to = to;
+        from->edges_to.emplace(edge);
+        return edge;
+    }
+
+    void Graph::copy(Graph &g) const {
+        std::unordered_map<Node*, Node*> map;
+        for (auto const &n: nodes_) {
+            auto nn = g.get_node();
+            map.emplace(n.get(), nn);
+        }
+        for (auto const &e: edges_) {
+            auto from = map.at(e->from);
+            auto to = map.at(e->to);
+            auto ee = g.connect(from, to);
+            ee->weight = e->weight;
+        }
+    }
+
+
+    Graph::Graph(const std::map<int, std::set<std::string>> &clusters,
+                 const std::map<std::string, std::vector<std::pair<std::string, std::string>>> &netlist) {
+        std::unordered_map<std::string, Node*> node_map;
+        for (auto const &[cluster_id, cluster]: clusters) {
+            auto n = get_node();
+            n->id = cluster_id;
+            for (auto const &blk: cluster) {
+                node_map.emplace(blk, n);
+            }
+            n->size = cluster.size();
+        }
+
+        // construct connections
+        std::map<std::pair<Node *, Node*>, Edge*> edge_map;
+        for (auto const &iter: netlist) {
+            auto const &net = iter.second;
+            auto const &src = net[0].first;
+            auto src_node = node_map.at(src);
+            for (uint64_t i = 1; i < net.size(); i++) {
+                auto const &sink = net[i].first;
+                if (node_map.at(sink) == node_map.at(src))
+                    continue;
+                auto sink_node = node_map.at(sink);
+                Edge *edge;
+                auto src_sink = std::make_pair(src_node, sink_node);
+                if (edge_map.find(src_sink) == edge_map.end()) {
+                    edge = connect(src_node, sink_node);
+                    edge_map.emplace(src_sink, edge);
+                } else {
+                    edge = edge_map.at(src_sink);
+                }
+                edge->weight += 1;
+            }
+        }
+        // make sure it is correct
+        for (auto const &n: nodes_) {
+            for (auto const &e: n->edges_to) {
+                if (e->to == n.get()) {
+                    throw std::runtime_error("Invalid graph for reduction");
+                }
+            }
+        }
+    }
+
+    bool Graph::has_loop() const {
+        std::unordered_set<Node*> srcs;
+        // since we don't keep track of edges from
+        // need to figure out where it starts
+        std::unordered_set<Node*> sinks;
+        for (auto const &e: edges_) {
+            sinks.emplace(e->to);
+        }
+        for (auto const &n: nodes_) {
+            if (sinks.find(n.get()) == sinks.end()) {
+                srcs.emplace(n.get());
+            }
+        }
+        if (srcs.empty())
+            throw std::runtime_error("Graph doesn't not have an input");
+
+        for (auto *src: srcs) {
+            std::queue<Node*> working_set;
+            std::unordered_set<Node*> visited;
+
+            working_set.emplace(src);
+
+            while (!working_set.empty()) {
+                auto n = working_set.front();
+                working_set.pop();
+                if (visited.find(n) != visited.end())
+                    return true;
+                visited.emplace(n);
+                for (auto const &e: n->edges_to) {
+                    working_set.emplace(e->to);
+                }
+            }
+        }
+
+        return false;
+    }
 }
