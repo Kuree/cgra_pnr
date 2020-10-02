@@ -125,6 +125,21 @@ bool is_connected(const Port &a, const Port &b, const Netlist &netlist) {
     return false;
 }
 
+bool is_driving(const BlockID &src, const BlockID &sink, const Netlist &netlist) {
+    // doesn't seem to be efficient
+    // in the future need to refactor it to a proper hypergraph data structure
+    for (auto const &iter: netlist) {
+        auto const &net = iter.second;
+        if (net[0].first == src) {
+            for (uint64_t i = 1; i < net.size(); i ++) {
+                auto const &sink_ = net[i];
+                if (sink_.first == sink) return true;
+            }
+        }
+    }
+    return false;
+}
+
 Netlist create_cluster_netlist(const Netlist &netlist,
                                const std::set<BlockID> &blks) {
     Netlist result;
@@ -354,6 +369,47 @@ void add_reset(Netlist &netlist, const Port &reset_port, std::set<BlockID> &clus
     bus_mode.emplace(new_net_id, 1);
 }
 
+void fix_clusters(const Netlist &netlist, std::map<int, std::set<BlockID>> &raw_clusters) {
+    std::unordered_set<int> visited_cluster;
+    uint64_t cluster_size = 0;
+    while (cluster_size != raw_clusters.size()) {
+        bool modified = false;
+        for (auto &[cluster_id0, cluster0]: raw_clusters) {
+            if (modified) break;
+            for (auto const &[cluster_id1, cluster1]: raw_clusters) {
+                if (cluster_id0 == cluster_id1) continue;
+                // see if there is any di-directional connections
+                bool from_0_to_1 = false;
+                bool from_1_to_0 = false;
+                // brute-force search clusters. this is O(NM)
+                for (auto const &blk0: cluster0) {
+                    for (auto const &blk1: cluster1) {
+                        if (is_driving(blk0, blk1, netlist))
+                            from_0_to_1 = true;
+                        if (is_driving(blk1, blk0, netlist))
+                            from_1_to_0 = true;
+                    }
+                    if (from_0_to_1 && from_1_to_0) break;
+                }
+
+                // to see if we need to merge
+                if (from_0_to_1 && from_1_to_0) {
+                    // merge these two
+                    // delete 1 and merge into 0
+                    for (auto const &blk: cluster1) {
+                        cluster0.emplace(blk);
+                    }
+                    raw_clusters.erase(cluster_id1);
+                    modified = true;
+                    break;
+                }
+            }
+        }
+
+        cluster_size = raw_clusters.size();
+    }
+}
+
 int main(int argc, char *argv[]) {
     auto[args, flag_values] = parse_argv(argc, argv);
     if (args.size() != 2) {
@@ -374,7 +430,7 @@ int main(int argc, char *argv[]) {
     auto[reset_port, connected_reset_port] = extract_reset_ports(netlist, id_to_name, port_width, bus_mode);
     bool has_reset = !reset_port.first.empty();
 
-    std::map<int, std::set<std::string>> raw_clusters;
+    std::map<int, std::set<BlockID>> raw_clusters;
     if (flag_values.find('c') == flag_values.end()) {
         // remove unnecessary information
         auto simplified_netlist = convert_netlist(netlist);
@@ -383,6 +439,8 @@ int main(int argc, char *argv[]) {
         // manually read out the partition list
         raw_clusters = read_partition_result(flag_values.at('c'));
     }
+    // make sure the clusters are legal
+    fix_clusters(netlist, raw_clusters);
 
     // get some meta info
     IOPortName io_names = get_io_port_name(netlist, bus_mode);

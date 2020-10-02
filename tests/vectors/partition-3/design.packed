@@ -1,0 +1,25 @@
+Netlists:
+e1: (I0, io2f_16)   (p0, data1)
+e2: (i1, io2f_1)    (p1, bit0)
+e3: (p0, alu_res)   (p1, data0)   (p3, data1)
+e4: (p1, alu_res)   (p1, data1)   (p3, data0) (p0, data0)
+e5: (p3, alu_res)   (I2, f2io_16)
+
+ID to Names:
+p0: add0
+p1: mux
+I0: input0
+i1: input1
+I2: output
+p3: mult
+
+Netlist Bus:
+e1: 16
+e2: 1
+e3: 16
+e4: 16
+e5: 16
+
+# notice that cluster 0 and 2 has bi-directional connections
+# they should be merged together
+# so at the end only two clusters
