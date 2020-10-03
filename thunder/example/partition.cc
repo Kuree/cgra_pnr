@@ -369,59 +369,6 @@ void add_reset(Netlist &netlist, const Port &reset_port, std::set<BlockID> &clus
     bus_mode.emplace(new_net_id, 1);
 }
 
-void fix_cluster_id(std::map<int, std::set<BlockID>> &clusters) {
-    std::map<int, std::set<BlockID>> temp;
-    for (auto const &iter: clusters) {
-        temp.emplace(temp.size(), iter.second);
-    }
-    clusters.clear();
-    for (auto const &iter: temp)
-        clusters.emplace(iter);
-}
-
-void fix_clusters(const Netlist &netlist, std::map<int, std::set<BlockID>> &raw_clusters) {
-    std::unordered_set<int> visited_cluster;
-    uint64_t cluster_size = 0;
-    while (cluster_size != raw_clusters.size()) {
-        bool modified = false;
-        for (auto &[cluster_id0, cluster0]: raw_clusters) {
-            if (modified) break;
-            for (auto const &[cluster_id1, cluster1]: raw_clusters) {
-                if (cluster_id0 == cluster_id1) continue;
-                // see if there is any di-directional connections
-                bool from_0_to_1 = false;
-                bool from_1_to_0 = false;
-                // brute-force search clusters. this is O(NM)
-                for (auto const &blk0: cluster0) {
-                    for (auto const &blk1: cluster1) {
-                        if (is_driving(blk0, blk1, netlist))
-                            from_0_to_1 = true;
-                        if (is_driving(blk1, blk0, netlist))
-                            from_1_to_0 = true;
-                    }
-                    if (from_0_to_1 && from_1_to_0) break;
-                }
-
-                // to see if we need to merge
-                if (from_0_to_1 && from_1_to_0) {
-                    // merge these two
-                    // delete 1 and merge into 0
-                    for (auto const &blk: cluster1) {
-                        cluster0.emplace(blk);
-                    }
-                    raw_clusters.erase(cluster_id1);
-                    modified = true;
-                    break;
-                }
-            }
-        }
-
-        cluster_size = raw_clusters.size();
-    }
-
-    fix_cluster_id(raw_clusters);
-}
-
 std::set<int, std::set<BlockID>> reduce_cluster(const std::set<int, std::set<BlockID>> &clusters,
                                                 const Netlist &netlist, uint32_t max_size) {
     Netlist new_netlist;
@@ -475,12 +422,12 @@ int main(int argc, char *argv[]) {
         // manually read out the partition list
         raw_clusters = read_partition_result(flag_values.at('c'));
     }
-    // make sure the clusters are legal
-    fix_clusters(netlist, raw_clusters);
     {
         graph::Graph g(raw_clusters, netlist);
-        if (g.has_loop())
-            throw std::runtime_error("Failed to partition netlist");
+        if (g.has_loop()) {
+            g.merge();
+            raw_clusters = g.clusters();
+        }
     }
 
     // get some meta info

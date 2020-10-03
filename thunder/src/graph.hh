@@ -33,17 +33,29 @@ namespace graph {
     class Graph {
     public:
         Graph() = default;
-        Graph(const std::map<int, std::set<std::string>> &clusters,
-              const std::map<std::string, std::vector<std::pair<std::string, std::string>>> &netlist);
+        Graph(std::map<int, std::set<std::string>> clusters,
+              std::map<std::string, std::vector<std::pair<std::string, std::string>>> netlist);
         void merge(uint32_t seed, uint32_t max_size);
+        void merge();
         Node *get_node();
         Edge *connect(Node *from, Node *to);
         void copy(Graph &g) const;
         bool has_loop() const;
+        [[nodiscard]]
+        const std::map<int, std::set<std::string>> &clusters() const { return clusters_; }
 
     private:
         std::vector<std::unique_ptr<Node>> nodes_;
         std::vector<std::unique_ptr<Edge>> edges_;
+
+        std::set<Node*> get_src() const;
+
+        std::map<int, std::set<std::string>> clusters_;
+        std::map<std::string, std::vector<std::pair<std::string, std::string>>> netlist_;
+
+        static std::vector<Node *> find_loop_path(Node *start);
+        void update();
+        void fix_cluster_id();
     };
 }
 

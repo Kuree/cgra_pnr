@@ -1,15 +1,16 @@
 #include "graph.hh"
 #include <igraph/igraph.h>
+
+#include <utility>
 #include "../lib/leidenalg/include/ModularityVertexPartition.h"
 #include "../lib/leidenalg/include/GraphHelper.h"
 #include "../lib/leidenalg/include/Optimiser.h"
 
 
-
 std::map<uint32_t, std::string>
 construct_igraph(igraph_t *graph,
                  const std::map<std::string,
-                                std::vector<std::string>> &netlists) {
+                         std::vector<std::string>> &netlists) {
     std::map<std::string, uint32_t> blk_to_id;
     std::map<uint32_t, std::string> id_to_block;
     for (auto const &iter: netlists) {
@@ -40,7 +41,7 @@ construct_igraph(igraph_t *graph,
 }
 
 std::map<int, std::set<std::string>>
-get_cluster(igraph_t* graph,
+get_cluster(igraph_t *graph,
             const std::map<uint32_t, std::string> &id_to_block,
             uint32_t num_iter,
             uint32_t seed) {
@@ -69,7 +70,7 @@ get_cluster(igraph_t* graph,
 
 std::map<int, std::set<std::string>>
 partition_netlist(const std::map<std::string,
-                                 std::vector<std::string>> &netlists,
+        std::vector<std::string>> &netlists,
                   uint32_t num_iter) {
     igraph_t graph;
     auto const &id_to_blk = construct_igraph(&graph, netlists);
@@ -87,7 +88,7 @@ namespace graph {
         return node;
     }
 
-    Edge * Graph::connect(Node *from, Node *to) {
+    Edge *Graph::connect(Node *from, Node *to) {
         edges_.emplace_back(std::make_unique<Edge>());
         auto edge = edges_.back().get();
         edge->weight = 0;
@@ -98,7 +99,7 @@ namespace graph {
     }
 
     void Graph::copy(Graph &g) const {
-        std::unordered_map<Node*, Node*> map;
+        std::unordered_map<Node *, Node *> map;
         for (auto const &n: nodes_) {
             auto nn = g.get_node();
             map.emplace(n.get(), nn);
@@ -112,10 +113,18 @@ namespace graph {
     }
 
 
-    Graph::Graph(const std::map<int, std::set<std::string>> &clusters,
-                 const std::map<std::string, std::vector<std::pair<std::string, std::string>>> &netlist) {
-        std::unordered_map<std::string, Node*> node_map;
-        for (auto const &[cluster_id, cluster]: clusters) {
+    Graph::Graph(std::map<int, std::set<std::string>> clusters,
+                 std::map<std::string, std::vector<std::pair<std::string, std::string>>> netlist) : clusters_(std::move(
+            clusters)), netlist_(std::move(netlist)) {
+        update();
+    }
+
+    void Graph::update() {
+        edges_.clear();
+        nodes_.clear();
+
+        std::unordered_map<std::string, Node *> node_map;
+        for (auto const &[cluster_id, cluster]: clusters_) {
             auto n = get_node();
             n->id = cluster_id;
             for (auto const &blk: cluster) {
@@ -125,8 +134,8 @@ namespace graph {
         }
 
         // construct connections
-        std::map<std::pair<Node *, Node*>, Edge*> edge_map;
-        for (auto const &iter: netlist) {
+        std::map<std::pair<Node *, Node *>, Edge *> edge_map;
+        for (auto const &iter: netlist_) {
             auto const &net = iter.second;
             auto const &src = net[0].first;
             auto src_node = node_map.at(src);
@@ -157,24 +166,10 @@ namespace graph {
     }
 
     bool Graph::has_loop() const {
-        std::unordered_set<Node*> srcs;
-        // since we don't keep track of edges from
-        // need to figure out where it starts
-        std::unordered_set<Node*> sinks;
-        for (auto const &e: edges_) {
-            sinks.emplace(e->to);
-        }
-        for (auto const &n: nodes_) {
-            if (sinks.find(n.get()) == sinks.end()) {
-                srcs.emplace(n.get());
-            }
-        }
-        if (srcs.empty())
-            throw std::runtime_error("Graph doesn't not have an input");
-
-        for (auto *src: srcs) {
-            std::queue<Node*> working_set;
-            std::unordered_set<Node*> visited;
+        for (auto &node: nodes_) {
+            auto src = node.get();
+            std::queue<Node *> working_set;
+            std::unordered_set<Node *> visited;
 
             working_set.emplace(src);
 
@@ -182,14 +177,87 @@ namespace graph {
                 auto n = working_set.front();
                 working_set.pop();
                 if (visited.find(n) != visited.end())
-                    return true;
+                    continue;
                 visited.emplace(n);
                 for (auto const &e: n->edges_to) {
+                    if (e->to == src)
+                        return true;
                     working_set.emplace(e->to);
                 }
             }
         }
 
         return false;
+    }
+
+    std::vector<Node *> Graph::find_loop_path(Node *start) {
+        // this is brute-force
+        // which is fine since the graph is always small
+        std::unordered_map<Node *, Node*> path;
+        std::unordered_set<Node*> visited;
+        std::queue<Node*> working_set;
+        working_set.emplace(start);
+
+        while (!working_set.empty()) {
+            auto node = working_set.front();
+            working_set.pop();
+            if (visited.find(node) != visited.end()) {
+                if (node == start) {
+                    // that is the path
+                    std::vector<Node *> result = {node};
+                    Node *n = start;
+                    while (path.find(n) != path.end()) {
+                        n = path.at(n);
+                        if (n == start) break;
+                        result.emplace_back(n);
+                    }
+                    return result;
+                } else {
+                    continue;
+                }
+            } else {
+                visited.emplace(node);
+                for (auto *e: node->edges_to) {
+                    auto *n = e->to;
+                    path.emplace(n, node);
+                    working_set.emplace(n);
+                }
+            }
+        }
+        return {};
+    }
+
+
+    void Graph::merge() {
+        // need to find a loop
+        while (has_loop()) {
+            for (auto &n: nodes_) {
+                auto path = find_loop_path(n.get());
+                if (!path.empty()) {
+                    // need to merge all the nodes along the path
+                    auto src = path[0];
+                    for (uint64_t i = 1; i < path.size(); i++) {
+                        auto dst = path[i];
+                        for (auto &blk: clusters_.at(dst->id)) {
+                            clusters_.at(src->id).emplace(blk);
+                        }
+                        clusters_.erase(dst->id);
+                    }
+                    update();
+                    break;
+                }
+            }
+        }
+
+        fix_cluster_id();
+    }
+
+    void Graph::fix_cluster_id() {
+        std::map<int, std::set<std::string>> result;
+        for (auto const &iter: clusters_) {
+            result.emplace(result.size(), iter.second);
+        }
+
+        clusters_ = result;
     }
 }
