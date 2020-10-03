@@ -369,19 +369,6 @@ void add_reset(Netlist &netlist, const Port &reset_port, std::set<BlockID> &clus
     bus_mode.emplace(new_net_id, 1);
 }
 
-std::set<int, std::set<BlockID>> reduce_cluster(const std::set<int, std::set<BlockID>> &clusters,
-                                                const Netlist &netlist, uint32_t max_size) {
-    Netlist new_netlist;
-    std::set<int, std::set<BlockID>> result;
-
-    (void)clusters;
-    (void)netlist;
-    (void)max_size;
-
-    return result;
-}
-
-
 int main(int argc, char *argv[]) {
     auto[args, flag_values] = parse_argv(argc, argv);
     if (args.size() != 2) {
