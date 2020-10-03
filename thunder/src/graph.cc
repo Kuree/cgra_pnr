@@ -193,9 +193,9 @@ namespace graph {
     std::vector<Node *> Graph::find_loop_path(Node *start) {
         // this is brute-force
         // which is fine since the graph is always small
-        std::unordered_map<Node *, Node*> path;
-        std::unordered_set<Node*> visited;
-        std::queue<Node*> working_set;
+        std::unordered_map<Node *, Node *> path;
+        std::unordered_set<Node *> visited;
+        std::queue<Node *> working_set;
         working_set.emplace(start);
 
         while (!working_set.empty()) {
@@ -227,6 +227,12 @@ namespace graph {
         return {};
     }
 
+    void Graph::merge(int base, int target) {
+        for (auto &blk: clusters_.at(target)) {
+            clusters_.at(base).emplace(blk);
+        }
+        clusters_.erase(target);
+    }
 
     void Graph::merge() {
         // need to find a loop
@@ -238,10 +244,7 @@ namespace graph {
                     auto src = path[0];
                     for (uint64_t i = 1; i < path.size(); i++) {
                         auto dst = path[i];
-                        for (auto &blk: clusters_.at(dst->id)) {
-                            clusters_.at(src->id).emplace(blk);
-                        }
-                        clusters_.erase(dst->id);
+                        merge(src->id, dst->id);
                     }
                     update();
                     break;
@@ -250,6 +253,47 @@ namespace graph {
         }
 
         fix_cluster_id();
+    }
+
+    void Graph::merge(uint32_t max_size) {
+        while (true) {
+            uint64_t old_cluster_size = clusters_.size();
+            // need to make sure that each cluster is within the max size
+            for (auto const &cluster: clusters_) {
+                if (cluster.second.size() > max_size)
+                    throw std::runtime_error(
+                            "Unable to partition the graph that fits the max size " + std::to_string(max_size));
+            }
+            // now we pick the edge with highest connection count
+            // if it legal to merge
+            //     1. no loop introduced
+            //     2. the new size does not exceed the max size
+            // sort the edges by their weight (num of connections)
+            std::vector<Edge *> edges;
+            edges.reserve(edges_.size());
+            for (auto &edge: edges_) edges.emplace_back(edge.get());
+
+            // from hi to lo
+            std::sort(edges.begin(), edges.end(), [](auto a, auto b) { return a->weight > b->weight; });
+
+            for (auto *edge: edges) {
+                // cannot exceed max size
+                if (clusters_.at(edge->from->id).size() + clusters_.at(edge->to->id).size() > max_size)
+                    continue;
+                // need to create a new graph and then merge these two, then see if it's valid
+                Graph g(clusters_, netlist_);
+                g.merge(edge->from->id, edge->to->id);
+                g.update();
+                if (!g.has_loop()) {
+                    clusters_ = g.clusters_;
+                    update();
+                    break;
+                }
+
+            }
+            if (old_cluster_size == clusters_.size())
+                break;
+        }
     }
 
     void Graph::fix_cluster_id() {

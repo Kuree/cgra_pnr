@@ -395,15 +395,6 @@ int main(int argc, char *argv[]) {
         auto simplified_netlist = convert_netlist(netlist);
         threshold_partition_netlist(simplified_netlist, raw_clusters, 64);
 
-        // we can also set the maximum partition size, in this case, we will try to figure out
-        // the best way to merge clusters to reduce the inter-cluster connections
-        if (flag_values.find('m') != flag_values.end()) {
-            auto size_raw = flag_values.at('m');
-            auto max_size = std::stoul(size_raw);
-            (void)max_size;
-            // we will reduce the cluster in a way to reduce inter-cluster connections as much as possible
-            // while make it legal and
-        }
 
     } else {
         // manually read out the partition list
@@ -415,6 +406,15 @@ int main(int argc, char *argv[]) {
             g.merge();
             raw_clusters = g.clusters();
         }
+    }
+    // we can also set the maximum partition size, in this case, we will try to figure out
+    // the best way to merge clusters to reduce the inter-cluster connections
+    if (flag_values.find('m') != flag_values.end()) {
+        auto size_raw = flag_values.at('m');
+        auto max_size = std::stoul(size_raw);
+        graph::Graph g(raw_clusters, netlist);
+        g.merge(max_size);
+        raw_clusters = g.clusters();
     }
 
     // get some meta info

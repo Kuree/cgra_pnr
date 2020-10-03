@@ -35,8 +35,9 @@ namespace graph {
         Graph() = default;
         Graph(std::map<int, std::set<std::string>> clusters,
               std::map<std::string, std::vector<std::pair<std::string, std::string>>> netlist);
-        void merge(uint32_t seed, uint32_t max_size);
+        void merge(uint32_t max_size);
         void merge();
+        void merge(int base, int target);
         Node *get_node();
         Edge *connect(Node *from, Node *to);
         void copy(Graph &g) const;
@@ -47,8 +48,6 @@ namespace graph {
     private:
         std::vector<std::unique_ptr<Node>> nodes_;
         std::vector<std::unique_ptr<Edge>> edges_;
-
-        std::set<Node*> get_src() const;
 
         std::map<int, std::set<std::string>> clusters_;
         std::map<std::string, std::vector<std::pair<std::string, std::string>>> netlist_;
