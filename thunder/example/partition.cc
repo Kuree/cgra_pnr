@@ -272,7 +272,10 @@ get_io_mapping(const Netlist &netlist,
                     if (is_connected(input, output, netlist)) {
                         if (output.first[0] == 'I' || output.first[0] == 'i') {
                             // we can re-use the input here
-                            io_mapping.emplace(output, input.first);
+                            io_mapping.emplace(input, output.first);
+                            if (io_mapping.find(output) == io_mapping.end()) {
+                                io_mapping.emplace(output, output.first);
+                            }
                         } else {
                             auto width = port_width.at(input);
                             if (io_mapping.find(input) == io_mapping.end()) {
