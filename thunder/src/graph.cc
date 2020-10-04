@@ -280,11 +280,20 @@ namespace graph {
                 // cannot exceed max size
                 if (clusters_.at(edge->from->id).size() + clusters_.at(edge->to->id).size() > max_size)
                     continue;
+                // only merge if it can decrease the total number of edge weights
+                int total_weights_before = 0;
+                for (auto const &e: edges_) {
+                    total_weights_before += e->weight;
+                }
                 // need to create a new graph and then merge these two, then see if it's valid
                 Graph g(clusters_, netlist_);
                 g.merge(edge->from->id, edge->to->id);
                 g.update();
-                if (!g.has_loop()) {
+                int total_weights_after = 0;
+                for (auto const &e: g.edges_) {
+                    total_weights_after += e->weight;
+                }
+                if (!g.has_loop() && total_weights_after <= total_weights_before) {
                     clusters_ = g.clusters_;
                     update();
                     break;
@@ -294,6 +303,8 @@ namespace graph {
             if (old_cluster_size == clusters_.size())
                 break;
         }
+        fix_cluster_id();
+        update();
     }
 
     void Graph::fix_cluster_id() {
@@ -303,5 +314,6 @@ namespace graph {
         }
 
         clusters_ = result;
+        update();
     }
 }

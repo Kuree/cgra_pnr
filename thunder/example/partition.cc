@@ -270,14 +270,20 @@ get_io_mapping(const Netlist &netlist,
             for (auto const &input: inputs_0) {
                 for (auto const &output: outputs_1) {
                     if (is_connected(input, output, netlist)) {
-                        auto width = port_width.at(input);
-                        if (io_mapping.find(input) == io_mapping.end()) {
-                            auto blk = add_io("virtualized_io_" + id_to_name.at(input.first) + "_" + input.second,
-                                              width);
-                            io_mapping.emplace(input, blk);
+                        if (output.first[0] == 'I' || output.first[0] == 'i') {
+                            // we can re-use the input here
+                            io_mapping.emplace(output, input.first);
+                        } else {
+                            auto width = port_width.at(input);
+                            if (io_mapping.find(input) == io_mapping.end()) {
+                                auto blk = add_io("virtualized_io_" + id_to_name.at(input.first) + "_" + input.second,
+                                                  width);
+                                io_mapping.emplace(input, blk);
+                            }
+                            auto input_id = io_mapping.at(input);
+                            io_mapping.emplace(output, input_id);
                         }
-                        auto input_id = io_mapping.at(input);
-                        io_mapping.emplace(output, input_id);
+
                     }
                 }
             }
@@ -457,5 +463,9 @@ int main(int argc, char *argv[]) {
         auto fn = fs::join(dirname, std::to_string(cluster_id) + ".packed");
         auto const &i2n = partition_id_to_names.at(cluster_id);
         save_netlist(partition_netlist, bus_mode, i2n, fn);
+    }
+
+    for (auto const &[id, cluster]: raw_clusters) {
+        std::cout << "cluster " << id << " size: " << cluster.size() << std::endl;
     }
 }
