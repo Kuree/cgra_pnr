@@ -12,6 +12,7 @@ using Port = std::pair<BlockID, PortName>;
 using BusMode = std::map<NetID, uint32_t>;
 using IOPortName = std::unordered_map<uint32_t, Port>;
 using Netlist = std::map<NetID, std::vector<Port>>;
+using Position = std::pair<int, int>;
 
 
 std::unordered_map<BlockID, std::unordered_set<NetID>>
@@ -131,7 +132,7 @@ bool is_driving(const BlockID &src, const BlockID &sink, const Netlist &netlist)
     for (auto const &iter: netlist) {
         auto const &net = iter.second;
         if (net[0].first == src) {
-            for (uint64_t i = 1; i < net.size(); i ++) {
+            for (uint64_t i = 1; i < net.size(); i++) {
                 auto const &sink_ = net[i];
                 if (sink_.first == sink) return true;
             }
@@ -378,6 +379,95 @@ void add_reset(Netlist &netlist, const Port &reset_port, std::set<BlockID> &clus
     bus_mode.emplace(new_net_id, 1);
 }
 
+std::unordered_map<BlockID, Position> compute_flow(const std::map<int, std::set<BlockID>> &clusters,
+                                                   const Netlist &netlist, std::vector<int> &execute_order,
+                                                   std::map<BlockID, std::pair<uint32_t, uint32_t>> &keep_alive) {
+
+    std::unordered_map<BlockID, Position> io_placement;
+    graph::Graph g(clusters, netlist);
+    // compute the execution order
+    execute_order = g.topological_sort();
+
+    // need to figure out the io placement and how long do we need to keep it alive
+    for (uint32_t i = 0; i < execute_order.size(); i++) {
+        auto cluster_id = execute_order[i];
+        std::map<BlockID, Position> placement;
+        auto const &cluster = clusters.at(cluster_id);
+        // need to re=populate the placement if previous kernel already has IO fixed
+        for (auto const &blk: cluster) {
+            if (io_placement.find(blk)!= io_placement.end())
+                placement.emplace(blk, io_placement.at(blk));
+        }
+
+        auto get_new_io_pos = [&placement]() {
+            int y = 0;
+            int x = 0;
+            while (true) {
+                auto pos = std::make_pair(x, y);
+                bool taken = false;
+                for (auto const &iter: placement) {
+                    if (iter.second == pos) {
+                        taken = true;
+                        break;
+                    }
+                }
+                if (!taken) break;
+                x++;
+            }
+            return std::make_pair(x, y);
+        };
+
+
+        for (auto const &id: cluster) {
+            if (id[0] == 'i' || id[0] == 'I') {
+                // TODO: fix 1-bit signal since it doesn't exist in global buffer
+                if (io_placement.find(id) == io_placement.end()) {
+                    // this is new
+                    Position pos = get_new_io_pos();
+                    io_placement.emplace(id, pos);
+                    placement.emplace(id, pos);
+
+                    // need to figure out when it ends
+                    uint32_t ends = i;
+                    for (uint32_t j = i; j < execute_order.size(); j++) {
+                        auto const &c = clusters.at(execute_order[j]);
+                        if (c.find(id) != c.end()) {
+                            ends = j;
+                        }
+                    }
+                    keep_alive.emplace(id, std::make_pair(i, ends));
+                }
+            }
+        }
+    }
+
+    return io_placement;
+}
+
+std::map<int, std::map<std::string, Position>> get_prefix_locations(const std::map<int, std::set<BlockID>> &clusters,
+                                                                    const std::unordered_map<BlockID, Position> &io_placement) {
+    std::map<int, std::map<std::string, Position>> result;
+    for (auto const &[cluster_id, cluster]: clusters) {
+        for (auto const &blk: cluster) {
+            if (io_placement.find(blk) != io_placement.end()) {
+                result[cluster_id].emplace(blk, io_placement.at(blk));
+            }
+        }
+    }
+
+    return result;
+}
+
+void fix_cluster(std::set<BlockID> &cluster, const Netlist &netlist) {
+    for (auto const &iter: netlist) {
+        for (auto const &port: iter.second) {
+            if (cluster.find(port.first) == cluster.end()) {
+                cluster.emplace(port.first);
+            }
+        }
+    }
+}
+
 int main(int argc, char *argv[]) {
     auto[args, flag_values] = parse_argv(argc, argv);
     if (args.size() != 2) {
@@ -445,7 +535,10 @@ int main(int argc, char *argv[]) {
     std::map<uint32_t, Netlist> partition_result;
     for (auto &[cluster_id, cluster]: raw_clusters) {
         auto cluster_netlist = create_cluster_netlist(netlist, cluster);
+        // fix netlist with new virtualized IO
         fix_netlist(cluster_netlist, cluster, io_mapping, io_names, port_width);
+        // fix cluster ids with new blk IDs
+        fix_cluster(cluster, cluster_netlist);
         if (has_reset) {
             // need to reinsert the reset net
             add_reset(cluster_netlist, reset_port, cluster, connected_reset_port, bus_mode);
@@ -467,6 +560,17 @@ int main(int argc, char *argv[]) {
         auto const &i2n = partition_id_to_names.at(cluster_id);
         save_netlist(partition_netlist, bus_mode, i2n, fn);
     }
+
+    // deal with the prefix IO placement
+    std::vector<int> execute_order;
+    std::map<BlockID, std::pair<uint32_t, uint32_t>> keep_alive;
+    auto io_placement = compute_flow(raw_clusters, netlist, execute_order, keep_alive);
+    auto io_prefix = get_prefix_locations(raw_clusters, io_placement);
+    for (auto const &[cluster_id, placement_result]: io_prefix) {
+        auto fn = fs::join(dirname, std::to_string(cluster_id) + ".place");
+        save_placement(placement_result, id_to_name, fn);
+    }
+
 
     for (auto const &[id, cluster]: raw_clusters) {
         std::cout << "cluster " << id << " size: " << cluster.size() << std::endl;

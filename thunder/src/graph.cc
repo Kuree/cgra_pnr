@@ -1,5 +1,6 @@
 #include "graph.hh"
 #include <igraph/igraph.h>
+#include <stack>
 
 #include <utility>
 #include "../lib/leidenalg/include/ModularityVertexPartition.h"
@@ -188,6 +189,36 @@ namespace graph {
         }
 
         return false;
+    }
+
+    void topological_sort_(Node *node, std::unordered_set<Node*> &visited, std::stack<Node*> &stack) {
+        visited.emplace(node);
+        for (auto *edge: node->edges_to) {
+            auto *to = edge->to;
+            if (visited.find(to) == visited.end()) {
+                topological_sort_(to, visited, stack);
+            }
+        }
+        stack.emplace(node);
+    }
+
+    std::vector<int> Graph::topological_sort() const {
+        std::unordered_set<Node*> visited;
+        std::stack<Node*> stack;
+
+        for (auto const &n: nodes_) {
+            if (visited.find(n.get()) == visited.end()) {
+                topological_sort_(n.get(), visited, stack);
+            }
+        }
+        std::vector<int> result;
+        result.reserve(stack.size());
+        while (!stack.empty()) {
+            auto n = stack.top();
+            result.emplace_back(n->id);
+            stack.pop();
+        }
+        return result;
     }
 
     std::vector<Node *> Graph::find_loop_path(Node *start) {

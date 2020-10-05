@@ -44,6 +44,8 @@ namespace graph {
         bool has_loop() const;
         [[nodiscard]]
         const std::map<int, std::set<std::string>> &clusters() const { return clusters_; }
+        [[nodiscard]]
+        std::vector<int> topological_sort() const;
 
     private:
         std::vector<std::unique_ptr<Node>> nodes_;
