@@ -349,6 +349,9 @@ GlobalRouter::get_free_switch(const std::pair<uint32_t, uint32_t> &p) {
 }
 
 std::vector<uint32_t> GlobalRouter::reorder_pins(const Net &net) {
+    if (net.size() < 2) {
+        throw std::runtime_error("Net " + net.name + " only has one pin");
+    }
     ::vector<uint32_t> result(net.size() - 1);
     for (uint32_t i = 0; i < result.size(); i++)
         result[i] = i + 1;

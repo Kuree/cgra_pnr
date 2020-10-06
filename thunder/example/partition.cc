@@ -373,10 +373,13 @@ void add_reset(Netlist &netlist, const Port &reset_port, std::set<BlockID> &clus
             net.emplace_back(port);
         }
     }
+    // only add it when the net is more than
     // add it to the netlist
-    netlist.emplace(new_net_id, net);
-    cluster.emplace(reset_port.first);
-    bus_mode.emplace(new_net_id, 1);
+    if (net.size() > 1) {
+        netlist.emplace(new_net_id, net);
+        cluster.emplace(reset_port.first);
+        bus_mode.emplace(new_net_id, 1);
+    }
 }
 
 std::unordered_map<BlockID, Position> compute_flow(const std::map<int, std::set<BlockID>> &clusters,
