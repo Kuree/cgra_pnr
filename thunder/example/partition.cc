@@ -381,12 +381,18 @@ void add_reset(Netlist &netlist, const Port &reset_port, std::set<BlockID> &clus
 
 std::unordered_map<BlockID, Position> compute_flow(const std::map<int, std::set<BlockID>> &clusters,
                                                    const Netlist &netlist, std::vector<int> &execute_order,
-                                                   std::map<BlockID, std::pair<uint32_t, uint32_t>> &keep_alive) {
+                                                   std::map<BlockID, std::pair<uint32_t, uint32_t>> &keep_alive,
+                                                   const Port &reset_port) {
 
     std::unordered_map<BlockID, Position> io_placement;
     graph::Graph g(clusters, netlist);
     // compute the execution order
     execute_order = g.topological_sort();
+
+    // reset port will always be (0, 0)
+    if (!reset_port.first.empty()) {
+        io_placement.emplace(reset_port.first, std::make_pair(0, 0));
+    }
 
     // need to figure out the io placement and how long do we need to keep it alive
     for (uint32_t i = 0; i < execute_order.size(); i++) {
@@ -564,7 +570,7 @@ int main(int argc, char *argv[]) {
     // deal with the prefix IO placement
     std::vector<int> execute_order;
     std::map<BlockID, std::pair<uint32_t, uint32_t>> keep_alive;
-    auto io_placement = compute_flow(raw_clusters, netlist, execute_order, keep_alive);
+    auto io_placement = compute_flow(raw_clusters, netlist, execute_order, keep_alive, reset_port);
     auto io_prefix = get_prefix_locations(raw_clusters, io_placement);
     for (auto const &[cluster_id, placement_result]: io_prefix) {
         auto fn = fs::join(dirname, std::to_string(cluster_id) + ".place");
