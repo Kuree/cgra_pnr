@@ -24,7 +24,10 @@ void init_io(py::module &m) {
     auto io_m = m.def_submodule("io");
 
     io_m.def("load_layout", &load_layout)
-        .def("dump_layout", &dump_layout);
+        .def("dump_layout", &dump_layout)
+        .def("load_netlist", &load_netlist)
+        .def("load_id_to_name", &load_id_to_name)
+        .def("load_placement", &load_placement);
 }
 
 void init_graph(py::module &m) {
