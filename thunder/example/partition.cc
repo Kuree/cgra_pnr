@@ -498,7 +498,8 @@ int main(int argc, char *argv[]) {
     bool has_reset = !reset_port.first.empty();
 
     std::map<int, std::set<BlockID>> raw_clusters;
-    if (flag_values.find('c') == flag_values.end()) {
+    bool has_fixed_partition = flag_values.find('c') != flag_values.end();
+    if (!has_fixed_partition) {
         // remove unnecessary information
         auto simplified_netlist = convert_netlist(netlist);
         threshold_partition_netlist(simplified_netlist, raw_clusters, 64);
@@ -517,11 +518,23 @@ int main(int argc, char *argv[]) {
     }
     // we can also set the maximum partition size, in this case, we will try to figure out
     // the best way to merge clusters to reduce the inter-cluster connections
-    if (flag_values.find('m') != flag_values.end()) {
+    bool has_max_size = flag_values.find('m') != flag_values.end();
+    if (has_max_size) {
         auto size_raw = flag_values.at('m');
         auto max_size = std::stoul(size_raw);
         graph::Graph g(raw_clusters, netlist);
         g.merge(max_size);
+        raw_clusters = g.clusters();
+    }
+    // adjust a little bit. need to respect to max size
+    if (!has_fixed_partition) {
+        graph::Graph g(raw_clusters, netlist);
+        uint32_t max_size = 0;
+        if (has_max_size) {
+            auto size_raw = flag_values.at('m');
+            max_size = std::stoul(size_raw);
+        }
+        g.optimize(max_size);
         raw_clusters = g.clusters();
     }
 

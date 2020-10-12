@@ -202,6 +202,14 @@ namespace graph {
         stack.emplace(node);
     }
 
+    int Graph::total_weight() const {
+        int result = 0;
+        for (auto const &edge: edges_) {
+            result += edge->weight;
+        }
+        return result;
+    }
+
     std::vector<int> Graph::topological_sort() const {
         std::unordered_set<Node*> visited;
         std::stack<Node*> stack;
@@ -346,5 +354,134 @@ namespace graph {
 
         clusters_ = result;
         update();
+    }
+
+    std::map<int, std::set<std::string>> copy_cluster(const std::map<int, std::set<std::string>> &cluster) {
+        std::map<int, std::set<std::string>> result;
+        for (auto const &[id, c]: cluster) {
+            std::set<std::string> c_copy;
+            for (auto const &blk: c) c_copy.emplace(blk);
+            result.emplace(id, c_copy);
+        }
+        return result;
+    }
+
+    void Graph::optimize(uint32_t max_partition_size) {
+        // if max_size not set, set it to maximum
+        if (max_partition_size == 0) max_partition_size = 0xFFFFFFFF;
+        // move nodes around to see if it can actually reduce the number of virtualized IOs
+        while (true) {
+            auto old_clusters = copy_cluster(clusters_);
+
+            // need to find out all the edges
+            int total_weights = total_weight();
+            // find interested pairs
+            // notice that
+            std::vector<std::pair<std::string, std::map<int, int>>> blks;
+            for (auto const &iter: netlist_) {
+                auto const &net = iter.second;
+                auto const &src_blk = net[0].first;
+                int src_id = 0;
+                for (auto const &[c_id, cluster]: clusters_) {
+                    if (cluster.find(src_blk) != cluster.end()) {
+                        src_id = c_id;
+                        break;
+                    }
+                }
+                std::map<int, int> targets;
+                for (uint64_t i = 1; i < net.size(); i++) {
+                    auto const &sink_blk = net[i].first;
+                    int sink_id = 0;
+                    for (auto const &[c_id, cluster]: clusters_) {
+                        if (cluster.find(sink_blk) != cluster.end()) {
+                            sink_id = c_id;
+                            break;
+                        }
+                    }
+                    if (sink_id != src_id) {
+                        // need to add it to the
+                        if (targets.find(sink_id) != targets.end())
+                            targets.emplace(sink_id, 0);
+                        targets[sink_id] += 1;
+                    }
+                }
+                if (!targets.empty()) {
+                    // we only interested in connection that has more than 1
+                    for (auto const &count: targets) {
+                        if (count.second > 1) {
+                            blks.emplace_back(std::make_pair(src_blk, targets));
+                            break;
+                        }
+                    }
+
+                }
+            }
+            // sort the blks based on the number of clusters
+            std::sort(blks.begin(), blks.end(), [](const auto &a, const auto &b) {
+                auto const &a_edges = a.second;
+                auto const &b_edges = b.second;
+                int a_sum = 0, b_sum = 0;
+                for (auto const &iter: a_edges) {
+                    a_sum += iter.second;
+                }
+                for (auto const &iter: b_edges) {
+                    b_sum += iter.second;
+                }
+                return a_sum > b_sum;
+            });
+            for (auto const &[blk, edges]: blks) {
+                // figure out which target to merge into
+                int c_id = -1, max_size = -1;
+                for (auto const &[c, count]: edges) {
+                    if (count > max_size) {
+                        max_size = count;
+                        c_id = c;
+                    }
+                }
+                if (c_id < 0) throw std::runtime_error("Incorrect state in merging");
+
+                // try to move the blk to the target cluster
+                auto temp = copy_cluster(clusters_);
+                for (auto &iter: temp) {
+                    auto &cluster = iter.second;
+                    if (cluster.find(blk) != cluster.end()) {
+                        cluster.erase(blk);
+                        break;
+                    }
+                }
+                auto &target_c = temp.at(c_id);
+                target_c.emplace(blk);
+                Graph g(temp, netlist_);
+                auto new_weight = g.total_weight();
+                if (new_weight < total_weights && target_c.size() < max_partition_size) {
+                    clusters_ = temp;
+                    update();
+                }
+            }
+
+            // logic to detect if we have made any changes
+            bool changed = false;
+            for (auto const &[c_id, cluster]: clusters_) {
+                if (changed) break;
+                if (old_clusters.find(c_id) != old_clusters.end()) {
+                    auto const &new_cluster = clusters_.at(c_id);
+                    auto const &old_cluster = old_clusters.at(c_id);
+                    if (new_cluster.size() != old_cluster.size()) {
+                        changed = true;
+                    } else {
+                        for (auto const &blk: cluster) {
+                            if (new_cluster.find(blk) == old_cluster.end()) {
+                                changed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!changed) {
+                break;
+            }
+        }
     }
 }

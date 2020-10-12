@@ -47,6 +47,10 @@ namespace graph {
         [[nodiscard]]
         std::vector<int> topological_sort() const;
 
+        void optimize(uint32_t max_partition_size=0);
+
+        [[nodiscard]] int total_weight() const;
+
     private:
         std::vector<std::unique_ptr<Node>> nodes_;
         std::vector<std::unique_ptr<Edge>> edges_;
