@@ -72,7 +72,7 @@ with open(os.path.join(current_directory, 'README.rst')) as f:
 
 setup(
     name='pycyclone',
-    version='0.3.25',
+    version='0.3.26',
     author='Keyi Zhang',
     author_email='keyi@stanford.edu',
     description='Fast CGRA Routing',
