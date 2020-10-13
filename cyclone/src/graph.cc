@@ -24,6 +24,10 @@ bool operator<(const std::weak_ptr<Node> &a,
     return a.lock() < b.lock();
 };
 
+bool operator==(std::weak_ptr<Node> &a, const std::weak_ptr<Node> &b) {
+    return a.lock() == b.lock();
+}
+
 Node::Node(NodeType type, const std::string &name, uint32_t x, uint32_t y)
     : type(type), name(name), x(x), y(y) { }
 
@@ -45,27 +49,29 @@ Node::Node(const Node &node) : enable_shared_from_this() {
 
 void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t wire_delay) {
     std::weak_ptr<Node> n = node;
-    neighbors_.insert(n);
+    neighbors_.emplace_back(n);
     edge_cost_[n] = node->delay + wire_delay;
-    node->conn_in_.insert(weak_from_this());
+    node->conn_in_.emplace_back(weak_from_this());
 }
 
 uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
     std::weak_ptr<Node> n = node;
-    if (neighbors_.find(n) == neighbors_.end())
+    if (std::find(neighbors_.begin(), neighbors_.end(), n) != neighbors_.end())
         return 0xFFFFFF;
     else
         return edge_cost_[node];
 }
 
 void Node::remove_edge(const std::shared_ptr<Node> &node) {
-    if (neighbors_.find(node) != neighbors_.end()) {
-        neighbors_.erase(node);
+    auto n_pos = std::find(neighbors_.begin(), neighbors_.end(), node);
+    if (n_pos != neighbors_.end()) {
+        neighbors_.erase(n_pos);
         edge_cost_.erase(node);
     }
-    if (node->conn_in_.find(weak_from_this()) != node->conn_in_.end()) {
+    auto c_pos = std::find(node->conn_in_.begin(), node->conn_in_.end(), weak_from_this());
+    if (c_pos != node->conn_in_.end()) {
         // remove the incoming connection as well
-        node->conn_in_.erase(weak_from_this());
+        node->conn_in_.erase(c_pos);
     }
 }
 

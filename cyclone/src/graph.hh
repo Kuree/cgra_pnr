@@ -62,14 +62,12 @@ public:
     uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
 
     // helper function to allow iteration
-    std::set<std::weak_ptr<Node>>::iterator begin() const
-    { return neighbors_.begin(); }
-    std::set<std::weak_ptr<Node>>::iterator end() const
-    { return neighbors_.end(); }
+    auto begin() const { return neighbors_.begin(); }
+    auto end() const { return neighbors_.end(); }
     uint64_t size() { return neighbors_.size(); }
 
     // used in creating mux in hardware
-    const std::set<std::weak_ptr<Node>> get_conn_in() const { return conn_in_; }
+    const std::vector<std::weak_ptr<Node>> &get_conn_in() const { return conn_in_; }
 
     virtual std::string to_string() const;
     friend std::ostream& operator<<(std::ostream &s, const Node &node) {
@@ -88,12 +86,12 @@ protected:
 
     // TODO: change this to std::weak_ptr to avoid memory leak due to circular
     // TODO: reference.
-    std::set<std::weak_ptr<Node>> neighbors_;
+    std::vector<std::weak_ptr<Node>> neighbors_;
     std::map<std::weak_ptr<Node>, uint32_t,
              std::owner_less<std::weak_ptr<Node>>> edge_cost_;
 
 private:
-    std::set<std::weak_ptr<Node>>conn_in_;
+    std::vector<std::weak_ptr<Node>>conn_in_;
 };
 
 class RegisterMuxNode : public Node {
