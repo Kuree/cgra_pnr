@@ -202,6 +202,10 @@ void GlobalPlacer::create_boxes() {
             ::vector<double> cost;
             ::vector<double> x_data;
             auto dsp_columns = hidden_columns[blk_type];
+            // sanity check
+            if (reduced_width_ < static_cast<uint32_t>(width)) {
+                throw std::runtime_error("Invalid layout. Tile array is too small");
+            }
             for (uint32_t x = 0; x < reduced_width_ - width; x++) {
                 // try to place it on every x and then see how many blocks left
                 // TODO: fix DSP block height
