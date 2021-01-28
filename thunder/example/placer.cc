@@ -7,7 +7,7 @@
 #include "../src/multi_place.hh"
 #include "../src/detailed.hh"
 
-constexpr uint32_t dim_threshold = 4;
+constexpr uint32_t dim_threshold = 6;
 
 using std::string;
 using std::map;
@@ -217,7 +217,7 @@ int main(int argc, char *argv[]) {
     // in most case it's an error
     if (early_termination(fixed_pos, raw_clusters)) {
         std::cerr << "Nothing to be done" << std::endl;
-        return EXIT_FAILURE;
+        return EXIT_SUCCESS;
     }
 
     auto clusters = convert_clusters(raw_clusters, fixed_pos);
@@ -226,7 +226,7 @@ int main(int argc, char *argv[]) {
     ::map<::string, ::map<char, std::set<::pair<int, int>>>> gp_result;
     const auto &size = layout.get_size();
     if ((clusters.size() == 1
-          && (size.first <= dim_threshold && size.second <= dim_threshold))
+          || (size.first <= dim_threshold && size.second <= dim_threshold))
         || (fixed_ratio >= partial_reconfigure_ratio))  {
         // merge into one-single cluster, if more than one
         std::map<std::string, std::set<std::string>> new_cluster;
