@@ -16,21 +16,20 @@ jobs:
         auth_header="$(git config --local --get http.https://github.com/.extraheader)"
         git submodule sync --recursive
         git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
-    - name: Setup Env
-      uses: goanpeca/setup-miniconda@v1
+    - name: Setup Python environment 🐍
+      uses: actions/setup-python@v2
       with:
-        auto-update-conda: true
         python-version: 3.7
     - name: Install igraph
       shell: bash
       run: |
           brew install igraph
     - name: Install Python packages
-      shell: bash -l {0}
+      shell: bash
       run: |
           pip install wheel pytest
     - name: Build and run wheel
-      shell: bash -l {0}
+      shell: bash
       env:
         OS: osx
         PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}

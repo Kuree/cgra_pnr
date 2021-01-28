@@ -21,22 +21,21 @@ jobs:
         auth_header="$(git config --local --get http.https://github.com/.extraheader)"
         git submodule sync --recursive
         git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
-    - name: Setup Env
-      uses: goanpeca/setup-miniconda@v1
+    - name: Setup Python environment 🐍
+      uses: actions/setup-python@v2
       with:
-        auto-update-conda: true
         python-version: ${{ matrix.python-version }}
     - name: Install igraph
       shell: bash
       run: |
           brew install igraph
     - name: Install Python packages
-      shell: bash -l {0}
+      shell: bash
       run: |
           pip install scikit-build
           pip install cmake twine wheel pytest
     - name: Build and run wheel
-      shell: bash -l {0}
+      shell: bash
       env:
         OS: osx
         PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
@@ -45,6 +44,6 @@ jobs:
       run: |
         source ./scripts/ci.sh
     - name: Upload to PyPI
-      shell: bash -l {0}
+      shell: bash
       run: twine upload --skip-existing dist/*.whl
       
