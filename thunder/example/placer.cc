@@ -19,8 +19,8 @@ constexpr double partial_reconfigure_ratio = 0.5;
 
 std::map<std::string, std::vector<std::string>>
 convert_netlist(const std::map<::string,
-                               std::vector<std::pair<::string,
-                                                     ::string>>> &netlist) {
+        std::vector<std::pair<::string,
+                ::string>>> &netlist) {
     std::map<std::string, std::vector<std::string>> result;
     for (auto &[net_id, net]: netlist) {
         std::vector<::string> blks(net.size());
@@ -34,7 +34,7 @@ convert_netlist(const std::map<::string,
 
 std::map<std::string, std::pair<int, int>>
 prefixed_placement(const std::map<std::string,
-                                  std::vector<std::string>> &netlist,
+        std::vector<std::string>> &netlist,
                    const Layout &layout,
                    const std::pair<bool, ::string> &fix_loc) {
     auto const &[use_prefix, placement_filename] = fix_loc;
@@ -63,7 +63,7 @@ prefixed_placement(const std::map<std::string,
     // has to be placed first
     std::vector<std::string> blocks(working_set.begin(), working_set.end());
     // sort the blocks based on the tag
-    std::sort(blocks.begin(), blocks.end(), [](const std::string &a, const std::string&) {
+    std::sort(blocks.begin(), blocks.end(), [](const std::string &a, const std::string &) {
         return a[0] == 'i';
     });
 
@@ -81,8 +81,8 @@ prefixed_placement(const std::map<std::string,
 
 void
 threshold_partition_netlist(const std::map<std::string,
-                                           std::vector<std::string>> &netlist,
-                       std::map<int, std::set<std::string>> &raw_clusters) {
+        std::vector<std::string>> &netlist,
+                            std::map<int, std::set<std::string>> &raw_clusters) {
 
     // if we only have a few blks, don't bother doing a partition
     // get the clusters
@@ -103,7 +103,7 @@ threshold_partition_netlist(const std::map<std::string,
 
 void
 check_placement(const ::map<::string,
-                            ::vector<::pair<::string, ::string>>> &raw_netlist,
+        ::vector<::pair<::string, ::string>>> &raw_netlist,
                 const ::map<std::string, std::pair<int, int>> &placement,
                 const Layout &layout) {
     // making sure the placement is correct
@@ -128,11 +128,11 @@ check_placement(const ::map<::string,
         // FIXME: NEED TO REMOVE THIS HACK, WHICH IS CAUSED BY A MANTLE BUG
         if (blk_type == 'i' || blk_type == 'I')
             continue;
-        auto const [x, y] = pos;
+        auto const[x, y] = pos;
         auto &blk_pos = pos_set.at(blk_type);
         if (blk_pos.find(pos) == blk_pos.end())
             throw std::runtime_error("over use position " + std::to_string(x)
-                                      + " " + std::to_string(y));
+                                     + " " + std::to_string(y));
         blk_pos.erase(pos);
     }
 }
@@ -165,7 +165,7 @@ parse_cli_args(int argc, char *argv[]) {
 }
 
 bool early_termination(const std::map<::string, std::pair<int, int>> &prefix,
-                       const std::map<int, std::set<::string>> & raw_c) {
+                       const std::map<int, std::set<::string>> &raw_c) {
     uint32_t count = 0;
     uint32_t prefix_size = 0;
     for (const auto &iter: raw_c) {
@@ -189,9 +189,13 @@ uint32_t blk_count(const std::map<int, std::set<std::string>> &clusters) {
     return blks.size();
 }
 
+bool disable_global_placement() {
+    return std::getenv("DISABLE_GP");
+}
+
 int main(int argc, char *argv[]) {
-    auto const [layout_file, netlist_file, result_filename, use_prefix] =
-            parse_cli_args(argc, argv);
+    auto const[layout_file, netlist_file, result_filename, use_prefix] =
+    parse_cli_args(argc, argv);
     if (layout_file.empty() || netlist_file.empty()
         || result_filename.empty()) {
         print_help_message(argv);
@@ -225,9 +229,9 @@ int main(int argc, char *argv[]) {
     // we just do it flat
     ::map<::string, ::map<char, std::set<::pair<int, int>>>> gp_result;
     const auto &size = layout.get_size();
-    if ((clusters.size() == 1
-          || (size.first <= dim_threshold && size.second <= dim_threshold))
-        || (fixed_ratio >= partial_reconfigure_ratio))  {
+    if ((clusters.size() == 1)
+        || (size.first <= dim_threshold && size.second <= dim_threshold)
+        || (fixed_ratio >= partial_reconfigure_ratio) || disable_global_placement()) {
         // merge into one-single cluster, if more than one
         std::map<std::string, std::set<std::string>> new_cluster;
         for (auto const &it: clusters) {
@@ -256,7 +260,7 @@ int main(int argc, char *argv[]) {
                     num_blks += 1;
             }
         }
-        double fill_ratio = fmax(0.99, num_blks /num_blks_layout);
+        double fill_ratio = fmax(0.99, num_blks / num_blks_layout);
         double base_factor = 1;
         if (fill_ratio > 0.8)
             base_factor = 1.2;
