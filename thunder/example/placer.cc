@@ -190,7 +190,7 @@ uint32_t blk_count(const std::map<int, std::set<std::string>> &clusters) {
 }
 
 bool disable_global_placement() {
-    return std::getenv("DISABLE_GP");
+    return (std::getenv("DISABLE_GP") != nullptr) || (std::getenv("SKIP_GP") != nullptr);  // NOLINT
 }
 
 int main(int argc, char *argv[]) {
@@ -229,10 +229,9 @@ int main(int argc, char *argv[]) {
     // we just do it flat
     ::map<::string, ::map<char, std::set<::pair<int, int>>>> gp_result;
     const auto &size = layout.get_size();
-    auto skip_gp = getenv("SKIP_GP") != nullptr;    // NOLINT
     if ((clusters.size() == 1)
         || (size.first <= dim_threshold && size.second <= dim_threshold)
-        || (fixed_ratio >= partial_reconfigure_ratio) || disable_global_placement() || skip_gp) {
+        || (fixed_ratio >= partial_reconfigure_ratio) || disable_global_placement()) {
         // merge into one-single cluster, if more than one
         std::map<std::string, std::set<std::string>> new_cluster;
         for (auto const &it: clusters) {
