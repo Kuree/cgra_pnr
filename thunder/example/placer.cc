@@ -63,7 +63,7 @@ prefixed_placement(const std::map<std::string,
     // has to be placed first
     std::vector<std::string> blocks(working_set.begin(), working_set.end());
     // sort the blocks based on the tag
-    std::sort(blocks.begin(), blocks.end(), [](const std::string &a, const std::string &) {
+    std::partition(blocks.begin(), blocks.end(), [](const std::string &a) {
         return a[0] == 'i';
     });
 
