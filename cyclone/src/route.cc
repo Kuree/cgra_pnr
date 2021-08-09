@@ -444,3 +444,11 @@ double Router::get_presence_cost(const std::shared_ptr<Node> &node,
     else
         return (start_connection.size() - 1);
 }
+
+RoutedGraph Router::convert_route_to_graph(int net_id) {
+    if (current_routes.find(net_id) == current_routes.end()) {
+        throw std::runtime_error("Invalid net id " + std::to_string(net_id));
+    }
+    auto const &segments = current_routes.at(net_id);
+    return RoutedGraph(segments);
+}

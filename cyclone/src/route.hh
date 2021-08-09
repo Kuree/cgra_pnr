@@ -30,6 +30,9 @@ public:
     std::map<std::string, std::vector<std::vector<std::shared_ptr<Node>>>>
     realize() const;
 
+    // re-timing stages
+    void retime(uint32_t frequency);
+
     // getter & setter
     double get_init_pn() const { return init_pn_; }
     void set_init_pn(double init_pn) { init_pn_ = init_pn; }
@@ -126,6 +129,8 @@ protected:
 
     void rip_up_net(int net_id);
     bool node_owned_net(int net_id, std::shared_ptr<Node> node);
+
+    RoutedGraph convert_route_to_graph(int net_id);
 
 private:
     std::vector<int> squash_net(int src_id);

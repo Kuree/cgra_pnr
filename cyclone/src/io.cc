@@ -254,7 +254,7 @@ void print_sb(std::ofstream &out, const std::string &pad, const Switch &sb) {
         << sb.num_track << endl;
     out << BEGIN << endl;
     const auto wires = sb.internal_wires();
-    for (auto const iter : wires) {
+    for (auto const &iter : wires) {
         auto [track_from, side_from, track_to, side_to] = iter;
         out << pad << track_from << " " << gsv(side_from) << " "
             << track_to << " " << gsv(side_to) << endl;
@@ -550,7 +550,6 @@ void setup_router_input(Router &r, const std::string &packed_filename,
                         const std::string &placement_filename,
                         uint32_t width) {
     auto [netlist, track_mode] = load_netlist(packed_filename);
-    printf("netlist: %ld\n", netlist.size());
     auto placement = load_placement(placement_filename);
     for (auto const &it : placement) {
         auto [x, y] = it.second;

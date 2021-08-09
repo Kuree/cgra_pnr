@@ -6,6 +6,7 @@
 #include <map>
 #include <vector>
 #include <iostream>
+#include <unordered_map>
 
 class Node;
 
@@ -74,8 +75,12 @@ public:
         return s << node.to_string();
     }
 
+    virtual std::shared_ptr<Node> clone() const { return std::make_shared<Node>(*this); }
+
     const static int IO = 2;
     const static uint32_t DEFAULT_WIRE_DELAY = 0;
+
+    virtual ~Node() = default;
 
 protected:
     Node(NodeType type, const std::string &name, uint32_t x, uint32_t y);
@@ -140,10 +145,14 @@ public:
     SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width, uint32_t track,
                   SwitchBoxSide side, SwitchBoxIO io);
 
+    SwitchBoxNode(const SwitchBoxNode &node);
+
     std::string to_string() const override;
 
     SwitchBoxSide side;
     SwitchBoxIO io;
+
+    std::shared_ptr<Node> clone() const override { return std::make_shared<SwitchBoxNode>(*this); }
 
     static constexpr char TOKEN[] = "SB";
 };
@@ -281,6 +290,27 @@ private:
     std::map<std::pair<uint32_t, uint32_t>, Tile> grid_;
 
     std::shared_ptr<Node> search_create_node(const Node &node);
+};
+
+// hold information for routed graph
+// all nodes are cloned from the original routing graph
+class RoutedGraph {
+public:
+    explicit RoutedGraph(const std::map<uint32_t,
+                         std::vector<std::shared_ptr<Node>>>& route);
+
+    std::map<uint32_t, std::vector<std::shared_ptr<Node>>> get_route() const;
+    std::set<int> insert_pipeline_reg(int pin_id);
+
+private:
+    // our node to the actual routing graph node
+    std::unordered_map<std::shared_ptr<Node>, const Node *> node_map_;
+    std::map<int, std::shared_ptr<Node>> pins_;
+    std::shared_ptr<Node> src_node_;
+
+    std::shared_ptr<Node> get_node(std::unordered_map<const Node*, std::shared_ptr<Node>> &node_mapping,
+                                   const Node * node);
+    void insert_reg_output(std::shared_ptr<Node> src_node);
 };
 
 #endif //CYCLONE_GRAPH_H

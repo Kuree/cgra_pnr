@@ -3,6 +3,7 @@
 #include <cassert>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 
 using std::make_pair;
 using std::make_shared;
@@ -112,6 +113,9 @@ SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
                              SwitchBoxIO io)
                              : Node(NodeType::SwitchBox, "", x, y,
                                     width, track), side(side), io(io) { }
+
+SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node):
+    SwitchBoxNode(node.x, node.y, node.width, node.track, node.side, node.io) {}
 
 std::string SwitchBoxNode::to_string() const {
     return ::string(TOKEN) + " (" + ::to_string(track) + ", " +
@@ -345,4 +349,164 @@ RoutingGraph::get_sb(const uint32_t &x, const uint32_t &y,
         const auto &tile = grid_.at(pos);
         return tile.switchbox[{track, side, io}];
     }
+}
+
+RoutedGraph::RoutedGraph(const std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &route) {
+    std::unordered_map<const Node*, std::shared_ptr<Node>> node_mapping;
+    for (auto const &[pin_id, segment]: route) {
+        for (uint64_t i = 1; i < segment.size(); i++) {
+            auto const &pre_node_ = segment[i - 1];
+            auto const &current_node_ = segment[i];
+            auto pre_node = get_node(node_mapping, pre_node_.get());
+            auto current_node = get_node(node_mapping, current_node_.get());
+
+            // add edge
+            pre_node->add_edge(current_node);
+        }
+        pins_.emplace(pin_id, node_mapping.at(segment.back().get()));
+    }
+    // src node has to be the one that doesn't have src
+    for (auto const &iter: node_map_) {
+        auto const &n = iter.first;
+        if (n->get_conn_in().empty()) {
+            src_node_ = n;
+            break;
+        }
+    }
+}
+
+std::shared_ptr<Node> RoutedGraph::get_node(std::unordered_map<const Node*, std::shared_ptr<Node>> &node_mapping,
+                                            const Node *node) {
+    if (node_mapping.find(node) == node_mapping.end()) {
+        auto n = node->clone();
+        node_mapping.emplace(node, n);
+        node_map_.emplace(n, node);
+    }
+    return node_mapping.at(node);
+}
+
+std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() const {
+    std::map<uint32_t, std::vector<std::shared_ptr<Node>>> result;
+    std::unordered_set<const Node *> visited;
+
+    for (auto const &[pin_id, pin_node]: pins_) {
+        std::vector<std::shared_ptr<Node>> segment;
+        std::shared_ptr<Node> n = pin_node;
+
+        while (n) {
+            segment.emplace_back(n);
+
+            if (visited.find(n.get()) != visited.end()) {
+                // fan-out net
+                break;
+            }
+            visited.emplace(n.get());
+
+            auto const &conn_to = n->get_conn_in();
+            if (conn_to.size() == 1) {
+                auto w_n = conn_to[0];
+                n = w_n.lock();
+            } else {
+                break;
+            }
+        }
+
+        // need to reverse to follow the proper route
+        std::reverse(segment.begin(), segment.end());
+        result.emplace(pin_id, segment);
+    }
+
+    return result;
+}
+
+
+void RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
+    // we cannot insert pass a branch
+    while (true) {
+        if (src_node->size() != 1) {
+            throw std::runtime_error("Unable to insert pipeline registers");
+        }
+
+        if (src_node->type == NodeType::SwitchBox) {
+            auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(src_node);
+            if (sb->io == SwitchBoxIO::SB_OUT) {
+                break;
+            }
+        }
+
+        src_node = src_node->begin()->lock();
+    }
+
+    if (node_map_.find(src_node) == node_map_.end()) {
+        throw std::runtime_error("Unable to find the routing node");
+    }
+    auto route_sb = node_map_.at(src_node);
+
+    auto next = route_sb->begin()->lock();
+    std::shared_ptr<Node> reg;
+    for (auto const &n: *route_sb) {
+        auto node = n.lock();
+        if (node->type == NodeType::Register) {
+            reg = node;
+            break;
+        }
+    }
+    if (!reg) {
+        throw std::runtime_error("Unable to find pipeline register");
+    }
+
+    src_node->remove_edge(next);
+    std::unordered_map<const Node*, std::shared_ptr<Node>> node_mapping;
+    auto reg_net = get_node(node_mapping, reg.get());
+    src_node->add_edge(reg_net);
+    reg_net->add_edge(next);
+}
+
+
+std::set<int> RoutedGraph::insert_pipeline_reg(int pin_id) {
+    if (pins_.find(pin_id) == pins_.end()) {
+        throw std::runtime_error("Unable to find pin id " + std::to_string(pin_id));
+    }
+
+    // itself must be affected
+    std::set<int> pin_nodes = {pin_id};
+    std::set<int> full_nodes;
+    for (auto const &iter: pins_) full_nodes.emplace(iter.first);
+
+    // figure out if we have any branch in the segments
+    auto const &pin_node = pins_.at(pin_id);
+
+    // need to see if we have a free RMUX node
+    // couple sanity check
+    if (pin_node->get_conn_in().size() != 1) {
+        throw std::runtime_error("Unexpected pin connection");
+    }
+
+    // we insert it right after the source sink, if possible
+
+    auto const &sb = pin_node->get_conn_in().front().lock();
+    if (!sb || sb->type != NodeType::SwitchBox) {
+        throw std::runtime_error("Pin is not connected to a switch box");
+    }
+    // if that switch box has two outputs already, we insert at the very beginning.
+    if (sb->size() > 1) {
+        insert_reg_output(src_node_);
+        return full_nodes;
+    }
+    // need to make sure the source is a rmux node
+    auto const &rmux = sb->get_conn_in().front().lock();
+    if (!rmux || rmux->type != NodeType::Generic || node_map_.at(rmux)->get_conn_in().size() != 2) {
+        throw std::runtime_error("Unable to find register mux");
+    }
+
+    auto pre_node = rmux->get_conn_in().front().lock();
+    if (pre_node->type == NodeType::Register) {
+        // we already register it. try to route it at the output
+        insert_reg_output(src_node_);
+        return full_nodes;
+    }
+
+    insert_reg_output(pre_node);
+
+    return pin_nodes;
 }
