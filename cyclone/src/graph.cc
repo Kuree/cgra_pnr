@@ -30,15 +30,15 @@ bool operator==(std::weak_ptr<Node> &a, const std::weak_ptr<Node> &b) {
 }
 
 Node::Node(NodeType type, const std::string &name, uint32_t x, uint32_t y)
-    : type(type), name(name), x(x), y(y) { }
+        : type(type), name(name), x(x), y(y) {}
 
 Node::Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
            uint32_t width)
-        : type(type), name(name), width(width), x(x), y(y) { }
+        : type(type), name(name), width(width), x(x), y(y) {}
 
 Node::Node(NodeType type, const std::string &name, uint32_t x, uint32_t y,
            uint32_t width, uint32_t track)
-        : type(type), name(name), width(width), track(track), x(x), y(y) { }
+        : type(type), name(name), width(width), track(track), x(x), y(y) {}
 
 Node::Node(const Node &node) : enable_shared_from_this() {
     type = node.type;
@@ -78,7 +78,7 @@ void Node::remove_edge(const std::shared_ptr<Node> &node) {
 
 std::string Node::to_string() const {
     return "NODE " + name + " (" + ::to_string(track) + ", " +
-           ::to_string(x) + ", " + ::to_string(y)  + ", " +
+           ::to_string(x) + ", " + ::to_string(y) + ", " +
            ::to_string(width) + ")";
 }
 
@@ -111,11 +111,11 @@ std::string RegisterNode::to_string() const {
 SwitchBoxNode::SwitchBoxNode(uint32_t x, uint32_t y, uint32_t width,
                              uint32_t track, SwitchBoxSide side,
                              SwitchBoxIO io)
-                             : Node(NodeType::SwitchBox, "", x, y,
-                                    width, track), side(side), io(io) { }
+        : Node(NodeType::SwitchBox, "", x, y,
+               width, track), side(side), io(io) {}
 
-SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node):
-    SwitchBoxNode(node.x, node.y, node.width, node.track, node.side, node.io) {}
+SwitchBoxNode::SwitchBoxNode(const SwitchBoxNode &node) :
+        SwitchBoxNode(node.x, node.y, node.width, node.track, node.side, node.io) {}
 
 std::string SwitchBoxNode::to_string() const {
     return ::string(TOKEN) + " (" + ::to_string(track) + ", " +
@@ -127,10 +127,10 @@ std::string SwitchBoxNode::to_string() const {
 Switch::Switch(uint32_t x, uint32_t y, uint32_t num_track,
                uint32_t width, uint32_t switch_id,
                const std::set<std::tuple<uint32_t,
-                              SwitchBoxSide, uint32_t,
-                              SwitchBoxSide>> &internal_wires)
-               : x(x), y(y), num_track(num_track), width(width), id(switch_id),
-               internal_wires_(internal_wires) {
+                       SwitchBoxSide, uint32_t,
+                       SwitchBoxSide>> &internal_wires)
+        : x(x), y(y), num_track(num_track), width(width), id(switch_id),
+          internal_wires_(internal_wires) {
     for (uint32_t side = 0; side < SIDES; side++) {
         for (uint32_t io = 0; io < IOS; io++) {
             sbs_[side][io] = ::vector<shared_ptr<SwitchBoxNode>>(num_track);
@@ -145,7 +145,7 @@ Switch::Switch(uint32_t x, uint32_t y, uint32_t num_track,
     // assign internal wiring
     // the order is always in to out
     for (const auto &iter : internal_wires_) {
-        auto [track_from, side_from, track_to, side_to] = iter;
+        auto[track_from, side_from, track_to, side_to] = iter;
         auto sb_from =
                 sbs_[gsv(side_from)][giv(SwitchBoxIO::SB_IN)][track_from];
         auto sb_to =
@@ -154,18 +154,18 @@ Switch::Switch(uint32_t x, uint32_t y, uint32_t num_track,
     }
 }
 
-const std::shared_ptr<SwitchBoxNode>&
+const std::shared_ptr<SwitchBoxNode> &
 Switch::operator[](const std::tuple<uint32_t,
-                   SwitchBoxSide,
-                   SwitchBoxIO> &track_side) const {
+        SwitchBoxSide,
+        SwitchBoxIO> &track_side) const {
     auto const &[track, side, io] = track_side;
     return sbs_[gsv(side)][giv(io)][track];
 }
 
-const std::shared_ptr<SwitchBoxNode>&
+const std::shared_ptr<SwitchBoxNode> &
 Switch::operator[](const std::tuple<SwitchBoxSide,
-                   uint32_t,
-                   SwitchBoxIO > &side_track) const {
+        uint32_t,
+        SwitchBoxIO> &side_track) const {
     auto const &[side, track, io] = side_track;
     return sbs_[gsv(side)][giv(io)][track];
 }
@@ -173,7 +173,7 @@ Switch::operator[](const std::tuple<SwitchBoxSide,
 const ::vector<::shared_ptr<SwitchBoxNode>>
 Switch::get_sbs_by_side(const SwitchBoxSide &side) const {
     ::vector<::shared_ptr<SwitchBoxNode>> result;
-    for (uint32_t io = 0; io< IOS; io++) {
+    for (uint32_t io = 0; io < IOS; io++) {
         for (const auto &sb : sbs_[gsv(side)][io])
             result.emplace_back(sb);
     }
@@ -198,7 +198,7 @@ void Switch::remove_sb_nodes(SwitchBoxSide side, SwitchBoxIO io) {
     // and io. this is very useful to create a tall tiles that uses multiple
     // switches
     ::set<std::tuple<uint32_t, SwitchBoxSide, uint32_t, SwitchBoxSide>>
-    wires_to_remove;
+            wires_to_remove;
     for (auto const &conn : internal_wires_) {
         SwitchBoxSide side_from, side_to;
         std::tie(std::ignore, side_from, std::ignore, side_to) = conn;
@@ -223,12 +223,12 @@ Tile::Tile(uint32_t x, uint32_t y, uint32_t height, const Switch &switchbox)
 }
 
 std::string Tile::to_string() const {
-    return std::string(Tile::TOKEN) + " (" +  ::to_string(x) + ", "
+    return std::string(Tile::TOKEN) + " (" + ::to_string(x) + ", "
            + ::to_string(y) + ", " + ::to_string(height) + ", "
            + ::to_string(switchbox.id) + ")";
 }
 
-std::ostream& operator<<(std::ostream &out, const Tile &tile) {
+std::ostream &operator<<(std::ostream &out, const Tile &tile) {
     out << "tile (" << tile.x << ", " << tile.y << ")";
     return out;
 }
@@ -264,7 +264,7 @@ void RoutingGraph::add_edge(const Node &node1, const Node &node2,
     if (n1->width != n2->width)
         throw ::runtime_error("node2 width does not equal to node1 "
                               "node1: " + ::to_string(n1->width) + " "
-                              "node2: " + ::to_string(n2->width));
+                                                                   "node2: " + ::to_string(n2->width));
     n1->add_edge(n2, wire_delay);
 }
 
@@ -314,10 +314,10 @@ std::shared_ptr<Node> RoutingGraph::search_create_node(const Node &node) {
                     == tile.rmux_nodes.end())
                     tile.rmux_nodes[node.name] =
                             ::make_shared<RegisterMuxNode>(node.name,
-                                                       node.x,
-                                                       node.y,
-                                                       node.width,
-                                                       node.track);
+                                                           node.x,
+                                                           node.y,
+                                                           node.width,
+                                                           node.track);
                 return tile.rmux_nodes.at(node.name);
         }
     }
@@ -352,7 +352,7 @@ RoutingGraph::get_sb(const uint32_t &x, const uint32_t &y,
 }
 
 RoutedGraph::RoutedGraph(const std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &route) {
-    std::unordered_map<const Node*, std::shared_ptr<Node>> node_mapping;
+    std::unordered_map<const Node *, std::shared_ptr<Node>> node_mapping;
     for (auto const &[pin_id, segment]: route) {
         for (uint64_t i = 1; i < segment.size(); i++) {
             auto const &pre_node_ = segment[i - 1];
@@ -375,7 +375,7 @@ RoutedGraph::RoutedGraph(const std::map<uint32_t, std::vector<std::shared_ptr<No
     }
 }
 
-std::shared_ptr<Node> RoutedGraph::get_node(std::unordered_map<const Node*, std::shared_ptr<Node>> &node_mapping,
+std::shared_ptr<Node> RoutedGraph::get_node(std::unordered_map<const Node *, std::shared_ptr<Node>> &node_mapping,
                                             const Node *node) {
     if (node_mapping.find(node) == node_mapping.end()) {
         auto n = node->clone();
@@ -385,7 +385,7 @@ std::shared_ptr<Node> RoutedGraph::get_node(std::unordered_map<const Node*, std:
     return node_mapping.at(node);
 }
 
-std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() const {
+std::vector<std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() const {
     std::map<uint32_t, std::vector<std::shared_ptr<Node>>> result;
     std::unordered_set<const Node *> visited;
 
@@ -416,7 +416,12 @@ std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() 
         result.emplace(pin_id, segment);
     }
 
-    return result;
+    std::vector<std::vector<std::shared_ptr<Node>>> segments;
+    segments.reserve(result.size());
+    for (auto const &iter: result) {
+        segments.emplace_back(iter.second);
+    }
+    return segments;
 }
 
 
@@ -456,7 +461,7 @@ void RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
     }
 
     src_node->remove_edge(next);
-    std::unordered_map<const Node*, std::shared_ptr<Node>> node_mapping;
+    std::unordered_map<const Node *, std::shared_ptr<Node>> node_mapping;
     auto reg_net = get_node(node_mapping, reg.get());
     src_node->add_edge(reg_net);
     reg_net->add_edge(next);

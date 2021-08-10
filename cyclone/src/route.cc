@@ -445,10 +445,12 @@ double Router::get_presence_cost(const std::shared_ptr<Node> &node,
         return (start_connection.size() - 1);
 }
 
-RoutedGraph Router::convert_route_to_graph(int net_id) {
-    if (current_routes.find(net_id) == current_routes.end()) {
-        throw std::runtime_error("Invalid net id " + std::to_string(net_id));
+
+std::unordered_map<int, RoutedGraph> Router::get_routed_graph() const {
+    std::unordered_map<int, RoutedGraph> result;
+    for (auto const &[net_id, segments]: current_routes) {
+        result.emplace(net_id, RoutedGraph(segments));
     }
-    auto const &segments = current_routes.at(net_id);
-    return RoutedGraph(segments);
+
+    return result;
 }

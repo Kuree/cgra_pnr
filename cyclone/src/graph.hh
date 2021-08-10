@@ -299,7 +299,7 @@ public:
     explicit RoutedGraph(const std::map<uint32_t,
                          std::vector<std::shared_ptr<Node>>>& route);
 
-    std::map<uint32_t, std::vector<std::shared_ptr<Node>>> get_route() const;
+    std::vector<std::vector<std::shared_ptr<Node>>> get_route() const;
     std::set<int> insert_pipeline_reg(int pin_id);
 
 private:
