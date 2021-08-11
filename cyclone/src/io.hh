@@ -12,7 +12,7 @@ std::pair<std::map<std::string, std::vector<std::pair<std::string,
           std::map<std::string, uint32_t>>
 load_netlist(const std::string &filename);
 
-std::map<std::string, std::pair<uint32_t, uint32_t>>
+std::map<std::string, std::pair<int, int>>
 load_placement(const std::string &filename);
 
 void dump_routing_graph(RoutingGraph &graph, const std::string &filename);

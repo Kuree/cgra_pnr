@@ -18,7 +18,8 @@ endif()
 
 add_library(cyclone src/graph.hh src/graph.cc src/route.hh
                     src/route.cc src/net.cc src/net.hh src/util.cc src/util.hh
-                    src/global.cc src/global.hh src/io.cc src/io.hh src/timing.cc src/timing.hh)
+                    src/global.cc src/global.hh src/io.cc src/io.hh src/timing.cc src/timing.hh
+                    src/thunder_io.cc src/layout.cc)
 
 add_subdirectory(python/pybind11)
 add_subdirectory(python)

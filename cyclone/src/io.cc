@@ -147,39 +147,6 @@ load_netlist(const std::string &filename) {
     return {netlist, track_mode};
 }
 
-
-std::map<std::string, std::pair<uint32_t, uint32_t>>
-load_placement(const std::string &filename) {
-    if (!::exists(filename))
-        throw ::runtime_error(filename + " does not exist");
-    ::ifstream in;
-    in.open(filename);
-
-    ::string line;
-    uint32_t line_num = 0;
-    std::map<std::string, std::pair<uint32_t, uint32_t>> placement;
-
-    while(std::getline(in, line)) {
-        if (line_num < 2) {
-            line_num++;
-            continue;
-        }
-        trim(line);
-
-        auto tokens = get_tokens(line);
-        if (tokens.size() != 4)
-            throw ::runtime_error("unable to process line " + line);
-        auto x = static_cast<uint32_t>(std::stoi(tokens[1]));
-        auto y = static_cast<uint32_t>(std::stoi(tokens[2]));
-        auto blk_id = tokens[3].substr(1, ::string::npos);
-
-        placement.insert({blk_id, {x, y}});
-        line_num++;
-    }
-
-    return placement;
-}
-
 // used to print identifiers for edges
 ::string node_to_string(const ::string &pad,
                         const std::shared_ptr<Node> &node) {

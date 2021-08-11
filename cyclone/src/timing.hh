@@ -4,15 +4,19 @@
 #include "net.hh"
 #include "route.hh"
 #include "graph.hh"
+#include "layout.hh"
 
 #include <unordered_map>
+
+struct TimingNode;
 
 enum class TimingCost {
     CLB_OP,
     MEM,
     CLB_SB,
     MEM_SB,
-    RMUX
+    RMUX,
+    REG
 };
 
 
@@ -21,21 +25,30 @@ std::unordered_map<TimingCost, uint64_t> get_default_timing_info() {
             {TimingCost::MEM,    0},
             {TimingCost::CLB_SB, 200},
             {TimingCost::MEM_SB, 300},
-            {TimingCost::RMUX,   10}};
+            {TimingCost::RMUX,   10},
+            {TimingCost::REG,    0}};
 }
 
 
 class TimingAnalysis {
 public:
-    explicit TimingAnalysis(const Router &router): router_(router) {}
+    explicit TimingAnalysis(const Router &router) : router_(router) {}
+
     void set_timing_cost(const std::unordered_map<TimingCost, uint64_t> &timing_cost) { timing_cost_ = timing_cost; }
 
     void retime();
+    void set_layout(const std::string &path);
+    void set_minimum_frequency(uint64_t f) { min_frequency_ = f; }
 
 private:
     const Router &router_;
+    Layout layout_;
+    uint64_t min_frequency_ = 200;
 
     std::unordered_map<TimingCost, uint64_t> timing_cost_;
+
+    uint64_t get_delay(const Node *node);
+    uint64_t maximum_delay() const;
 };
 
 
