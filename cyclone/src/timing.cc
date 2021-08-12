@@ -58,13 +58,12 @@ public:
 
     std::vector<int> get_sink_ids(const TimingNode *node) const {
         std::vector<int> result;
-        for (auto const *n: node->next) {
-            for (auto const &net: netlist_) {
-                if (net[0].name == node->name) {
-                    result.emplace_back(net.id);
-                }
+        for (auto const &net: netlist_) {
+            if (net[0].name == node->name) {
+                result.emplace_back(net.id);
             }
         }
+
 
         return result;
     }
@@ -347,6 +346,8 @@ uint64_t TimingAnalysis::get_delay(const Node *node) {
         case NodeType::Generic: {
             return timing_cost_.at(TimingCost::RMUX);
         }
+        default:
+            throw std::runtime_error("Unable to identify node to compute delay");
     }
 }
 

@@ -39,7 +39,7 @@ bool process_args(int argc, char *argv[], ::vector<::string> &args) {
 
 void
 adjust_node_cost_power_domain(RoutingGraph *graph,
-                              const std::map<std::string, std::pair<uint32_t, uint32_t>> &placement_result) {
+                              const std::map<std::string, std::pair<int, int>> &placement_result) {
     ::set<std::pair<uint32_t, uint32_t>> locations;
     for (auto const &iter: placement_result) {
         locations.emplace(iter.second);
@@ -52,7 +52,7 @@ adjust_node_cost_power_domain(RoutingGraph *graph,
             auto switchbox = tile.switchbox;
             for (uint32_t i = 0; i < 4; i++) {
                 auto sbs = switchbox.get_sbs_by_side(SwitchBoxSide(i));
-                for (auto sb: sbs) {
+                for (const auto& sb: sbs) {
                     sb->delay = power_domain_cost;
                 }
             }
