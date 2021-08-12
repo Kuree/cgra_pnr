@@ -4,6 +4,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_set>
+#include <queue>
 
 using std::make_pair;
 using std::make_shared;
@@ -425,7 +426,7 @@ std::vector<std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() const {
 }
 
 
-void RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
+std::set<int> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
     // we cannot insert pass a branch
     while (true) {
         if (src_node->size() != 1) {
@@ -465,6 +466,28 @@ void RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
     auto reg_net = get_node(node_mapping, reg.get());
     src_node->add_edge(reg_net);
     reg_net->add_edge(next);
+
+    // figure out the affected pins
+    std::set<int> pins;
+    std::queue<const Node *> nodes;
+    nodes.emplace(next.get());
+    while (!nodes.empty()) {
+        auto const *n = nodes.front();
+        nodes.pop();
+        for (auto const &nn: *n) {
+            auto const &node_ptr = nn.lock();
+            if (node_ptr->type == NodeType::Port) {
+                // need to figure out which pins gets affected
+                for (auto const &[pin_id, pin_node]: pins_) {
+                    if (pin_node == node_ptr) {
+                        pins.emplace(pin_id);
+                    }
+                }
+            }
+        }
+    }
+
+    return pins;
 }
 
 
@@ -495,7 +518,10 @@ std::set<int> RoutedGraph::insert_pipeline_reg(int pin_id) {
     }
     // if that switch box has two outputs already, we insert at the very beginning.
     if (sb->size() > 1) {
-        insert_reg_output(src_node_);
+        auto pins = insert_reg_output(src_node_);
+        if (pins.size() != full_nodes.size()) {
+            throw std::runtime_error("Unable to insert registers to all pins from source");
+        }
         return full_nodes;
     }
     // need to make sure the source is a rmux node
@@ -507,11 +533,17 @@ std::set<int> RoutedGraph::insert_pipeline_reg(int pin_id) {
     auto pre_node = rmux->get_conn_in().front().lock();
     if (pre_node->type == NodeType::Register) {
         // we already register it. try to route it at the output
-        insert_reg_output(src_node_);
+        auto pins = insert_reg_output(src_node_);
+        if (pins.size() != full_nodes.size()) {
+            throw std::runtime_error("Unable to insert registers to all pins from source");
+        }
         return full_nodes;
     }
 
-    insert_reg_output(pre_node);
+    auto pins = insert_reg_output(pre_node);
+    if (pins.size() != full_nodes.size()) {
+        throw std::runtime_error("Unable to insert a single register to the targeted pin");
+    }
 
     return pin_nodes;
 }

@@ -300,7 +300,8 @@ public:
                          std::vector<std::shared_ptr<Node>>>& route);
 
     std::vector<std::vector<std::shared_ptr<Node>>> get_route() const;
-    std::set<int> insert_pipeline_reg(int pin_id);
+    [[nodiscard]] std::set<int> insert_pipeline_reg(int pin_id);
+    [[nodiscard]] std::set<int> insert_reg_output(std::shared_ptr<Node> src_node);
     std::shared_ptr<Node> src_node() const { return src_node_; }
 
 private:
@@ -311,7 +312,6 @@ private:
 
     std::shared_ptr<Node> get_node(std::unordered_map<const Node*, std::shared_ptr<Node>> &node_mapping,
                                    const Node * node);
-    void insert_reg_output(std::shared_ptr<Node> src_node);
 };
 
 #endif //CYCLONE_GRAPH_H

@@ -36,7 +36,7 @@ public:
 
     void set_timing_cost(const std::unordered_map<TimingCost, uint64_t> &timing_cost) { timing_cost_ = timing_cost; }
 
-    void retime();
+    uint64_t retime();
     void set_layout(const std::string &path);
     void set_minimum_frequency(uint64_t f) { min_frequency_ = f; }
 

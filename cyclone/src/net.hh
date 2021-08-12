@@ -29,8 +29,8 @@ public:
                                        std::pair<std::string,
                                                  std::string>>> net);
 
-    std::vector<Pin>::iterator begin() { return pins_.begin(); }
-    std::vector<Pin>::iterator end() { return pins_.end(); }
+    [[nodiscard]] std::vector<Pin>::const_iterator begin() const { return pins_.begin(); }
+    [[nodiscard]] std::vector<Pin>::const_iterator end() const { return pins_.end(); }
 
     void add_pin(const Pin &pin);
     inline uint64_t size() const { return pins_.size(); }

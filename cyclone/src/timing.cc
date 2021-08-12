@@ -129,7 +129,17 @@ get_timing_node_mapping(const std::vector<const TimingNode *> &nodes) {
 }
 
 
-void TimingAnalysis::retime() {
+uint64_t get_max_wave_number(const std::unordered_map<const Pin *, uint64_t> &pin_wave) {
+    uint64_t result = 0;
+    for (auto const &iter: pin_wave) {
+        if (iter.second > result)
+            result = iter.second;
+    }
+
+    return result;
+}
+
+uint64_t TimingAnalysis::retime() {
     auto const &netlist = router_.get_netlist();
     auto const routed_graphs = router_.get_routed_graph();
 
@@ -139,10 +149,16 @@ void TimingAnalysis::retime() {
     std::unordered_map<const Pin *, uint64_t> pin_delay_;
     std::unordered_map<const TimingNode *, uint64_t> node_delay_;
     std::unordered_map<const Pin *, uint64_t> pin_wave_;
-    std::unordered_map<const TimingNode *, uint64_t> node_wave_;
+    std::unordered_map<const Node *, const Pin *> node_to_pin;
 
     for (auto const &[id, pin]: io_pins) {
         pin_wave_.emplace(pin, 0);
+    }
+
+    for (auto const &net: netlist) {
+        for (auto const &pin: net) {
+            node_to_pin.emplace(pin.node.get(), &pin);
+        }
     }
 
     const TimingGraph timing_graph(netlist);
@@ -159,11 +175,11 @@ void TimingAnalysis::retime() {
         auto sink_net_ids = timing_graph.get_sink_ids(timing_node);
         for (auto const net_id: sink_net_ids) {
             auto const &net = netlist[net_id];
-            auto const &routed_graph = routed_graphs.at(net.id);
+            auto routed_graph = routed_graphs.at(net.id);
 
             // all its source pins have to be available
             auto const &src_pins = timing_node->sink_pins;
-            uint64_t max_delay = 0;
+            uint64_t max_delay = start_delay;
             std::unordered_set<uint64_t> pin_waves;
             for (auto const *src_pin: src_pins) {
                 if (pin_wave_.find(src_pin) == pin_wave_.end()) {
@@ -178,27 +194,59 @@ void TimingAnalysis::retime() {
                 }
             }
             // we assume at this point the pin data waves should be matched
-            if (pin_wave_.size() != 1) {
+            if (pin_waves.size() != 1) {
+                // if the pin waves doesn't match, we have to insert extra ones to those that lack of it
+                // TODO. Add code to match data wave for source operands
                 throw std::runtime_error("Node pins data wave does not match: " + timing_node->name);
             }
 
             // now we need to compute the delay for each node
             std::unordered_map<const Node *, uint64_t> node_delay = {{net[0].node.get(), max_delay}};
             auto segments = routed_graph.get_route();
-            for (auto const &segment: segments) {
-                for (uint64_t i = 1; i < segment.size(); i++) {
-                    auto const &current_node = segment[i];
-                    auto const &pre_node = segment[i - 1];
-                    if (node_delay.find(pre_node.get()) == node_delay.end()) {
-                        throw std::runtime_error("Unable to find delay for node " + pre_node->name);
-                    }
-                    auto delay = node_delay.at(pre_node.get());
-                    delay += get_delay(current_node.get());
+            bool updated;
+            do {
+                updated = false;
+                for (auto const &segment: segments) {
+                    for (uint64_t i = 1; i < segment.size(); i++) {
+                        auto const &current_node = segment[i];
+                        auto const &pre_node = segment[i - 1];
+                        if (node_delay.find(pre_node.get()) == node_delay.end()) {
+                            throw std::runtime_error("Unable to find delay for node " + pre_node->name);
+                        }
+                        auto delay = node_delay.at(pre_node.get());
+                        delay += get_delay(current_node.get());
 
-                    // if the delay is more than we can handle, we need to insert the pipeline registers
-                    if (delay > allowed_delay) {
-                        // need to pipeline register it
-                        
+                        // if the delay is more than we can handle, we need to insert the pipeline registers
+                        if (delay > allowed_delay) {
+                            // need to pipeline register it
+                            auto pins = routed_graph.insert_reg_output(current_node);
+                            // those are pins affected
+                            updated = true;
+                            if (pins.empty()) {
+                                throw std::runtime_error("Failed to insert pipeline register at " + current_node->name);
+                            }
+                            // need to update the wave number
+                            auto const &pin_node = segment.back();
+                            pin_wave_[node_to_pin.at(pin_node.get())]++;
+                            // reset the node delay
+                            node_delay = {{net[0].node.get(), max_delay}};
+                            break;
+                        }
+                    }
+                    // redo all the work
+                    if (updated) break;
+                }
+            } while (updated);
+            // update the delay
+            for (auto const *next_timing_node: timing_node->next) {
+                auto const &source_pins = next_timing_node->src_pins;
+                for (auto const *src_pin : source_pins) {
+                    auto const *pin_node = src_pin->node.get();
+                    if (node_delay.find(pin_node) != node_delay.end()) {
+                        auto d = node_delay.at(pin_node);
+                        if (node_delay_[next_timing_node] < d) {
+                            node_delay_[next_timing_node] = d;
+                        }
                     }
                 }
             }
@@ -208,6 +256,9 @@ void TimingAnalysis::retime() {
             final_result.emplace(net.name, segments);
         }
     }
+
+    auto r = get_max_wave_number(pin_wave_);
+    return r;
 }
 
 void TimingAnalysis::set_layout(const std::string &path) {
