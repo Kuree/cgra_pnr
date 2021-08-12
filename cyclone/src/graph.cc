@@ -426,7 +426,7 @@ std::vector<std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() const {
 }
 
 
-std::set<int> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
+std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
     // we cannot insert pass a branch
     while (true) {
         if (src_node->size() != 1) {
@@ -468,7 +468,7 @@ std::set<int> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
     reg_net->add_edge(next);
 
     // figure out the affected pins
-    std::set<int> pins;
+    std::set<uint32_t> pins;
     std::queue<const Node *> nodes;
     nodes.emplace(next.get());
     while (!nodes.empty()) {
@@ -491,14 +491,14 @@ std::set<int> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
 }
 
 
-std::set<int> RoutedGraph::insert_pipeline_reg(int pin_id) {
+std::set<uint32_t> RoutedGraph::insert_pipeline_reg(uint32_t pin_id) {
     if (pins_.find(pin_id) == pins_.end()) {
         throw std::runtime_error("Unable to find pin id " + std::to_string(pin_id));
     }
 
     // itself must be affected
-    std::set<int> pin_nodes = {pin_id};
-    std::set<int> full_nodes;
+    std::set<uint32_t> pin_nodes = {pin_id};
+    std::set<uint32_t> full_nodes;
     for (auto const &iter: pins_) full_nodes.emplace(iter.first);
 
     // figure out if we have any branch in the segments

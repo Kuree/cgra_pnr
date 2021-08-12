@@ -300,14 +300,14 @@ public:
                          std::vector<std::shared_ptr<Node>>>& route);
 
     std::vector<std::vector<std::shared_ptr<Node>>> get_route() const;
-    [[nodiscard]] std::set<int> insert_pipeline_reg(int pin_id);
-    [[nodiscard]] std::set<int> insert_reg_output(std::shared_ptr<Node> src_node);
+    [[nodiscard]] std::set<uint32_t> insert_pipeline_reg(uint32_t pin_id);
+    [[nodiscard]] std::set<uint32_t> insert_reg_output(std::shared_ptr<Node> src_node);
     std::shared_ptr<Node> src_node() const { return src_node_; }
 
 private:
     // our node to the actual routing graph node
     std::unordered_map<std::shared_ptr<Node>, const Node *> node_map_;
-    std::map<int, std::shared_ptr<Node>> pins_;
+    std::map<uint32_t, std::shared_ptr<Node>> pins_;
     std::shared_ptr<Node> src_node_;
 
     std::shared_ptr<Node> get_node(std::unordered_map<const Node*, std::shared_ptr<Node>> &node_mapping,

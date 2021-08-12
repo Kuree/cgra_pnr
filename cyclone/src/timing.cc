@@ -139,6 +139,48 @@ uint64_t get_max_wave_number(const std::unordered_map<const Pin *, uint64_t> &pi
     return result;
 }
 
+void wave_matching(RoutedGraph &routed_graph, const std::vector<const Pin *> &src_pins,
+                   std::unordered_map<const Pin *, uint64_t> &pin_wave) {
+    // gather the pin wave information
+    uint64_t max_wave = 0;
+    std::unordered_map<const Pin *, uint64_t> waves;
+    std::unordered_map<uint32_t, const Pin *> pin_map;
+    for (auto const *pin: src_pins) {
+        auto w = pin_wave.at(pin);
+        pin_map.emplace(pin->id, pin);
+        waves.emplace(pin, w);
+        if (w > max_wave) {
+            max_wave = w;
+        }
+    }
+
+    bool match;
+    do {
+        match = false;
+        for (auto *pin: src_pins) {
+            auto w = pin_wave.at(pin);
+            if (w < max_wave) {
+                // need to pipeline this pin
+                auto pins = routed_graph.insert_pipeline_reg(pin->id);
+                for (auto pin_id: pins) {
+                    auto const *p = pin_map.at(pin_id);
+                    pin_wave[p]++;
+                    waves[p] = pin_wave[p];
+                }
+                break;
+            }
+        }
+        match = true;
+        for (auto const &iter: waves) {
+            if (iter.second < max_wave) {
+                match = false;
+                break;
+            }
+        }
+
+    } while (!match);
+}
+
 uint64_t TimingAnalysis::retime() {
     auto const &netlist = router_.get_netlist();
     auto const routed_graphs = router_.get_routed_graph();
@@ -196,8 +238,7 @@ uint64_t TimingAnalysis::retime() {
             // we assume at this point the pin data waves should be matched
             if (pin_waves.size() != 1) {
                 // if the pin waves doesn't match, we have to insert extra ones to those that lack of it
-                // TODO. Add code to match data wave for source operands
-                throw std::runtime_error("Node pins data wave does not match: " + timing_node->name);
+                wave_matching(routed_graph, src_pins, pin_wave_);
             }
 
             // now we need to compute the delay for each node
