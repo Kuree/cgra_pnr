@@ -20,7 +20,7 @@ enum class TimingCost {
 };
 
 
-std::unordered_map<TimingCost, uint64_t> get_default_timing_info() {
+inline std::unordered_map<TimingCost, uint64_t> get_default_timing_info() {
     return {{TimingCost::CLB_OP, 1000},
             {TimingCost::MEM,    0},
             {TimingCost::CLB_SB, 200},
@@ -32,7 +32,7 @@ std::unordered_map<TimingCost, uint64_t> get_default_timing_info() {
 
 class TimingAnalysis {
 public:
-    explicit TimingAnalysis(const Router &router) : router_(router) {}
+    explicit TimingAnalysis(Router &router) : router_(router) {}
 
     void set_timing_cost(const std::unordered_map<TimingCost, uint64_t> &timing_cost) { timing_cost_ = timing_cost; }
 
@@ -41,7 +41,7 @@ public:
     void set_minimum_frequency(uint64_t f) { min_frequency_ = f; }
 
 private:
-    const Router &router_;
+    Router &router_;
     Layout layout_;
     uint64_t min_frequency_ = 200;
 

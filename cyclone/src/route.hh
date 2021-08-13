@@ -40,6 +40,10 @@ public:
     // get final routed graph
     std::unordered_map<int, RoutedGraph> get_routed_graph() const;
 
+    void set_current_routes(const std::map<int,
+            std::map<uint32_t,
+                    std::vector<std::shared_ptr<Node>>>> &routes) { current_routes = routes; }
+
 
 protected:
     RoutingGraph graph_;

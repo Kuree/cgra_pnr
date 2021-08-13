@@ -206,7 +206,7 @@ uint64_t TimingAnalysis::retime() {
 
     auto nodes = timing_graph.topological_sort();
     auto timing_node_mapping = get_timing_node_mapping(nodes);
-    std::map<std::string, std::vector<std::vector<std::shared_ptr<Node>>>> final_result;
+    std::map<int, std::map<uint32_t, std::vector<std::shared_ptr<Node>>>> final_result;
 
     // start STA on each node
     for (auto const *timing_node: nodes) {
@@ -246,7 +246,7 @@ uint64_t TimingAnalysis::retime() {
             bool updated;
             do {
                 updated = false;
-                for (auto const &segment: segments) {
+                for (auto const &[pin_id, segment]: segments) {
                     for (uint64_t i = 1; i < segment.size(); i++) {
                         auto const &current_node = segment[i];
                         auto const &pre_node = segment[i - 1];
@@ -293,10 +293,11 @@ uint64_t TimingAnalysis::retime() {
 
             // get the updated route
             segments = routed_graph.get_route();
-            final_result.emplace(net.name, segments);
+            final_result.emplace(net.id, segments);
         }
     }
 
+    router_.set_current_routes(final_result);
     auto r = get_max_wave_number(pin_wave_);
     return r;
 }

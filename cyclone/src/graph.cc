@@ -386,7 +386,7 @@ std::shared_ptr<Node> RoutedGraph::get_node(std::unordered_map<const Node *, std
     return node_mapping.at(node);
 }
 
-std::vector<std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() const {
+std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() const {
     std::map<uint32_t, std::vector<std::shared_ptr<Node>>> result;
     std::unordered_set<const Node *> visited;
 
@@ -417,12 +417,7 @@ std::vector<std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() const {
         result.emplace(pin_id, segment);
     }
 
-    std::vector<std::vector<std::shared_ptr<Node>>> segments;
-    segments.reserve(result.size());
-    for (auto const &iter: result) {
-        segments.emplace_back(iter.second);
-    }
-    return segments;
+    return result;
 }
 
 

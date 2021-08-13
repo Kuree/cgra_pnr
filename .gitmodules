@@ -7,3 +7,6 @@
 [submodule "thunder/lib/leidenalg"]
 	path = thunder/lib/leidenalg
 	url = https://github.com/kuree/leidenalg
+[submodule "cyclone/extern/argparse"]
+	path = cyclone/extern/argparse
+	url = https://github.com/p-ranav/argparse

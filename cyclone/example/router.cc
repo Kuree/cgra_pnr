@@ -1,9 +1,11 @@
 #include "../src/global.hh"
-#include "../src/graph.hh"
 #include "../src/io.hh"
+#include "../src/timing.hh"
+#include "../src/thunder_io.hh"
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include "argparse/argparse.hpp"
 
 using namespace std;
 
@@ -37,6 +39,73 @@ bool process_args(int argc, char *argv[], ::vector<::string> &args) {
     return pd_aware;
 }
 
+void setup_argparse(argparse::ArgumentParser &parser) {
+    parser.add_argument("--pd").help("If set, will use PD-oriented routing strategy").default_value(
+            false).implicit_value(true);
+    parser.add_argument("-p", "--packed").help("Packed netlist file").required();
+    parser.add_argument("-P", "--placement").help("Placement file").required();
+    parser.add_argument("-o", "-r", "--route").help("Routing result").required();
+    parser.add_argument("-g").help("Routing graph information").required().append();
+    parser.add_argument("-l", "--layout").help("Chip layout").default_value("");
+    parser.add_argument("-t", "--retime").help(
+            "Set timing file. Default is none, which turns off re-timing. Set to default to use the default timing information").default_value(
+            "none");
+}
+
+struct RouterInput {
+    bool pd = false;
+    std::string packed_filename;
+    std::string placement_filename;
+    std::string output_file;
+    std::vector<std::pair<uint32_t, std::string>> graph_info;
+    std::string timing_file;
+    std::string chip_layout;
+};
+
+std::optional<RouterInput> parse_args(int argc, char *argv[]) {
+    argparse::ArgumentParser parser("CGRA Router");
+    setup_argparse(parser);
+
+    try {
+        parser.parse_args(argc, argv);
+    }
+    catch (const std::runtime_error &err) {
+        std::cerr << err.what() << std::endl;
+        std::cerr << parser;
+        return std::nullopt;
+    }
+    // fill out information
+    RouterInput result;
+    result.pd = parser["--pd"] == true;
+    result.packed_filename = parser.get<std::string>("-p");
+    result.placement_filename = parser.get<std::string>("-P");
+    result.output_file = parser.get<std::string>("-o");
+    auto values = parser.get<std::vector<std::string>>("-g");
+    if (values.size() % 2 != 0) {
+        std::cerr << "Incorrect number of graph args" << std::endl;
+        std::cerr << parser;
+        return std::nullopt;
+    }
+    for (auto i = 0u; i < values.size(); i += 2) {
+        auto bit_width = std::stoul(values[i * 2]);
+        auto path = values[i * 2 + 1];
+        result.graph_info.emplace_back(std::make_pair(bit_width, path));
+    }
+
+    auto timing_file = parser.get<std::string>("-t");
+    if (timing_file != "none") {
+        auto layout = parser.get<std::string>("-l");
+        if (layout.empty()) {
+            std::cerr << "When re-timing is specified, layout file is required" << std::endl;
+            std::cerr << parser << std::endl;
+            return std::nullopt;
+        }
+        result.chip_layout = layout;
+    }
+
+    return result;
+}
+
 void
 adjust_node_cost_power_domain(RoutingGraph *graph,
                               const std::map<std::string, std::pair<int, int>> &placement_result) {
@@ -52,7 +121,7 @@ adjust_node_cost_power_domain(RoutingGraph *graph,
             auto switchbox = tile.switchbox;
             for (uint32_t i = 0; i < 4; i++) {
                 auto sbs = switchbox.get_sbs_by_side(SwitchBoxSide(i));
-                for (const auto& sb: sbs) {
+                for (const auto &sb: sbs) {
                     sb->delay = power_domain_cost;
                 }
             }
@@ -60,22 +129,35 @@ adjust_node_cost_power_domain(RoutingGraph *graph,
     }
 }
 
+void retime_router(Router &router, const RouterInput &args) {
+    const auto &timing_file = args.timing_file;
+    if (timing_file == "none") {
+        return;
+    } else if (timing_file == "default") {
+        auto const &layout_file = args.chip_layout;
+        auto layout = load_layout(layout_file);
+        TimingAnalysis timing(router);
+        timing.set_timing_cost(get_default_timing_info());
+        timing.retime();
+    } else {
+        throw std::runtime_error("Timing file not implemented");
+    }
+}
+
 int main(int argc, char *argv[]) {
-    if (argc < 6) {
-        print_help(argv[0]);
+    auto args_opt = parse_args(argc, argv);
+    if (!args_opt) {
         return EXIT_FAILURE;
     }
-    ::vector<::string> args;
-    bool power_domain = process_args(argc, argv, args);
+    auto const &args = *args_opt;
 
-    string packed_filename = args[1];
-    string placement_filename = args[2];
-    // reassign the size
-    argc = args.size();
+    bool power_domain = args.pd;
+    const auto &packed_filename = args.packed_filename;
+    auto const &placement_filename = args.placement_filename;
 
     auto[netlist, track_mode] = load_netlist(packed_filename);
     auto placement = load_placement(placement_filename);
-    auto output_file = args[argc - 1];
+    auto output_file = args.output_file;
 
     // delete the old file if exists
     if (exists(output_file)) {
@@ -85,9 +167,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    for (int arg_index = 3; arg_index < argc - 1; arg_index += 2) {
-        auto bit_width = static_cast<uint32_t>(stoi(args[arg_index]));
-        string graph_filename = args[arg_index + 1];
+    for (auto const &[bit_width, graph_filename]: args.graph_info) {
         cout << "using bit_width " << bit_width << endl;
         auto graph = load_routing_graph(graph_filename);
 
@@ -112,6 +192,8 @@ int main(int argc, char *argv[]) {
         }
 
         r.route();
+
+        retime_router(r, args);
 
         dump_routing_result(r, output_file);
     }
