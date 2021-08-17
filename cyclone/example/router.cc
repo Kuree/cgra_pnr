@@ -1,7 +1,6 @@
 #include "../src/global.hh"
 #include "../src/io.hh"
 #include "../src/timing.hh"
-#include "../src/thunder_io.hh"
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -14,29 +13,6 @@ constexpr double power_domain_cost = 5;
 inline bool exists(const std::string &filename) {
     std::ifstream in(filename);
     return in.good();
-}
-
-void print_help(const string &program_name) {
-    cerr << "Usage: " << endl;
-    cerr << "    " << program_name << " [--pd] <packed_file>"
-         << " <placement_file> <bit_width> <routing_graph_file> ... "
-            "<routing_result.route>"
-         << endl;
-}
-
-bool process_args(int argc, char *argv[], ::vector<::string> &args) {
-    bool pd_aware = false;
-    args.reserve(argc - 1);
-    for (int i = 0; i < argc; i++) {
-        ::string value = argv[i];
-        if (value != "--pd") {
-            args.emplace_back(value);
-        } else {
-            pd_aware = true;
-        }
-    }
-
-    return pd_aware;
 }
 
 void setup_argparse(argparse::ArgumentParser &parser) {
@@ -81,15 +57,10 @@ std::optional<RouterInput> parse_args(int argc, char *argv[]) {
     result.placement_filename = parser.get<std::string>("-P");
     result.output_file = parser.get<std::string>("-o");
     auto values = parser.get<std::vector<std::string>>("-g");
-    if (values.size() % 2 != 0) {
-        std::cerr << "Incorrect number of graph args" << std::endl;
-        std::cerr << parser;
-        return std::nullopt;
-    }
-    for (auto i = 0u; i < values.size(); i += 2) {
-        auto bit_width = std::stoul(values[i * 2]);
-        auto path = values[i * 2 + 1];
-        result.graph_info.emplace_back(std::make_pair(bit_width, path));
+    for (auto const &value: values) {
+        auto bit_width_str = value.substr(value.find_first_not_of('.'));
+        auto bit_width = std::stoul(bit_width_str);
+        result.graph_info.emplace_back(std::make_pair(bit_width, value));
     }
 
     auto timing_file = parser.get<std::string>("-t");
@@ -102,6 +73,7 @@ std::optional<RouterInput> parse_args(int argc, char *argv[]) {
         }
         result.chip_layout = layout;
     }
+    result.timing_file = timing_file;
 
     return result;
 }
@@ -135,9 +107,9 @@ void retime_router(Router &router, const RouterInput &args) {
         return;
     } else if (timing_file == "default") {
         auto const &layout_file = args.chip_layout;
-        auto layout = load_layout(layout_file);
         TimingAnalysis timing(router);
         timing.set_timing_cost(get_default_timing_info());
+        timing.set_layout(layout_file);
         timing.retime();
     } else {
         throw std::runtime_error("Timing file not implemented");
@@ -193,7 +165,8 @@ int main(int argc, char *argv[]) {
 
         r.route();
 
-        retime_router(r, args);
+        if (bit_width == 16)
+            retime_router(r, args);
 
         dump_routing_result(r, output_file);
     }

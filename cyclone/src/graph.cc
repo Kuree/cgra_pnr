@@ -353,18 +353,17 @@ RoutingGraph::get_sb(const uint32_t &x, const uint32_t &y,
 }
 
 RoutedGraph::RoutedGraph(const std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &route) {
-    std::unordered_map<const Node *, std::shared_ptr<Node>> node_mapping;
     for (auto const &[pin_id, segment]: route) {
         for (uint64_t i = 1; i < segment.size(); i++) {
             auto const &pre_node_ = segment[i - 1];
             auto const &current_node_ = segment[i];
-            auto pre_node = get_node(node_mapping, pre_node_.get());
-            auto current_node = get_node(node_mapping, current_node_.get());
+            auto pre_node = get_node(pre_node_);
+            auto current_node = get_node(current_node_);
 
             // add edge
             pre_node->add_edge(current_node);
         }
-        pins_.emplace(pin_id, node_mapping.at(segment.back().get()));
+        pins_.emplace(pin_id, get_node(segment.back()));
     }
     // src node has to be the one that doesn't have src
     for (auto const &iter: node_map_) {
@@ -376,14 +375,13 @@ RoutedGraph::RoutedGraph(const std::map<uint32_t, std::vector<std::shared_ptr<No
     }
 }
 
-std::shared_ptr<Node> RoutedGraph::get_node(std::unordered_map<const Node *, std::shared_ptr<Node>> &node_mapping,
-                                            const Node *node) {
-    if (node_mapping.find(node) == node_mapping.end()) {
+std::shared_ptr<Node> RoutedGraph::get_node(const std::shared_ptr<Node> &node) {
+    if (normal_to_internal_.find(node) == normal_to_internal_.end()) {
         auto n = node->clone();
-        node_mapping.emplace(node, n);
-        node_map_.emplace(n, node);
+        normal_to_internal_.emplace(node, n);
+        internal_to_normal_.emplace(n, node);
     }
-    return node_mapping.at(node);
+    return normal_to_internal_.at(node);
 }
 
 std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() const {
@@ -395,7 +393,7 @@ std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() 
         std::shared_ptr<Node> n = pin_node;
 
         while (n) {
-            segment.emplace_back(n);
+            segment.emplace_back(internal_to_normal_.at(n));
 
             if (visited.find(n.get()) != visited.end()) {
                 // fan-out net
@@ -438,14 +436,10 @@ std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node
         src_node = src_node->begin()->lock();
     }
 
-    if (node_map_.find(src_node) == node_map_.end()) {
-        throw std::runtime_error("Unable to find the routing node");
-    }
-    auto route_sb = node_map_.at(src_node);
-
-    auto next = route_sb->begin()->lock();
+    auto next = src_node->begin()->lock();
     std::shared_ptr<Node> reg;
-    for (auto const &n: *route_sb) {
+    auto const &original_src_node = internal_to_normal_.at(src_node);
+    for (auto const &n: *original_src_node) {
         auto node = n.lock();
         if (node->type == NodeType::Register) {
             reg = node;
@@ -457,8 +451,7 @@ std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node
     }
 
     src_node->remove_edge(next);
-    std::unordered_map<const Node *, std::shared_ptr<Node>> node_mapping;
-    auto reg_net = get_node(node_mapping, reg.get());
+    auto reg_net = get_node(reg);
     src_node->add_edge(reg_net);
     reg_net->add_edge(next);
 
