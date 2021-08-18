@@ -51,6 +51,10 @@ Node::Node(const Node &node) : enable_shared_from_this() {
 
 void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t wire_delay) {
     std::weak_ptr<Node> n = node;
+    auto n_pos = std::find(neighbors_.begin(), neighbors_.end(), node);
+    if (n_pos != neighbors_.end()) {
+        throw std::runtime_error("Adding duplicated edge");
+    }
     neighbors_.emplace_back(n);
     edge_cost_[n] = node->delay + wire_delay;
     node->conn_in_.emplace_back(weak_from_this());
@@ -69,6 +73,8 @@ void Node::remove_edge(const std::shared_ptr<Node> &node) {
     if (n_pos != neighbors_.end()) {
         neighbors_.erase(n_pos);
         edge_cost_.erase(node);
+    } else {
+        throw std::runtime_error("Removing non-existing edge");
     }
     auto c_pos = std::find(node->conn_in_.begin(), node->conn_in_.end(), weak_from_this());
     if (c_pos != node->conn_in_.end()) {
@@ -353,6 +359,7 @@ RoutingGraph::get_sb(const uint32_t &x, const uint32_t &y,
 }
 
 RoutedGraph::RoutedGraph(const std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &route) {
+    std::set<std::pair<const Node *, const Node *>> visited;
     for (auto const &[pin_id, segment]: route) {
         for (uint64_t i = 1; i < segment.size(); i++) {
             auto const &pre_node_ = segment[i - 1];
@@ -361,12 +368,17 @@ RoutedGraph::RoutedGraph(const std::map<uint32_t, std::vector<std::shared_ptr<No
             auto current_node = get_node(current_node_);
 
             // add edge
-            pre_node->add_edge(current_node);
+            auto connection = std::make_pair(pre_node.get(), current_node.get());
+            if (visited.find(connection) == visited.end()) {
+                visited.emplace(connection);
+                pre_node->add_edge(current_node);
+            }
+
         }
         pins_.emplace(pin_id, get_node(segment.back()));
     }
     // src node has to be the one that doesn't have src
-    for (auto const &iter: node_map_) {
+    for (auto const &iter: internal_to_normal_) {
         auto const &n = iter.first;
         if (n->get_conn_in().empty()) {
             src_node_ = n;
@@ -406,6 +418,8 @@ std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() 
                 auto w_n = conn_to[0];
                 n = w_n.lock();
             } else {
+                if (conn_to.size() > 1)
+                    throw std::runtime_error("ERROR");
                 break;
             }
         }
@@ -413,6 +427,28 @@ std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() 
         // need to reverse to follow the proper route
         std::reverse(segment.begin(), segment.end());
         result.emplace(pin_id, segment);
+    }
+
+    return result;
+}
+
+std::vector<uint32_t>
+RoutedGraph::pin_order(const std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &routes) const {
+    std::unordered_set<uint32_t> finished;
+    std::unordered_set<const Node *> visited;
+    visited.emplace(internal_to_normal_.at(src_node_).get());
+    std::vector<uint32_t> result;
+    while (finished.size() != routes.size()) {
+        for (auto const &[pin_id, segment]: routes) {
+            if (finished.find(pin_id) != finished.end()) continue;
+            if (visited.find(segment[0].get()) != visited.end()) {
+                finished.emplace(pin_id);
+                result.emplace_back(pin_id);
+                for (auto const &n: segment) {
+                    visited.emplace(n.get());
+                }
+            }
+        }
     }
 
     return result;
@@ -456,22 +492,29 @@ std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node
     reg_net->add_edge(next);
 
     // figure out the affected pins
+    // assume no loop
     std::set<uint32_t> pins;
     std::queue<const Node *> nodes;
     nodes.emplace(next.get());
+    std::unordered_set<const Node *> visited;
     while (!nodes.empty()) {
         auto const *n = nodes.front();
         nodes.pop();
-        for (auto const &nn: *n) {
-            auto const &node_ptr = nn.lock();
-            if (node_ptr->type == NodeType::Port) {
-                // need to figure out which pins gets affected
-                for (auto const &[pin_id, pin_node]: pins_) {
-                    if (pin_node == node_ptr) {
-                        pins.emplace(pin_id);
-                    }
+        visited.emplace(n);
+        if (n->type == NodeType::Port) {
+            // need to figure out which pins gets affected
+            for (auto const &[pin_id, pin_node]: pins_) {
+                if (pin_node.get() == n) {
+                    pins.emplace(pin_id);
                 }
             }
+        }
+        for (auto const &nn: *n) {
+            auto const &node_ptr = nn.lock();
+            if (visited.find(node_ptr.get()) != visited.end()) {
+                throw std::runtime_error("Loop detected. This is an error");
+            }
+            nodes.emplace(node_ptr.get());
         }
     }
 
@@ -514,7 +557,7 @@ std::set<uint32_t> RoutedGraph::insert_pipeline_reg(uint32_t pin_id) {
     }
     // need to make sure the source is a rmux node
     auto const &rmux = sb->get_conn_in().front().lock();
-    if (!rmux || rmux->type != NodeType::Generic || node_map_.at(rmux)->get_conn_in().size() != 2) {
+    if (!rmux || rmux->type != NodeType::Generic || internal_to_normal_.at(rmux)->get_conn_in().size() != 2) {
         throw std::runtime_error("Unable to find register mux");
     }
 
@@ -529,7 +572,7 @@ std::set<uint32_t> RoutedGraph::insert_pipeline_reg(uint32_t pin_id) {
     }
 
     auto pins = insert_reg_output(pre_node);
-    if (pins.size() != full_nodes.size()) {
+    if (pins.empty()) {
         throw std::runtime_error("Unable to insert a single register to the targeted pin");
     }
 

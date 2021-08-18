@@ -299,13 +299,13 @@ public:
     explicit RoutedGraph(const std::map<uint32_t,
                          std::vector<std::shared_ptr<Node>>>& route);
 
-    std::map<uint32_t, std::vector<std::shared_ptr<Node>>>  get_route() const;
+    std::map<uint32_t, std::vector<std::shared_ptr<Node>>> get_route() const;
+    std::vector<uint32_t> pin_order(const std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &routes) const;
     [[nodiscard]] std::set<uint32_t> insert_pipeline_reg(uint32_t pin_id);
     [[nodiscard]] std::set<uint32_t> insert_reg_output(std::shared_ptr<Node> src_node);
 
 private:
     // our node to the actual routing graph node
-    std::unordered_map<std::shared_ptr<Node>, const Node *> node_map_;
     std::unordered_map<std::shared_ptr<Node>, std::shared_ptr<Node>> normal_to_internal_;
     std::unordered_map<std::shared_ptr<Node>, std::shared_ptr<Node>> internal_to_normal_;
     std::map<uint32_t, std::shared_ptr<Node>> pins_;
