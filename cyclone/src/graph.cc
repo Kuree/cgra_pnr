@@ -515,7 +515,7 @@ std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node
         auto const *n = nodes.front();
         nodes.pop();
         visited.emplace(n);
-        if (n->type == NodeType::Port) {
+        if (n->type == NodeType::Port || n->type == NodeType::Register) {
             // need to figure out which pins gets affected
             for (auto const &[pin_id, pin_node]: pins_) {
                 if (pin_node.get() == n) {

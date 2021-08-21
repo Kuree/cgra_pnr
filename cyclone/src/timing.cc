@@ -277,7 +277,8 @@ uint64_t TimingAnalysis::retime() {
                             throw std::runtime_error("Unable to find delay for node " + pre_node->name);
                         }
                         auto delay = node_delay.at(pre_node.get());
-                        if (current_node->type == NodeType::Register) {
+                        // if the original sink pin is a register, don't count the wave
+                        if (current_node->type == NodeType::Register && i != (segment.size() - 1)) {
                             // reset the delay
                             delay = 0;
                             node_delay[current_node.get()] = 0;
