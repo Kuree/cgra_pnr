@@ -23,6 +23,8 @@ void setup_argparse(argparse::ArgumentParser &parser) {
     parser.add_argument("-o", "-r", "--route").help("Routing result").required();
     parser.add_argument("-g").help("Routing graph information").required().append();
     parser.add_argument("-l", "--layout").help("Chip layout").default_value("");
+    parser.add_argument("-f", "--frequency").help("Minimum frequency in MHz").default_value<uint64_t>(100)
+            .action([](const std::string &value) -> uint64_t { return std::stoull(value); });;
     parser.add_argument("-t", "--retime").help(
             "Set timing file. Default is none, which turns off re-timing. Set to default to use the default timing information").default_value(
             "none");
@@ -36,6 +38,7 @@ struct RouterInput {
     std::vector<std::pair<uint32_t, std::string>> graph_info;
     std::string timing_file;
     std::string chip_layout;
+    uint64_t min_frequency = 200;
 };
 
 std::optional<RouterInput> parse_args(int argc, char *argv[]) {
@@ -74,6 +77,7 @@ std::optional<RouterInput> parse_args(int argc, char *argv[]) {
         result.chip_layout = layout;
     }
     result.timing_file = timing_file;
+    result.min_frequency = parser.get<uint64_t>("-f");
 
     return result;
 }
@@ -108,6 +112,7 @@ void retime_router(Router &router, const RouterInput &args) {
     } else if (timing_file == "default") {
         auto const &layout_file = args.chip_layout;
         TimingAnalysis timing(router);
+        timing.set_minimum_frequency(args.min_frequency);
         timing.set_timing_cost(get_default_timing_info());
         timing.set_layout(layout_file);
         timing.retime();
@@ -165,8 +170,7 @@ int main(int argc, char *argv[]) {
 
         r.route();
 
-        if (bit_width == 16)
-            retime_router(r, args);
+        retime_router(r, args);
 
         dump_routing_result(r, output_file);
     }

@@ -260,8 +260,8 @@ uint64_t TimingAnalysis::retime() {
             }
 
             // now we need to compute the delay for each node
-            auto const *source_code = net[0].node.get();
-            std::unordered_map<const Node *, uint64_t> node_delay = {{source_code, max_delay}};
+            auto const *source_node = net[0].node.get();
+            std::unordered_map<const Node *, uint64_t> node_delay = {{source_node, max_delay}};
             bool updated;
             do {
                 updated = false;
@@ -280,6 +280,7 @@ uint64_t TimingAnalysis::retime() {
                         if (current_node->type == NodeType::Register) {
                             // reset the delay
                             delay = 0;
+                            node_delay[current_node.get()] = 0;
                             num_reg++;
                         } else {
                             delay += get_delay(current_node.get());
@@ -288,7 +289,7 @@ uint64_t TimingAnalysis::retime() {
                         // if the delay is more than we can handle, we need to insert the pipeline registers
                         if (delay > allowed_delay) {
                             // need to pipeline register it
-                            auto pins = routed_graph.insert_reg_output(current_node);
+                            auto pins = routed_graph.insert_reg_output(current_node, true);
                             // those are pins affected
                             updated = true;
                             if (pins.empty()) {
@@ -300,11 +301,11 @@ uint64_t TimingAnalysis::retime() {
                             auto const *pin = node_to_pin.at(pin_node.get());
                             pin_wave_[pin] = src_wave + num_reg;
                             // reset the node delay
-                            node_delay = {{source_code, max_delay}};
+                            node_delay = {{source_node, max_delay}};
                             break;
                         } else {
                             // insert updated timing
-                            node_delay.emplace(current_node.get(), delay);
+                            node_delay[current_node.get()] = delay;
                             // use the same pin wave
                             auto const pin_node = segment.back();
                             auto const *pin = node_to_pin.at(pin_node.get());

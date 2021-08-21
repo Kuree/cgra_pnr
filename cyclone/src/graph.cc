@@ -455,21 +455,35 @@ RoutedGraph::pin_order(const std::map<uint32_t, std::vector<std::shared_ptr<Node
 }
 
 
-std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node) {
+std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node, bool reverse) {
     // we cannot insert pass a branch
+    // mapped from normal to internal
+    if (normal_to_internal_.find(src_node) != normal_to_internal_.end()) {
+        src_node = normal_to_internal_.at(src_node);
+    }
     while (true) {
-        if (src_node->size() != 1) {
-            throw std::runtime_error("Unable to insert pipeline registers");
-        }
-
         if (src_node->type == NodeType::SwitchBox) {
             auto sb = std::reinterpret_pointer_cast<SwitchBoxNode>(src_node);
             if (sb->io == SwitchBoxIO::SB_OUT) {
-                break;
+                // make sure we haven't pipelined this register
+                auto next = sb->begin()->lock();
+                if (next->type != NodeType::Register)
+                    break;
             }
         }
 
-        src_node = src_node->begin()->lock();
+        if (reverse) {
+            if (src_node->get_conn_in().empty()) {
+                throw std::runtime_error("Route completely full. Unable to insert pipeline registers");
+            }
+            src_node = src_node->get_conn_in().begin()->lock();
+        } else {
+            if (src_node->size() == 0) {
+                throw std::runtime_error("Route completely full. Unable to insert pipeline registers");
+            }
+            src_node = src_node->begin()->lock();
+        }
+
     }
 
     auto next = src_node->begin()->lock();
@@ -563,12 +577,9 @@ std::set<uint32_t> RoutedGraph::insert_pipeline_reg(uint32_t pin_id) {
 
     auto pre_node = rmux->get_conn_in().front().lock();
     if (pre_node->type == NodeType::Register) {
-        // we already register it. try to route it at the output
-        auto pins = insert_reg_output(src_node_);
-        if (pins.size() != full_nodes.size()) {
-            throw std::runtime_error("Unable to insert registers to all pins from source");
-        }
-        return full_nodes;
+        // we already register it. try one more step
+        auto pins = insert_reg_output(pre_node, true);
+        return pins;
     }
 
     auto pins = insert_reg_output(pre_node);

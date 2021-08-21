@@ -300,9 +300,12 @@ public:
                          std::vector<std::shared_ptr<Node>>>& route);
 
     std::map<uint32_t, std::vector<std::shared_ptr<Node>>> get_route() const;
+
     std::vector<uint32_t> pin_order(const std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &routes) const;
+
     [[nodiscard]] std::set<uint32_t> insert_pipeline_reg(uint32_t pin_id);
-    [[nodiscard]] std::set<uint32_t> insert_reg_output(std::shared_ptr<Node> src_node);
+
+    [[nodiscard]] std::set<uint32_t> insert_reg_output(std::shared_ptr<Node> src_node, bool reverse = false);
 
 private:
     // our node to the actual routing graph node
