@@ -20,6 +20,8 @@ using std::unordered_map;
 using std::unordered_set;
 
 
+uint64_t Router::net_id_count_ = 0;
+
 Router::Router(const RoutingGraph &g) : graph_(g) {
     // create the look up table for cost analysis
     for (const auto &tile_iter : graph_) {
@@ -53,7 +55,7 @@ Router::Router(const RoutingGraph &g) : graph_(g) {
 void
 Router::add_net(const ::string &name,
                 const ::vector<::pair<::string, ::string>> &net) {
-    int net_id = static_cast<int>(netlist_.size());
+    int net_id = static_cast<int>(net_id_count_++);
     Net n;
     n.id = net_id;
     n.name = name;
@@ -86,7 +88,7 @@ Router::add_net(const ::string &name,
             pin.node = node;
         }
     }
-    netlist_.emplace_back(n);
+    netlist_.emplace(net_id, n);
 }
 
 void Router::add_placement(const uint32_t &x, const uint32_t &y,
@@ -235,7 +237,8 @@ std::shared_ptr<Node> Router::get_port(const uint32_t &x, const uint32_t &y,
 void Router::group_reg_nets() {
     ::map<::string, int> driven_by;
     // first pass to determine where the reg nets originates.
-    for (auto &net : netlist_) {
+    for (auto &iter : netlist_) {
+        auto const &net = iter.second;
         for (uint32_t i = 1; i < net.size(); i++) {
             auto const &pin = net[i];
             if (pin.port == REG and pin.name[0] == 'r') {
@@ -246,7 +249,7 @@ void Router::group_reg_nets() {
     }
 
     // second pass to create a map from the reg src to sink
-    for (auto &net : netlist_) {
+    for (auto const &[net_id, net] : netlist_) {
         if (driven_by.find(net[0].name) != driven_by.end()) {
             // we have found a reg that drives this net
             reg_net_src_.insert({net[0].name, net.id});
@@ -288,7 +291,7 @@ std::vector<uint32_t>
 Router::reorder_reg_nets() {
     ::vector<uint32_t> result;
     ::set<int32_t> working_set;
-    for (uint32_t i = 0; i < netlist_.size(); i++)
+    for (auto const &[i, net]: netlist_)
         working_set.emplace(i);
 
     // we will first sort out the order of reg nets
@@ -355,7 +358,7 @@ void Router::assign_net_segment(const ::vector<::shared_ptr<Node>> &segment,
 }
 
 void Router::assign_history() {
-    for (const auto &net : netlist_) {
+    for (const auto &[net_id, net] : netlist_) {
         auto segments = current_routes[net.id];
         for (auto &seg_it : segments) {
             auto &segment = seg_it.second;
@@ -371,7 +374,7 @@ void Router::assign_history() {
 Router::realize() const {
     ::map<::string, ::vector<::vector<::shared_ptr<Node>>>>
     result;
-    for (const auto &net : netlist_) {
+    for (const auto &[net_id, net] : netlist_) {
         const auto &name = net.name;
         ::vector<::vector<shared_ptr<Node>>> segments;
         auto const &route = current_routes.at(net.id);
@@ -443,6 +446,13 @@ double Router::get_presence_cost(const std::shared_ptr<Node> &node,
         return start_connection.size();
     else
         return (start_connection.size() - 1);
+}
+
+
+bool Router::has_net(int net_id) const {
+    return std::any_of(netlist_.begin(), netlist_.end(), [net_id](const auto &iter) {
+        return iter.second.id == net_id;
+    });
 }
 
 

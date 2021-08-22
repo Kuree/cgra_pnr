@@ -15,9 +15,6 @@ def test_pnr(dirname):
     meta = os.path.join(dirname, "design.info")
     netlist = os.path.join(dirname, "design.packed")
     layout = os.path.join(dirname, "design.layout")
-    graphs = []
-    for i in {1, 16}:
-        graphs += ["-g", "{0}.graph".format(i)]
 
     with tempfile.TemporaryDirectory() as temp:
         placement_file = os.path.join(temp, "design.place")
@@ -26,7 +23,11 @@ def test_pnr(dirname):
         args = ["placer", layout, netlist, placement_file]
         subprocess.check_call(args, cwd=vectors_dir)
         # call router
+        graphs = []
+        for i in {1, 16}:
+            graphs += ["-g", os.path.join(dirname, "{0}.graph".format(i))]
         args = ["router", "-p", netlist, "-P", placement_file] + graphs + ["-o", route_file]
+        print("args", " ".join(args))
         subprocess.check_call(args, cwd=vectors_dir)
 
         assert os.path.isfile(placement_file)

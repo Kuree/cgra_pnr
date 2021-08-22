@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <filesystem>
 #include "argparse/argparse.hpp"
 
 using namespace std;
@@ -26,7 +27,7 @@ void setup_argparse(argparse::ArgumentParser &parser) {
     parser.add_argument("-f", "--frequency").help("Minimum frequency in MHz").default_value<uint64_t>(100)
             .action([](const std::string &value) -> uint64_t { return std::stoull(value); });;
     parser.add_argument("-t", "--retime").help(
-            "Set timing file. Default is none, which turns off re-timing. Set to default to use the default timing information").default_value(
+            "Set timing file. Default is none, which turns off re-timing. Set to default to use the default timing information").default_value<std::string>(
             "none");
 }
 
@@ -61,7 +62,8 @@ std::optional<RouterInput> parse_args(int argc, char *argv[]) {
     result.output_file = parser.get<std::string>("-o");
     auto values = parser.get<std::vector<std::string>>("-g");
     for (auto const &value: values) {
-        auto bit_width_str = value.substr(value.find_first_not_of('.'));
+        std::string name = std::filesystem::path(value).filename();
+        auto bit_width_str = name.substr(name.find_first_not_of('.'));
         auto bit_width = std::stoul(bit_width_str);
         result.graph_info.emplace_back(std::make_pair(bit_width, value));
     }
@@ -105,13 +107,13 @@ adjust_node_cost_power_domain(RoutingGraph *graph,
     }
 }
 
-void retime_router(Router &router, const RouterInput &args) {
+void retime_router(std::map<uint32_t, std::unique_ptr<Router>> &routers, const RouterInput &args) {
     const auto &timing_file = args.timing_file;
     if (timing_file == "none") {
         return;
     } else if (timing_file == "default") {
         auto const &layout_file = args.chip_layout;
-        TimingAnalysis timing(router);
+        TimingAnalysis timing(routers);
         timing.set_minimum_frequency(args.min_frequency);
         timing.set_timing_cost(get_default_timing_info());
         timing.set_layout(layout_file);
@@ -144,6 +146,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    std::map<uint32_t, std::unique_ptr<Router>> routers;
     for (auto const &[bit_width, graph_filename]: args.graph_info) {
         cout << "using bit_width " << bit_width << endl;
         auto graph = load_routing_graph(graph_filename);
@@ -155,24 +158,29 @@ int main(int argc, char *argv[]) {
         }
 
         // set up the router
-        GlobalRouter r(100, graph);
+        auto r = std::make_unique<GlobalRouter>(100, graph);
         for (auto const &it : placement) {
             auto[x, y] = it.second;
-            r.add_placement(x, y, it.first);
+            r->add_placement(x, y, it.first);
         }
 
         for (const auto &iter : netlist) {
             // Note
             // we only route 1bit at this time
             if (track_mode.at(iter.first) == bit_width)
-                r.add_net(iter.first, iter.second);
+                r->add_net(iter.first, iter.second);
         }
 
-        r.route();
+        r->route();
 
-        retime_router(r, args);
-
-        dump_routing_result(r, output_file);
+        routers.emplace(bit_width, std::move(r));
     }
+
+    retime_router(routers, args);
+
+    for (auto const &iter: routers) {
+        dump_routing_result(*iter.second, output_file);
+    }
+
     return EXIT_SUCCESS;
 }

@@ -393,7 +393,7 @@ void dump_routing_result(const Router &r, const std::string &filename) {
 
     auto routes = r.realize();
     const auto &netlist = r.get_netlist();
-    for (const auto &net : netlist) {
+    for (const auto &[id, net] : netlist) {
         const auto &net_id = net.name;
         auto const segments = routes.at(net.name);
         out << "Net ID: " << net_id << " Segment Size: "

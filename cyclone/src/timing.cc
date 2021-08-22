@@ -4,12 +4,12 @@
 
 #include <queue>
 
-using Netlist = std::vector<Net>;
+using Netlist = std::map<int, Net>;
 
-std::vector<std::pair<int, const Pin *>> get_source_pins(const std::vector<Net> &netlist) {
+std::vector<std::pair<int, const Pin *>> get_source_pins(const std::map<int, Net> &netlist) {
     std::vector<std::pair<int, const Pin *>> result;
     // any pin that has I as the name is an IO pin
-    for (auto const &net: netlist) {
+    for (auto const &[net_id, net]: netlist) {
         auto const &p = net[0];
         if (p.name[0] == 'i' || p.name[0] == 'I') {
             result.emplace_back(std::make_pair(net.id, &p));
@@ -29,7 +29,7 @@ struct TimingNode {
 class TimingGraph {
 public:
     explicit TimingGraph(const Netlist &netlist) : netlist_(netlist) {
-        for (auto const &net: netlist) {
+        for (auto const &[net_id, net]: netlist) {
             auto const &src_pin = net[0];
             auto *src_node = get_node(src_pin);
             src_node->sink_pins.emplace_back(&src_pin);
@@ -58,7 +58,7 @@ public:
 
     std::vector<int> get_sink_ids(const TimingNode *node) const {
         std::vector<int> result;
-        for (auto const &net: netlist_) {
+        for (auto const &[net_id, net]: netlist_) {
             if (net[0].name == node->name) {
                 result.emplace_back(net.id);
             }
@@ -102,7 +102,7 @@ private:
 std::unordered_set<const Pin *> get_sink_pins(const Pin &pin, const Netlist &netlist) {
     // brute-force search
     std::unordered_set<const Pin *> result;
-    for (auto const &net: netlist) {
+    for (auto const &[net_id, net]: netlist) {
         auto const &src = net[0];
         if (src.x == pin.x && src.y == pin.y && src.name[0] != 'r') {
             // it's placed on the same tile, but it's not a pipeline register
@@ -183,8 +183,20 @@ uint64_t get_max_wave_number(const std::unordered_map<const Pin *, uint64_t> &pi
 }
 
 uint64_t TimingAnalysis::retime() {
-    auto const &netlist = router_.get_netlist();
-    auto const routed_graphs = router_.get_routed_graph();
+    std::map<int, Net> netlist;
+    std::unordered_map<int, RoutedGraph> routed_graphs;
+    for (auto const &iter: routers_) {
+        auto const &nets = iter.second->get_netlist();
+        for (auto const &entry: nets) {
+            netlist.emplace(entry);
+        }
+    }
+    for (auto const &iter: routers_) {
+        auto const &g = iter.second->get_routed_graph();
+        for (auto const &entry: g) {
+            routed_graphs.emplace(entry);
+        }
+    }
 
     auto io_pins = get_source_pins(netlist);
     auto allowed_delay = maximum_delay();
@@ -199,7 +211,7 @@ uint64_t TimingAnalysis::retime() {
         pin_delay_.emplace(pin, 0);
     }
 
-    for (auto const &net: netlist) {
+    for (auto const &[net_id, net]: netlist) {
         for (auto const &pin: net) {
             node_to_pin.emplace(pin.node.get(), &pin);
         }
@@ -215,7 +227,6 @@ uint64_t TimingAnalysis::retime() {
     for (auto const *timing_node: nodes) {
         // the delay table is already calculated after the input, i.e., we don't consider the src pin
         // delay
-        printf("timing node: %s\n", timing_node->name.c_str());
         uint64_t start_delay = node_delay_[timing_node];
         auto sink_net_ids = timing_graph.get_sink_ids(timing_node);
         for (auto const net_id: sink_net_ids) {
@@ -338,7 +349,18 @@ uint64_t TimingAnalysis::retime() {
         }
     }
 
-    router_.set_current_routes(final_result);
+    // reassemble the result
+    for (auto const &iter: routers_) {
+        std::map<int, std::map<uint32_t, std::vector<std::shared_ptr<Node>>>> router_result;
+        auto &router = *iter.second;
+        for (auto const &[net_id, routes]: final_result) {
+            if (router.has_net(net_id)) {
+                router_result.emplace(net_id, routes);
+            }
+        }
+        router.set_current_routes(router_result);
+    }
+
     auto r = get_max_wave_number(pin_wave_);
     return r;
 }

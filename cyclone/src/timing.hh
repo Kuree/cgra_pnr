@@ -32,7 +32,7 @@ inline std::unordered_map<TimingCost, uint64_t> get_default_timing_info() {
 
 class TimingAnalysis {
 public:
-    explicit TimingAnalysis(Router &router) : router_(router) {}
+    explicit TimingAnalysis(const std::map<uint32_t, std::unique_ptr<Router>> &routers) : routers_(routers) {}
 
     void set_timing_cost(const std::unordered_map<TimingCost, uint64_t> &timing_cost) { timing_cost_ = timing_cost; }
 
@@ -41,7 +41,7 @@ public:
     void set_minimum_frequency(uint64_t f) { min_frequency_ = f; }
 
 private:
-    Router &router_;
+    const std::map<uint32_t, std::unique_ptr<Router>> &routers_;
     Layout layout_;
     uint64_t min_frequency_ = 200;
 

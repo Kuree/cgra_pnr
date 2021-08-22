@@ -35,7 +35,8 @@ public:
     void set_init_pn(double init_pn) { init_pn_ = init_pn; }
     double get_pn_factor() const  { return pn_factor_; }
     void set_pn_factor(double pn_factor) { pn_factor_ = pn_factor; }
-    const std::vector<Net>& get_netlist() const { return netlist_; }
+    const std::map<int, Net>& get_netlist() const { return netlist_; }
+    [[nodiscard]] bool has_net(int net_id) const;
 
     // get final routed graph
     std::unordered_map<int, RoutedGraph> get_routed_graph() const;
@@ -44,10 +45,11 @@ public:
             std::map<uint32_t,
                     std::vector<std::shared_ptr<Node>>>> &routes) { current_routes = routes; }
 
+    virtual ~Router() = default;
 
 protected:
     RoutingGraph graph_;
-    std::vector<Net> netlist_;
+    std::map<int, Net> netlist_;
     std::map<std::string, std::pair<uint32_t, uint32_t>> placement_;
     std::map<int, std::vector<int>> reg_net_order_;
     std::map<std::string, int> reg_net_src_;
@@ -136,6 +138,8 @@ protected:
 
 private:
     std::vector<int> squash_net(int src_id);
+    // global net id to avoid conflict among different routers when sharing netlist
+    static uint64_t net_id_count_;
 };
 
 class UnableRouteException : public std::runtime_error {

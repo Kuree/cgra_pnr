@@ -91,7 +91,7 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
         // also notice that for pins that haven't got assigned, this is
         // fine since nullptr will be entered into the ratio, which really
         // doesn't matter since everything is 1
-        for (auto &net : netlist_) {
+        for (auto &[net_id, net] : netlist_) {
             // FIXME
             // refactor the net to distinguish the source and sinks
             for (uint32_t seg_index = 1; seg_index < net.size(); seg_index++) {
@@ -107,7 +107,7 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
         // traverse the segments to find the actual delay
         double max_delay = 0;
         double min_delay = std::numeric_limits<double>::max();
-        for (auto &net : netlist_) {
+        for (auto &[net_id, net] : netlist_) {
             const auto &src = net[0].node;
             const auto &segments = current_routes[net.id];
             if (src == nullptr)
