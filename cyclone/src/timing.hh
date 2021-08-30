@@ -39,6 +39,7 @@ public:
     uint64_t retime();
     void set_layout(const std::string &path);
     void set_minimum_frequency(uint64_t f) { min_frequency_ = f; }
+    void save_wave_info(const std::string &filename);
 
 private:
     const std::map<uint32_t, std::unique_ptr<Router>> &routers_;
@@ -46,6 +47,7 @@ private:
     uint64_t min_frequency_ = 200;
 
     std::unordered_map<TimingCost, uint64_t> timing_cost_;
+    std::map<std::string, uint64_t> node_waves_;
 
     uint64_t get_delay(const Node *node);
     uint64_t maximum_delay() const;

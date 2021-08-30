@@ -204,6 +204,21 @@ void dump_routing_graph(RoutingGraph &graph,
     }
 }
 
+
+void dump_wave_info(const std::map<std::string, uint64_t> &wave_info, const std::string &path) {
+    // need to sort based on the pin id to get a consistent result
+    std::ofstream out;
+    out.open(path);
+    static const ::string PAD = "  ";
+    out << "BLK_ID" << PAD << "WAVE_NUM" << std::endl;
+
+    for (auto const &[pin, w]: wave_info) {
+        out << pin << PAD << wave_info.at(pin) << std::endl;
+    }
+    out.close();
+}
+
+
 inline uint32_t stou(const std::string &str) {
     return static_cast<uint32_t>(std::stoi(str));
 }

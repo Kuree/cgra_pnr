@@ -25,7 +25,8 @@ void setup_argparse(argparse::ArgumentParser &parser) {
     parser.add_argument("-g").help("Routing graph information").required().append();
     parser.add_argument("-l", "--layout").help("Chip layout").default_value("");
     parser.add_argument("-f", "--frequency").help("Minimum frequency in MHz").default_value<uint64_t>(100)
-            .action([](const std::string &value) -> uint64_t { return std::stoull(value); });;
+            .action([](const std::string &value) -> uint64_t { return std::stoull(value); });
+    parser.add_argument("-w").help("Wave information file after retiming").default_value<std::string>("");
     parser.add_argument("-t", "--retime").help(
             "Set timing file. Default is none, which turns off re-timing. Set to default to use the default timing information").default_value<std::string>(
             "none");
@@ -39,6 +40,7 @@ struct RouterInput {
     std::vector<std::pair<uint32_t, std::string>> graph_info;
     std::string timing_file;
     std::string chip_layout;
+    std::string timing_result_filename;
     uint64_t min_frequency = 200;
 };
 
@@ -80,6 +82,7 @@ std::optional<RouterInput> parse_args(int argc, char *argv[]) {
     }
     result.timing_file = timing_file;
     result.min_frequency = parser.get<uint64_t>("-f");
+    result.timing_result_filename = parser.get<std::string>("-w");
 
     return result;
 }
@@ -118,6 +121,12 @@ void retime_router(std::map<uint32_t, std::unique_ptr<Router>> &routers, const R
         timing.set_timing_cost(get_default_timing_info());
         timing.set_layout(layout_file);
         timing.retime();
+
+        // whether to save the timing result or not
+        auto const &filename = args.timing_result_filename;
+        if (!filename.empty()) {
+            timing.save_wave_info(filename);
+        }
     } else {
         throw std::runtime_error("Timing file not implemented");
     }

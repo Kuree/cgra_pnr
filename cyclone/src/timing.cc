@@ -1,5 +1,6 @@
 #include "timing.hh"
 #include "thunder_io.hh"
+#include "io.hh"
 #include <unordered_set>
 
 #include <queue>
@@ -362,6 +363,11 @@ uint64_t TimingAnalysis::retime() {
     }
 
     auto r = get_max_wave_number(pin_wave_);
+    for (auto const &[pin, w]: pin_wave_) {
+        if (node_waves_.find(pin->name) == node_waves_.end()) {
+            node_waves_.emplace(pin->name, w);
+        }
+    }
     return r;
 }
 
@@ -420,4 +426,8 @@ uint64_t TimingAnalysis::maximum_delay() const {
     // the frequency is in mhz
     auto ns = 1'000'000 / min_frequency_;
     return ns;
+}
+
+void TimingAnalysis::save_wave_info(const std::string &filename) {
+    dump_wave_info(node_waves_, filename);
 }
