@@ -228,6 +228,7 @@ uint64_t TimingAnalysis::retime() {
     for (auto const *timing_node: nodes) {
         // the delay table is already calculated after the input, i.e., we don't consider the src pin
         // delay
+        std::cout << "Timing at " << timing_node->name << std::endl;
         uint64_t start_delay = node_delay_[timing_node];
         auto sink_net_ids = timing_graph.get_sink_ids(timing_node);
         for (auto const net_id: sink_net_ids) {
@@ -381,7 +382,8 @@ uint64_t TimingAnalysis::get_delay(const Node *node) {
             auto clb_type = layout_.get_blk_type(node->x, node->y);
             switch (clb_type) {
                 case 'p':
-                    return timing_cost_.at(TimingCost::CLB_OP);
+                    // we add additional SB cost since we can't insert a reg between an ALU port and SB_OUT directly
+                    return timing_cost_.at(TimingCost::CLB_OP) + timing_cost_.at(TimingCost::CLB_SB);
                 case 'm':
                     // assume memory is registered
                     return timing_cost_.at(TimingCost::MEM);
