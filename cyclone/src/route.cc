@@ -459,7 +459,13 @@ bool Router::has_net(int net_id) const {
 std::unordered_map<int, RoutedGraph> Router::get_routed_graph() const {
     std::unordered_map<int, RoutedGraph> result;
     for (auto const &[net_id, segments]: current_routes) {
-        result.emplace(net_id, RoutedGraph(segments));
+        // need to get in the pin form
+        std::map<const Pin*, std::vector<std::shared_ptr<Node>>> route;
+        auto const &net = netlist_.at(net_id);
+        for (auto const &[index, seg]: segments) {
+            route.emplace(&net[index], seg);
+        }
+        result.emplace(net_id, RoutedGraph(route));
     }
 
     return result;

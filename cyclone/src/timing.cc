@@ -145,10 +145,10 @@ uint64_t get_max_wave_number(const std::unordered_map<const Pin *, uint64_t> &pi
     // gather the pin wave information
     uint64_t max_wave = 0;
     std::unordered_map<const Pin *, uint64_t> waves;
-    std::unordered_map<uint32_t, const Pin *> pin_map;
+    std::unordered_map<const Pin *, const Pin *> pin_map;
     for (auto const *pin: src_pins) {
         auto w = pin_wave.at(pin);
-        pin_map.emplace(pin->id, pin);
+        pin_map.emplace(pin, pin);
         waves.emplace(pin, w);
         if (w > max_wave) {
             max_wave = w;
@@ -162,7 +162,7 @@ uint64_t get_max_wave_number(const std::unordered_map<const Pin *, uint64_t> &pi
             auto w = pin_wave.at(pin);
             if (w < max_wave) {
                 // need to pipeline this pin
-                auto pins = routed_graph.insert_pipeline_reg(pin->id);
+                auto pins = routed_graph.insert_pipeline_reg(pin);
                 for (auto pin_id: pins) {
                     auto const *p = pin_map.at(pin_id);
                     pin_wave[p]++;
@@ -382,8 +382,7 @@ uint64_t TimingAnalysis::get_delay(const Node *node) {
             auto clb_type = layout_.get_blk_type(node->x, node->y);
             switch (clb_type) {
                 case 'p':
-                    // we add additional SB cost since we can't insert a reg between an ALU port and SB_OUT directly
-                    return timing_cost_.at(TimingCost::CLB_OP) + timing_cost_.at(TimingCost::CLB_SB);
+                    return timing_cost_.at(TimingCost::CLB_OP);
                 case 'm':
                     // assume memory is registered
                     return timing_cost_.at(TimingCost::MEM);

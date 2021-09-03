@@ -1,4 +1,5 @@
 #include "graph.hh"
+#include "net.hh"
 #include "util.hh"
 #include <cassert>
 #include <sstream>
@@ -358,9 +359,9 @@ RoutingGraph::get_sb(const uint32_t &x, const uint32_t &y,
     }
 }
 
-RoutedGraph::RoutedGraph(const std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &route) {
+RoutedGraph::RoutedGraph(const std::map<const Pin *, std::vector<std::shared_ptr<Node>>> &route) {
     std::set<std::pair<const Node *, const Node *>> visited;
-    for (auto const &[pin_id, segment]: route) {
+    for (auto const &[pin, segment]: route) {
         for (uint64_t i = 1; i < segment.size(); i++) {
             auto const &pre_node_ = segment[i - 1];
             auto const &current_node_ = segment[i];
@@ -375,7 +376,7 @@ RoutedGraph::RoutedGraph(const std::map<uint32_t, std::vector<std::shared_ptr<No
             }
 
         }
-        pins_.emplace(pin_id, get_node(segment.back()));
+        pins_.emplace(pin, get_node(segment.back()));
     }
     // src node has to be the one that doesn't have src
     for (auto const &iter: internal_to_normal_) {
@@ -400,7 +401,7 @@ std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() 
     std::map<uint32_t, std::vector<std::shared_ptr<Node>>> result;
     std::unordered_set<const Node *> visited;
 
-    for (auto const &[pin_id, pin_node]: pins_) {
+    for (auto const &[pin, pin_node]: pins_) {
         std::vector<std::shared_ptr<Node>> segment;
         std::shared_ptr<Node> n = pin_node;
 
@@ -426,7 +427,7 @@ std::map<uint32_t, std::vector<std::shared_ptr<Node>>> RoutedGraph::get_route() 
 
         // need to reverse to follow the proper route
         std::reverse(segment.begin(), segment.end());
-        result.emplace(pin_id, segment);
+        result.emplace(pin->id, segment);
     }
 
     return result;
@@ -455,7 +456,7 @@ RoutedGraph::pin_order(const std::map<uint32_t, std::vector<std::shared_ptr<Node
 }
 
 
-std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node, bool reverse) {
+std::set<const Pin *> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node, bool reverse) {
     // we cannot insert pass a branch
     // mapped from normal to internal
     if (normal_to_internal_.find(src_node) != normal_to_internal_.end()) {
@@ -507,7 +508,7 @@ std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node
 
     // figure out the affected pins
     // assume no loop
-    std::set<uint32_t> pins;
+    std::set<const Pin *> pins;
     std::queue<const Node *> nodes;
     nodes.emplace(next.get());
     std::unordered_set<const Node *> visited;
@@ -517,9 +518,9 @@ std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node
         visited.emplace(n);
         if (n->type == NodeType::Port || n->type == NodeType::Register) {
             // need to figure out which pins gets affected
-            for (auto const &[pin_id, pin_node]: pins_) {
+            for (auto const &[pin, pin_node]: pins_) {
                 if (pin_node.get() == n) {
-                    pins.emplace(pin_id);
+                    pins.emplace(pin);
                 }
             }
         }
@@ -536,18 +537,18 @@ std::set<uint32_t> RoutedGraph::insert_reg_output(std::shared_ptr<Node> src_node
 }
 
 
-std::set<uint32_t> RoutedGraph::insert_pipeline_reg(uint32_t pin_id) {
-    if (pins_.find(pin_id) == pins_.end()) {
-        throw std::runtime_error("Unable to find pin id " + std::to_string(pin_id));
+std::set<const Pin *> RoutedGraph::insert_pipeline_reg(const Pin * pin) {
+    if (pins_.find(pin) == pins_.end()) {
+        throw std::runtime_error("Unable to find pin " + pin->name);
     }
 
     // itself must be affected
-    std::set<uint32_t> pin_nodes = {pin_id};
-    std::set<uint32_t> full_nodes;
+    std::set<const Pin *> pin_nodes = {pin};
+    std::set<const Pin *> full_nodes;
     for (auto const &iter: pins_) full_nodes.emplace(iter.first);
 
     // figure out if we have any branch in the segments
-    auto const &pin_node = pins_.at(pin_id);
+    auto const &pin_node = pins_.at(pin);
 
     // need to see if we have a free RMUX node
     // couple sanity check
@@ -557,10 +558,7 @@ std::set<uint32_t> RoutedGraph::insert_pipeline_reg(uint32_t pin_id) {
 
     // we insert it right after the source sink, if possible
 
-    auto const &sb = pin_node->get_conn_in().front().lock();
-    if (!sb || sb->type != NodeType::SwitchBox) {
-        throw std::runtime_error("Pin is not connected to a switch box");
-    }
+    auto sb = pin_node->get_conn_in().front().lock();
     // if that switch box has two outputs already, we insert at the very beginning.
     if (sb->size() > 1) {
         auto pins = insert_reg_output(src_node_);
@@ -570,7 +568,15 @@ std::set<uint32_t> RoutedGraph::insert_pipeline_reg(uint32_t pin_id) {
         return full_nodes;
     }
     // need to make sure the source is a rmux node
-    auto const &rmux = sb->get_conn_in().front().lock();
+    std::shared_ptr<Node> rmux;
+    if (sb->type == NodeType::Generic) {
+        // this only happens when we are trying to insert pipeline registers before the IO ports
+        rmux = sb;
+    } else {
+        // if it's not rmux, which is very likely the case
+        rmux = sb->get_conn_in().front().lock();
+    }
+
     if (!rmux || rmux->type != NodeType::Generic || internal_to_normal_.at(rmux)->get_conn_in().size() != 2) {
         throw std::runtime_error("Unable to find register mux");
     }

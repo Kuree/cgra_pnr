@@ -294,24 +294,25 @@ private:
 
 // hold information for routed graph
 // all nodes are cloned from the original routing graph
+struct Pin;
 class RoutedGraph {
 public:
-    explicit RoutedGraph(const std::map<uint32_t,
+    explicit RoutedGraph(const std::map<const Pin*,
                          std::vector<std::shared_ptr<Node>>>& route);
 
     std::map<uint32_t, std::vector<std::shared_ptr<Node>>> get_route() const;
 
     std::vector<uint32_t> pin_order(const std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &routes) const;
 
-    [[nodiscard]] std::set<uint32_t> insert_pipeline_reg(uint32_t pin_id);
+    [[nodiscard]] std::set<const Pin *> insert_pipeline_reg(const Pin * pin);
 
-    [[nodiscard]] std::set<uint32_t> insert_reg_output(std::shared_ptr<Node> src_node, bool reverse = false);
+    [[nodiscard]] std::set<const Pin *> insert_reg_output(std::shared_ptr<Node> src_node, bool reverse = false);
 
 private:
     // our node to the actual routing graph node
     std::unordered_map<std::shared_ptr<Node>, std::shared_ptr<Node>> normal_to_internal_;
     std::unordered_map<std::shared_ptr<Node>, std::shared_ptr<Node>> internal_to_normal_;
-    std::map<uint32_t, std::shared_ptr<Node>> pins_;
+    std::map<const Pin *, std::shared_ptr<Node>> pins_;
     std::shared_ptr<Node> src_node_;
 
     std::shared_ptr<Node> get_node(const std::shared_ptr<Node> &node);

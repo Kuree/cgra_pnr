@@ -2,8 +2,11 @@
 #define CYCLONE_NET_HH
 
 #include <vector>
-#include "graph.hh"
+#include <memory>
+#include <string>
 
+
+struct Node;
 
 struct Pin {
 public:
