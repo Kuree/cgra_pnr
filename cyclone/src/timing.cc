@@ -5,15 +5,15 @@
 
 #include <queue>
 
-using Netlist = std::map<int, Net>;
+using Netlist = std::map<int, const Net*>;
 
-std::vector<std::pair<int, const Pin *>> get_source_pins(const std::map<int, Net> &netlist) {
+std::vector<std::pair<int, const Pin *>> get_source_pins(const std::map<int, const Net*> &netlist) {
     std::vector<std::pair<int, const Pin *>> result;
     // any pin that has I as the name is an IO pin
     for (auto const &[net_id, net]: netlist) {
-        auto const &p = net[0];
+        auto const &p = (*net)[0];
         if (p.name[0] == 'i' || p.name[0] == 'I') {
-            result.emplace_back(std::make_pair(net.id, &p));
+            result.emplace_back(std::make_pair(net->id, &p));
         }
     }
     return result;
@@ -31,11 +31,11 @@ class TimingGraph {
 public:
     explicit TimingGraph(const Netlist &netlist) : netlist_(netlist) {
         for (auto const &[net_id, net]: netlist) {
-            auto const &src_pin = net[0];
+            auto const &src_pin = (*net)[0];
             auto *src_node = get_node(src_pin);
             src_node->sink_pins.emplace_back(&src_pin);
-            for (uint64_t i = 1; i < net.size(); i++) {
-                auto const &sink = net[i];
+            for (uint64_t i = 1; i < net->size(); i++) {
+                auto const &sink = (*net)[i];
                 auto *sink_node = get_node(sink);
                 src_node->next.emplace_back(sink_node);
                 sink_node->src_pins.emplace_back(&sink);
@@ -60,8 +60,8 @@ public:
     std::vector<int> get_sink_ids(const TimingNode *node) const {
         std::vector<int> result;
         for (auto const &[net_id, net]: netlist_) {
-            if (net[0].name == node->name) {
-                result.emplace_back(net.id);
+            if ((*net)[0].name == node->name) {
+                result.emplace_back(net->id);
             }
         }
 
@@ -104,7 +104,7 @@ std::unordered_set<const Pin *> get_sink_pins(const Pin &pin, const Netlist &net
     // brute-force search
     std::unordered_set<const Pin *> result;
     for (auto const &[net_id, net]: netlist) {
-        auto const &src = net[0];
+        auto const &src = (*net)[0];
         if (src.x == pin.x && src.y == pin.y && src.name[0] != 'r') {
             // it's placed on the same tile, but it's not a pipeline register
             result.emplace(&src);
@@ -140,7 +140,9 @@ uint64_t get_max_wave_number(const std::unordered_map<const Pin *, uint64_t> &pi
     return result;
 }
 
-[[nodiscard]] uint64_t wave_matching(RoutedGraph &routed_graph, const std::vector<const Pin *> &src_pins,
+[[nodiscard]] uint64_t wave_matching(std::unordered_map<int, RoutedGraph> &routed_graphs,
+                                     const std::unordered_map<const Pin *, int> &pin_src_net,
+                                     const std::vector<const Pin *> &src_pins,
                    std::unordered_map<const Pin *, uint64_t> &pin_wave) {
     // gather the pin wave information
     uint64_t max_wave = 0;
@@ -161,6 +163,9 @@ uint64_t get_max_wave_number(const std::unordered_map<const Pin *, uint64_t> &pi
         for (auto *pin: src_pins) {
             auto w = pin_wave.at(pin);
             if (w < max_wave) {
+                // get routed graph
+                int net_id = pin_src_net.at(pin);
+                auto &routed_graph = routed_graphs.at(net_id);
                 // need to pipeline this pin
                 auto pins = routed_graph.insert_pipeline_reg(pin);
                 for (auto pin_id: pins) {
@@ -184,12 +189,12 @@ uint64_t get_max_wave_number(const std::unordered_map<const Pin *, uint64_t> &pi
 }
 
 uint64_t TimingAnalysis::retime() {
-    std::map<int, Net> netlist;
+    std::map<int, const Net*> netlist;
     std::unordered_map<int, RoutedGraph> routed_graphs;
     for (auto const &iter: routers_) {
         auto const &nets = iter.second->get_netlist();
-        for (auto const &entry: nets) {
-            netlist.emplace(entry);
+        for (auto const &[id, net]: nets) {
+            netlist.emplace(id, &net);
         }
     }
     for (auto const &iter: routers_) {
@@ -206,6 +211,7 @@ uint64_t TimingAnalysis::retime() {
     std::unordered_map<const TimingNode *, uint64_t> node_delay_;
     std::unordered_map<const Pin *, uint64_t> pin_wave_;
     std::unordered_map<const Node *, const Pin *> node_to_pin;
+    std::unordered_map<const Pin *, int> pin_src_net_;
 
     for (auto const &[id, pin]: io_pins) {
         pin_wave_.emplace(pin, 0);
@@ -213,8 +219,11 @@ uint64_t TimingAnalysis::retime() {
     }
 
     for (auto const &[net_id, net]: netlist) {
-        for (auto const &pin: net) {
+        for (auto const &pin: *net) {
             node_to_pin.emplace(pin.node.get(), &pin);
+        }
+        for (auto i = 1u; i < net->size(); i++) {
+            pin_src_net_.emplace(&(*net)[i], net_id);
         }
     }
 
@@ -233,7 +242,6 @@ uint64_t TimingAnalysis::retime() {
         auto sink_net_ids = timing_graph.get_sink_ids(timing_node);
         for (auto const net_id: sink_net_ids) {
             auto const &net = netlist[net_id];
-            auto routed_graph = routed_graphs.at(net.id);
 
             // all its source pins have to be available
             auto const &src_pins = timing_node->src_pins;
@@ -267,13 +275,14 @@ uint64_t TimingAnalysis::retime() {
             }
             else if (pin_waves.size() != 1) {
                 // if the pin waves doesn't match, we have to insert extra ones to those that lack of it
-                src_wave = wave_matching(routed_graph, src_pins, pin_wave_);
+                src_wave = wave_matching(routed_graphs, pin_src_net_, src_pins, pin_wave_);
             } else {
                 src_wave = *pin_waves.begin();
             }
 
             // now we need to compute the delay for each node
-            auto const *source_node = net[0].node.get();
+            auto &routed_graph = routed_graphs.at(net->id);
+            auto const *source_node = (*net)[0].node.get();
             std::unordered_map<const Node *, uint64_t> node_delay = {{source_node, max_delay}};
             bool updated;
             do {
@@ -344,11 +353,12 @@ uint64_t TimingAnalysis::retime() {
                     }
                 }
             }
-
-            // get the updated route
-            auto segments = routed_graph.get_route();
-            final_result.emplace(net.id, segments);
         }
+    }
+
+    for (auto const &[net_id, g]: routed_graphs) {
+        auto segments = g.get_route();
+        final_result.emplace(net_id, segments);
     }
 
     // reassemble the result
