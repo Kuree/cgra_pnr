@@ -188,6 +188,47 @@ uint64_t get_max_wave_number(const std::unordered_map<const Pin *, uint64_t> &pi
     return max_wave;
 }
 
+uint64_t TimingAnalysis::recompute_pin_delay(const std::unordered_map<int, RoutedGraph> &routed_graphs,
+                                             const std::unordered_map<const Pin *, int> &pin_src_net,
+                                             const std::vector<const Pin *> &src_pins,
+                                             const std::unordered_map<const Pin *, uint64_t> &pin_delay,
+                                             const std::unordered_map<const Node *, const Pin *> &node_to_pin) const {
+    std::vector<uint64_t> delays;
+    delays.reserve(src_pins.size());
+
+    for (auto const *pin: src_pins) {
+        auto net_id = pin_src_net.at(pin);
+        auto const &routed_graph = routed_graphs.at(net_id);
+        auto route = routed_graph.get_sink_to_src_route(pin);
+
+        uint64_t delay = 0;
+        bool has_reg = false;
+        for (auto const &node: route) {
+            if (node->type == NodeType::Register) {
+                has_reg = true;
+                break;
+            }
+            delay += get_delay(node.get());
+        }
+        if (!has_reg) {
+            // need to use the end node delay as well
+            auto end_node = route.back().get();
+            auto end_pin = node_to_pin.at(end_node);
+            auto d = pin_delay.at(end_pin);
+            delay += d;
+        }
+
+        delays.emplace_back(delay);
+
+    }
+
+    uint64_t delay = 0;
+    for (auto d: delays) {
+        if (d > delay) delay = d;
+    }
+    return delay;
+}
+
 uint64_t TimingAnalysis::retime() {
     std::map<int, const Net*> netlist;
     std::unordered_map<int, RoutedGraph> routed_graphs;
@@ -276,6 +317,8 @@ uint64_t TimingAnalysis::retime() {
             else if (pin_waves.size() != 1) {
                 // if the pin waves doesn't match, we have to insert extra ones to those that lack of it
                 src_wave = wave_matching(routed_graphs, pin_src_net_, src_pins, pin_wave_);
+                // then we need to recalculate the delay since all register information is changed
+                max_delay = recompute_pin_delay(routed_graphs, pin_src_net_, src_pins, pin_delay_, node_to_pin);
             } else {
                 src_wave = *pin_waves.begin();
             }
@@ -347,7 +390,7 @@ uint64_t TimingAnalysis::retime() {
                     auto const *pin_node = src_pin->node.get();
                     if (node_delay.find(pin_node) != node_delay.end()) {
                         auto d = node_delay.at(pin_node);
-                        if (node_delay_[next_timing_node] < d) {
+                        if (node_delay_[next_timing_node] != d) {
                             node_delay_[next_timing_node] = d;
                         }
                     }
@@ -386,7 +429,7 @@ void TimingAnalysis::set_layout(const std::string &path) {
     layout_ = load_layout(path);
 }
 
-uint64_t TimingAnalysis::get_delay(const Node *node) {
+uint64_t TimingAnalysis::get_delay(const Node *node) const {
     switch (node->type) {
         case NodeType::Port: {
             auto clb_type = layout_.get_blk_type(node->x, node->y);

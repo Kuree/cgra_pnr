@@ -308,6 +308,8 @@ public:
 
     [[nodiscard]] std::set<const Pin *> insert_reg_output(std::shared_ptr<Node> src_node, bool reverse = false);
 
+    [[nodiscard]] std::vector<std::shared_ptr<Node>> get_sink_to_src_route(const Pin *pin) const;
+
 private:
     // our node to the actual routing graph node
     std::unordered_map<std::shared_ptr<Node>, std::shared_ptr<Node>> normal_to_internal_;

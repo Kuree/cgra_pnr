@@ -595,3 +595,20 @@ std::set<const Pin *> RoutedGraph::insert_pipeline_reg(const Pin * pin) {
 
     return pin_nodes;
 }
+
+
+std::vector<std::shared_ptr<Node>> RoutedGraph::get_sink_to_src_route(const Pin *pin) const {
+    std::vector<std::shared_ptr<Node>> result;
+    auto node = pins_.at(pin);
+    while (node) {
+        result.emplace_back(internal_to_normal_.at(node));
+        auto const &conn_in = node->get_conn_in();
+        if (conn_in.empty()) {
+            node = nullptr;
+        } else {
+            node = conn_in[0].lock();
+        }
+    }
+
+    return result;
+}

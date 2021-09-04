@@ -37,8 +37,11 @@ public:
     void set_timing_cost(const std::unordered_map<TimingCost, uint64_t> &timing_cost) { timing_cost_ = timing_cost; }
 
     uint64_t retime();
+
     void set_layout(const std::string &path);
+
     void set_minimum_frequency(uint64_t f) { min_frequency_ = f; }
+
     void save_wave_info(const std::string &filename);
 
 private:
@@ -49,8 +52,15 @@ private:
     std::unordered_map<TimingCost, uint64_t> timing_cost_;
     std::map<std::string, uint64_t> node_waves_;
 
-    uint64_t get_delay(const Node *node);
+    uint64_t get_delay(const Node *node) const;
+
     uint64_t maximum_delay() const;
+
+    uint64_t recompute_pin_delay(const std::unordered_map<int, RoutedGraph> &routed_graphs,
+                                 const std::unordered_map<const Pin *, int> &pin_src_net,
+                                 const std::vector<const Pin *> &src_pins,
+                                 const std::unordered_map<const Pin *, uint64_t> &pin_delay,
+                                 const std::unordered_map<const Node *, const Pin *> &node_to_pin) const;
 };
 
 
