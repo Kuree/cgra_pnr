@@ -465,6 +465,7 @@ void DetailedPlacer::legalize_reg(const ::map<char, ::vector<::pair<int,
     for (auto const id : working_set) {
         if (finished_set.find(id) != finished_set.end())
             continue;
+        if (available_pos_r.empty()) break;
         Point pos = *available_pos_r.begin();
         instances_[id].pos = pos;
         available_pos_r.erase(pos);
