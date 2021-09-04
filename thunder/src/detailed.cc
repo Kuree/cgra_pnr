@@ -466,7 +466,7 @@ void DetailedPlacer::legalize_reg(const ::map<char, ::vector<::pair<int,
         if (finished_set.find(id) != finished_set.end())
             continue;
         if (!available_pos_r.empty())
-            throw std::runtime_error("Internal error: expect available register position non-zero");
+            break;
         Point pos = *available_pos_r.begin();
         instances_[id].pos = pos;
         available_pos_r.erase(pos);
