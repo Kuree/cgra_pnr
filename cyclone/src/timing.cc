@@ -288,6 +288,8 @@ uint64_t TimingAnalysis::retime() {
             auto const &src_pins = timing_node->src_pins;
             uint64_t max_delay = start_delay;
             std::unordered_set<uint64_t> pin_waves;
+            // if it's not registered element, we need to compute
+            // the source pin delays, otherwise it's 0
             for (auto const *src_pin: src_pins) {
                 // gather the pin information
                 if (pin_wave_.find(src_pin) == pin_wave_.end()) {
@@ -296,13 +298,14 @@ uint64_t TimingAnalysis::retime() {
 
                 pin_waves.emplace(pin_wave_.at(src_pin));
 
-                if (pin_delay_.find(src_pin) == pin_delay_.end()) {
-                    throw std::runtime_error("Unable to find pin delay for " + src_pin->name);
+                if (timing_node->name[0] == 'p') {
+                    if (pin_delay_.find(src_pin) == pin_delay_.end()) {
+                        throw std::runtime_error("Unable to find pin delay for " + src_pin->name);
+                    }
+                    if (pin_delay_.at(src_pin) > max_delay) {
+                        max_delay = pin_delay_.at(src_pin);
+                    }
                 }
-                if (pin_delay_.at(src_pin) > max_delay) {
-                    max_delay = pin_delay_.at(src_pin);
-                }
-
             }
             auto const &sink_pins = timing_node->sink_pins;
             for (auto const *sink_pin: sink_pins) {
@@ -328,6 +331,7 @@ uint64_t TimingAnalysis::retime() {
             auto const *source_node = (*net)[0].node.get();
             std::unordered_map<const Node *, uint64_t> node_delay = {{source_node, max_delay}};
             bool updated;
+            std::unordered_set<Node *> inserted_node;
             do {
                 updated = false;
                 auto segments = routed_graph.get_route();
@@ -353,7 +357,7 @@ uint64_t TimingAnalysis::retime() {
                         }
 
                         // if the delay is more than we can handle, we need to insert the pipeline registers
-                        if (delay > allowed_delay) {
+                        if (delay > allowed_delay && inserted_node.find(current_node.get()) == inserted_node.end()) {
                             // need to pipeline register it
                             auto pins = routed_graph.insert_reg_output(current_node, true);
                             // those are pins affected
@@ -368,6 +372,7 @@ uint64_t TimingAnalysis::retime() {
                             pin_wave_[pin] = src_wave + num_reg;
                             // reset the node delay
                             node_delay = {{source_node, max_delay}};
+                            inserted_node.emplace(current_node.get());
                             break;
                         } else {
                             // insert updated timing
@@ -385,13 +390,18 @@ uint64_t TimingAnalysis::retime() {
             } while (updated);
             // update the delay
             for (auto const *next_timing_node: timing_node->next) {
-                auto const &source_pins = next_timing_node->src_pins;
-                for (auto const *src_pin : source_pins) {
-                    auto const *pin_node = src_pin->node.get();
-                    if (node_delay.find(pin_node) != node_delay.end()) {
-                        auto d = node_delay.at(pin_node);
-                        if (node_delay_[next_timing_node] != d) {
-                            node_delay_[next_timing_node] = d;
+                if (next_timing_node->name[0] != 'p') {
+                    // delay is 0
+                    node_delay_[next_timing_node] = 0;
+                } else {
+                    auto const &source_pins = next_timing_node->src_pins;
+                    for (auto const *src_pin : source_pins) {
+                        auto const *pin_node = src_pin->node.get();
+                        if (node_delay.find(pin_node) != node_delay.end()) {
+                            auto d = node_delay.at(pin_node);
+                            if (node_delay_[next_timing_node] != d) {
+                                node_delay_[next_timing_node] = d;
+                            }
                         }
                     }
                 }
