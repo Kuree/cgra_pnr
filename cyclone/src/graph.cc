@@ -61,6 +61,12 @@ void Node::add_edge(const std::shared_ptr<Node> &node, uint32_t wire_delay) {
     node->conn_in_.emplace_back(weak_from_this());
 }
 
+bool Node::has_edge(const std::shared_ptr<Node> &node) {
+    return std::any_of(neighbors_.begin(), neighbors_.end(), [node](const auto &n) {
+        return n.lock() == node;
+    });
+}
+
 uint32_t Node::get_edge_cost(const std::shared_ptr<Node> &node) {
     std::weak_ptr<Node> n = node;
     if (std::find(neighbors_.begin(), neighbors_.end(), n) != neighbors_.end())
@@ -611,4 +617,32 @@ std::vector<std::shared_ptr<Node>> RoutedGraph::get_sink_to_src_route(const Pin 
     }
 
     return result;
+}
+
+std::shared_ptr<Node> RoutedGraph::get_internal_node(const std::shared_ptr<Node> &normal) const {
+    if (normal_to_internal_.find(normal) != normal_to_internal_.end()) {
+        return normal_to_internal_.at(normal);
+    } else {
+        return nullptr;
+    }
+}
+
+void RoutedGraph::connect(const std::shared_ptr<Node> &src, const std::shared_ptr<Node> &sink) {
+    auto pre_node = get_node(src);
+    auto current_node = get_node(sink);
+
+    // add edge
+    if (!pre_node->has_edge(current_node)) {
+        pre_node->add_edge(current_node);
+    }
+}
+
+void RoutedGraph::remove_connection(const std::shared_ptr<Node> &src, const std::shared_ptr<Node> &sink) {
+    auto pre_node = get_node(src);
+    auto current_node = get_node(sink);
+
+    // add edge
+    if (pre_node->has_edge(current_node)) {
+        pre_node->remove_edge(current_node);
+    }
 }

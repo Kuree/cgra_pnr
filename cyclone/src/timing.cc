@@ -435,7 +435,7 @@ uint64_t TimingAnalysis::retime() {
     return r;
 }
 
-uint64_t TimingAnalysis::adjust_pipeline_registers() {
+void TimingAnalysis::adjust_pipeline_registers() {
     // compute for each pin's timing and then figure out if we can move the
     // pin's associated pipeline registers
     std::map<int, const Net *> netlist;
@@ -454,7 +454,6 @@ uint64_t TimingAnalysis::adjust_pipeline_registers() {
     }
 
     auto io_pins = get_source_pins(netlist);
-    auto allowed_delay = maximum_delay();
 
     std::unordered_map<const Pin *, uint64_t> pin_delay_;
     std::unordered_map<const TimingNode *, uint64_t> node_delay_;
@@ -606,6 +605,50 @@ uint64_t TimingAnalysis::adjust_pipeline_registers() {
         if (reg_insertion) {
             idx = *reg_insertion;
             // compute the new current segment
+            std::shared_ptr<Node> target_reg_node = nullptr;
+            {
+                auto sb_out_internal = current_routed_graph.get_internal_node(current_route[idx]);
+                auto rmux_internal = current_routed_graph.get_internal_node(current_route[idx + 1]);
+                // cut the
+                sb_out_internal->remove_edge(rmux_internal);
+                // need to find that register node
+                for (auto const &n: *current_route[idx]) {
+                    auto const &node = n.lock();
+                    if (node->type == NodeType::Register) {
+                        target_reg_node = node;
+                        break;
+                    }
+                }
+                if (target_reg_node == nullptr) {
+                    throw std::runtime_error("Unable to find regiter node");
+                }
+                current_routed_graph.connect(target_reg_node, current_route[idx + 1]);
+            }
+            // need to modify the source net
+            {
+                // node that this is the reversed route
+                auto const &source_route_reversed = source_routed_graph.get_sink_to_src_route(src_pin);
+                auto const &reg_node = source_route_reversed[0];
+                auto const &rmux = source_route_reversed[1];
+                source_routed_graph.remove_connection(rmux, reg_node);
+                // now we add connections until the idx
+                std::shared_ptr<Node> pre_node = rmux;
+                // starting from 1 to skipp the reg
+                for (uint64_t i = 1; i <= idx; i++) {
+                    auto node = current_route[i];
+                    source_routed_graph.connect(pre_node, node);
+                    pre_node = node;
+                }
+                // then connect it to the reg node
+                source_routed_graph.connect(pre_node, target_reg_node);
+            }
+
+            for (auto const &iter: routers_) {
+                auto routes = source_routed_graph.get_route();
+                iter.second->update_net_route(source_net, routes);
+                routes = current_routed_graph.get_route();
+                iter.second->update_net_route(current_net, routes);
+            }
         }
     }
 

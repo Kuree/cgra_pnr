@@ -59,6 +59,7 @@ public:
     virtual void add_edge(const std::shared_ptr<Node> &node,
                           uint32_t wire_delay);
     virtual void remove_edge(const std::shared_ptr<Node> &node);
+    bool has_edge(const std::shared_ptr<Node> &node);
 
     uint32_t get_edge_cost(const std::shared_ptr<Node> &node);
 
@@ -309,6 +310,11 @@ public:
     [[nodiscard]] std::set<const Pin *> insert_reg_output(std::shared_ptr<Node> src_node, bool reverse = false);
 
     [[nodiscard]] std::vector<std::shared_ptr<Node>> get_sink_to_src_route(const Pin *pin) const;
+
+    [[nodiscard]] std::shared_ptr<Node> get_internal_node(const std::shared_ptr<Node> &normal) const;
+
+    void connect(const std::shared_ptr<Node> &src, const std::shared_ptr<Node> &sink);
+    void remove_connection(const std::shared_ptr<Node> &src, const std::shared_ptr<Node> &sink);
 
 private:
     // our node to the actual routing graph node

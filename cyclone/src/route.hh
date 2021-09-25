@@ -45,6 +45,8 @@ public:
             std::map<uint32_t,
                     std::vector<std::shared_ptr<Node>>>> &routes) { current_routes = routes; }
 
+    void update_net_route(int net_id, std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &routes);
+
     virtual ~Router() = default;
 
 protected:

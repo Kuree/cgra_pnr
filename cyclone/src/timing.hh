@@ -38,7 +38,7 @@ public:
 
     uint64_t retime();
 
-    uint64_t adjust_pipeline_registers();
+    void adjust_pipeline_registers();
 
     void set_layout(const std::string &path);
 

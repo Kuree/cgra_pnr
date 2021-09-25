@@ -470,3 +470,10 @@ std::unordered_map<int, RoutedGraph> Router::get_routed_graph() const {
 
     return result;
 }
+
+void Router::update_net_route(int net_id, std::map<uint32_t, std::vector<std::shared_ptr<Node>>> &routes) {
+    if (current_routes.find(net_id) != current_routes.end()) {
+        current_routes[net_id] = routes;
+    }
+}
+
