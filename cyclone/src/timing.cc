@@ -435,6 +435,182 @@ uint64_t TimingAnalysis::retime() {
     return r;
 }
 
+uint64_t TimingAnalysis::adjust_pipeline_registers() {
+    // compute for each pin's timing and then figure out if we can move the
+    // pin's associated pipeline registers
+    std::map<int, const Net *> netlist;
+    std::unordered_map<int, RoutedGraph> routed_graphs;
+    for (auto const &iter: routers_) {
+        auto const &nets = iter.second->get_netlist();
+        for (auto const &[id, net]: nets) {
+            netlist.emplace(id, &net);
+        }
+    }
+    for (auto const &iter: routers_) {
+        auto const &g = iter.second->get_routed_graph();
+        for (auto const &entry: g) {
+            routed_graphs.emplace(entry);
+        }
+    }
+
+    auto io_pins = get_source_pins(netlist);
+    auto allowed_delay = maximum_delay();
+
+    std::unordered_map<const Pin *, uint64_t> pin_delay_;
+    std::unordered_map<const TimingNode *, uint64_t> node_delay_;
+    std::unordered_map<const Node *, const Pin *> node_to_pin;
+    std::unordered_map<const Pin *, int> pin_src_net_;
+    std::unordered_map<const Pin*, int> pin_sink_net_;
+
+    for (auto const &[id, pin]: io_pins) {
+        pin_delay_.emplace(pin, 0);
+    }
+
+    for (auto const &[net_id, net]: netlist) {
+        for (auto const &pin: *net) {
+            node_to_pin.emplace(pin.node.get(), &pin);
+        }
+        for (auto i = 1u; i < net->size(); i++) {
+            pin_src_net_.emplace(&(*net)[i], net_id);
+        }
+        pin_sink_net_.emplace(&(*net)[0], net_id);
+    }
+
+    const TimingGraph timing_graph(netlist);
+
+    auto nodes = timing_graph.topological_sort();
+    auto timing_node_mapping = get_timing_node_mapping(nodes);
+
+    // we go through two passes
+    // the first pass compute the timing and figure out which nets
+    // can be adjusted. the second pass is to adjust the nets
+
+    std::set<std::pair<int, int>> target_nets;
+
+    // compute timing
+    for (auto const *node: nodes) {
+        uint64_t max_delay = 0;
+        for (auto const *src_pin: node->src_pins) {
+            auto delay = pin_delay_.at(src_pin);
+            if (delay > max_delay) {
+                max_delay = delay;
+            }
+        }
+        node_delay_.emplace(node, max_delay);
+        // compute the route to the sinks and update the delay
+        // notice that if the timing node is registered, it doesn't have delay in the output
+        // registered elements doesn't have delay
+        auto node_type = node->name[0];
+        if (node_type == 'm' || node_type == 'r') {
+            max_delay = 0;
+        }
+        // walk through the routed net and compute timing
+        std::unordered_map<const Node *, uint64_t> route_node_delay;
+        uint64_t num_sinks = 0;
+        for (auto const *pin: node->sink_pins) {
+            route_node_delay.emplace(pin->node.get(), max_delay);
+            auto net_id = pin_sink_net_.at(pin);
+            auto const &routed = routed_graphs.at(net_id);
+
+            auto segments = routed.get_route();
+            auto pin_order = routed.pin_order(segments);
+            for (auto pin_id: pin_order) {
+                auto const segment = segments.at(pin_id);
+                num_sinks++;
+                for (uint64_t i = 0; i < segment.size(); i++) {
+                    auto const &r_node = segment[i];
+                    auto d = get_delay(r_node.get());
+                    auto current_delay = route_node_delay.at(r_node.get());
+                    current_delay += d;
+                    route_node_delay.emplace(r_node.get(), current_delay);
+                    if (i == (segment.size() - 1)) {
+                        // update the src pin info
+                        auto const *src_pin = node_to_pin.at(r_node.get());
+                        pin_delay_.emplace(src_pin, current_delay);
+                    }
+                }
+            }
+        }
+
+        // detect if we can move the register (src) or not
+        // and if so, which is the connected route
+        if (node_type == 'r') {
+            // the sink has to be a non-register type, and we only have fan out one
+            if (node->sink_pins.size() == 1 && num_sinks == 1) {
+                auto *sink_pin = node->sink_pins.front();
+                auto sink_type = sink_pin->name[0];
+                if (sink_type != 'r') {
+                    // we found one.
+                    // need to find out two nets. the current net, and it's source
+                    // since when we move the register, we also need to change the source net route
+                    auto source_net = pin_src_net_.at(node->src_pins[0]);
+                    auto current_net = pin_sink_net_.at(sink_pin);
+                    target_nets.emplace(std::make_pair(current_net, source_net));
+                }
+            }
+        }
+    }
+
+    // second pass
+    for (auto const &[current_net, source_net]: target_nets) {
+        // because register track is decided right away, the track might not be optimal,
+        // so we move it down to ease the downstream slack
+        // need to compute the current register timing and its sink timing
+        // if the sink timing is larger than the current register timing, we can move it down
+        // until they are about equal
+        auto &current_routed_graph = routed_graphs.at(current_net);
+        auto const &current_route = current_routed_graph.get_route().begin()->second;
+        auto const *sink_pin = node_to_pin.at(current_route.back().get());
+        auto const *target_pin = node_to_pin.at(current_route.front().get());
+        auto current_delay = pin_delay_.at(sink_pin);
+        // get the source delay from the previous net
+        auto &source_routed_graph = routed_graphs.at(current_net);
+        // need to get the source pin id
+        const Pin *src_pin = nullptr;
+        auto const &source_segments = source_routed_graph.get_route();
+        for (auto const &[pin_id, segments]: source_segments) {
+            auto const &sink_node = segments.back();
+            auto const *pin = node_to_pin.at(sink_node.get());
+            if (pin->name == target_pin->name) {
+                src_pin = pin;
+                break;
+            }
+        }
+        if (!src_pin) {
+            throw std::runtime_error("Unable to identify source net routed segment " + target_pin->name);
+        }
+        auto source_delay = pin_delay_.at(src_pin);
+        // now we try to move down the routed graph until we balanced the slack
+        uint64_t idx = 0;
+        std::optional<uint64_t> reg_insertion;
+        while (current_delay > source_delay) {
+            auto *node = current_route[idx].get();
+            if (node->name == sink_pin->name) {
+                // can't do stuff anymore
+                break;
+            } else if (node->type == NodeType::SwitchBox) {
+                auto *sb = reinterpret_cast<SwitchBoxNode*>(node);
+                if (sb->io == SwitchBoxIO::SB_OUT) {
+                    reg_insertion = idx;
+                }
+                idx++;
+            } else {
+                idx++;
+            }
+            auto delay = get_delay(node);
+            current_delay -= delay;
+            source_delay += delay;
+        }
+
+        // if reg insertion is set
+        if (reg_insertion) {
+            idx = *reg_insertion;
+            // compute the new current segment
+        }
+    }
+
+}
+
 void TimingAnalysis::set_layout(const std::string &path) {
     layout_ = load_layout(path);
 }
