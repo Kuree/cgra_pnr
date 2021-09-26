@@ -517,15 +517,17 @@ void TimingAnalysis::adjust_pipeline_registers() {
                 auto const segment = segments.at(pin_id);
                 num_sinks++;
                 for (uint64_t i = 0; i < segment.size(); i++) {
-                    auto const &r_node = segment[i];
+                    auto r_node = segment[i];
                     auto d = get_delay(r_node.get());
                     auto current_delay = route_node_delay.at(r_node.get());
                     current_delay += d;
-                    route_node_delay.emplace(r_node.get(), current_delay);
                     if (i == (segment.size() - 1)) {
                         // update the src pin info
                         auto const *src_pin = node_to_pin.at(r_node.get());
                         pin_delay_.emplace(src_pin, current_delay);
+                    } else {
+                        auto next_node = segment[i + 1];
+                        route_node_delay.emplace(next_node.get(), current_delay);
                     }
                 }
             }
@@ -537,15 +539,13 @@ void TimingAnalysis::adjust_pipeline_registers() {
             // the sink has to be a non-register type, and we only have fan out one
             if (node->sink_pins.size() == 1 && num_sinks == 1) {
                 auto *sink_pin = node->sink_pins.front();
-                auto sink_type = sink_pin->name[0];
-                if (sink_type != 'r') {
-                    // we found one.
-                    // need to find out two nets. the current net, and it's source
-                    // since when we move the register, we also need to change the source net route
-                    auto source_net = pin_src_net_.at(node->src_pins[0]);
-                    auto current_net = pin_sink_net_.at(sink_pin);
-                    target_nets.emplace(std::make_pair(current_net, source_net));
-                }
+                // we found one.
+                // need to find out two nets. the current net, and it's source
+                // since when we move the register, we also need to change the source net route
+                auto source_net = pin_src_net_.at(node->src_pins[0]);
+                auto current_net = pin_sink_net_.at(sink_pin);
+                target_nets.emplace(std::make_pair(current_net, source_net));
+
             }
         }
     }

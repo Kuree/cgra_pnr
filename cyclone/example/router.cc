@@ -28,7 +28,8 @@ void setup_argparse(argparse::ArgumentParser &parser) {
             .action([](const std::string &value) -> uint64_t { return std::stoull(value); });
     parser.add_argument("-w").help("Wave information file after retiming").default_value<std::string>("");
     parser.add_argument("-t", "--retime").help(
-            "Set timing file. Default is none, which turns off re-timing. Set to default to use the default timing information").default_value<std::string>(
+            "Set timing file. Default is none, which turns off re-timing. "
+            "Set to default to use the default timing information, register just to shifting registers").default_value<std::string>(
             "none");
 }
 
@@ -114,18 +115,21 @@ void retime_router(std::map<uint32_t, std::unique_ptr<Router>> &routers, const R
     const auto &timing_file = args.timing_file;
     if (timing_file == "none") {
         return;
-    } else if (timing_file == "default") {
+    } else if (timing_file == "default" || timing_file == "register") {
         auto const &layout_file = args.chip_layout;
         TimingAnalysis timing(routers);
         timing.set_minimum_frequency(args.min_frequency);
         timing.set_timing_cost(get_default_timing_info());
         timing.set_layout(layout_file);
-        timing.retime();
-
-        // whether to save the timing result or not
-        auto const &filename = args.timing_result_filename;
-        if (!filename.empty()) {
-            timing.save_wave_info(filename);
+        if (timing_file == "register") {
+            timing.adjust_pipeline_registers();
+        } else {
+            timing.retime();
+            // whether to save the timing result or not
+            auto const &filename = args.timing_result_filename;
+            if (!filename.empty()) {
+                timing.save_wave_info(filename);
+            }
         }
     } else {
         throw std::runtime_error("Timing file not implemented");
@@ -168,12 +172,12 @@ int main(int argc, char *argv[]) {
 
         // set up the router
         auto r = std::make_unique<GlobalRouter>(100, graph);
-        for (auto const &it : placement) {
+        for (auto const &it: placement) {
             auto[x, y] = it.second;
             r->add_placement(x, y, it.first);
         }
 
-        for (const auto &iter : netlist) {
+        for (const auto &iter: netlist) {
             // Note
             // we only route 1bit at this time
             if (track_mode.at(iter.first) == bit_width)
