@@ -26,7 +26,8 @@ std::ostream& operator<<(std::ostream& os, const Point &p) {
 }
 
 double get_hpwl(const ::vector<Net> &netlist,
-                const ::vector<Instance> &instances) {
+                const ::vector<Instance> &instances,
+                int placer_cost_exp) {
     double hpwl = 0;
     for (auto const &net : netlist) {
         int xmin = INT_MAX;
@@ -44,12 +45,7 @@ double get_hpwl(const ::vector<Net> &netlist,
             if (pos.y > ymax)
                 ymax = pos.y;
         }
-        int exp = 1;
-        char* dist_exp = std::getenv("PNR_PLACER_EXP");
-        if (dist_exp != NULL) {
-            exp = std::stoi(dist_exp);
-        }
-        hpwl += std::pow((xmax - xmin) + (ymax - ymin), exp);
+        hpwl += std::pow((xmax - xmin) + (ymax - ymin), placer_cost_exp);
     }
     return hpwl;
 }

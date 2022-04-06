@@ -48,6 +48,7 @@ protected:
     std::map<char, std::pair<uint64_t, uint64_t>> instance_type_index_;
     char clb_type_;
     bool fold_reg_;
+    int placer_cost_exp;
 
     randutils::random_generator<std::mt19937> detail_rand_;
 
@@ -79,6 +80,8 @@ private:
     // will speed up a lot if there is no registers
     void set_fold_reg(const std::vector<std::string> &cluster_blocks,
                       bool fold_reg);
+
+    void set_placer_cost_exp();
 
     void compute_reg_no_pos(const std::vector<std::string> &cluster_blocks,
                             std::map<std::string,
