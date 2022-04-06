@@ -54,7 +54,8 @@ struct Net {
 };
 
 double get_hpwl(const std::vector<Net> &netlist,
-                const std::vector<Instance> &instances);
+                const std::vector<Instance> &instances,
+                int placer_cost_exp);
 
 std::map<std::string, std::vector<std::string>> group_reg_nets(
         std::map<std::string, std::vector<std::string>> &netlist);

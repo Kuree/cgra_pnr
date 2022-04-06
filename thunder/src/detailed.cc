@@ -46,6 +46,8 @@ DetailedPlacer
     // intelligently set the fold reg option
     set_fold_reg(cluster_blocks, fold_reg);
 
+    set_placer_cost_exp();
+
     ::map<::string, int> blk_id_dict;
     create_fixed_pos(fixed_pos, blk_id_dict);
 
@@ -275,6 +277,15 @@ void DetailedPlacer::set_fold_reg(const ::vector<::string> &cluster_blocks,
     } else {
         this->fold_reg_ = fold_reg;
     }
+}
+
+void DetailedPlacer::set_placer_cost_exp() {
+    int exp = 1;
+    char* dist_exp = std::getenv("PNR_PLACER_EXP");
+    if (dist_exp != NULL) {
+        exp = std::stoi(dist_exp);
+    }
+    this->placer_cost_exp = exp;
 }
 
 void DetailedPlacer
@@ -544,7 +555,7 @@ void DetailedPlacer::check_clb_fixed(const std::map<std::string,
 
 void DetailedPlacer::move() {
 #if DEBUG
-    double real_hpwl = get_hpwl(this->netlist_, this->instances_);
+    double real_hpwl = get_hpwl(this->netlist_, this->instances_, this->placer_cost_exp);
     if (real_hpwl != this->curr_energy) {
         cerr << current_step << " "
              << "real: " << real_hpwl << " current: "
@@ -761,7 +772,7 @@ double DetailedPlacer::energy() {
         for (auto const net_id : changed_net) {
             nets[count++] = netlist_[net_id];
         }
-        double old_hpwl = get_hpwl(nets, this->instances_);
+        double old_hpwl = get_hpwl(nets, this->instances_, this->placer_cost_exp);
 
         // change the locations
         for (const auto &move : moves_) {
@@ -770,7 +781,7 @@ double DetailedPlacer::energy() {
         }
 
         // compute the new hpwl
-        double new_hpwl = get_hpwl(nets, this->instances_);
+        double new_hpwl = get_hpwl(nets, this->instances_, this->placer_cost_exp);
 
         // revert
         for (const auto &iter : original)
@@ -795,7 +806,7 @@ void DetailedPlacer::commit_changes() {
 }
 
 double DetailedPlacer::init_energy() {
-    return get_hpwl(this->netlist_, this->instances_);
+    return get_hpwl(this->netlist_, this->instances_, this->placer_cost_exp);
 }
 
 ::map<std::string, std::pair<int, int>> DetailedPlacer::realize() {
