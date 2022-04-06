@@ -44,7 +44,12 @@ double get_hpwl(const ::vector<Net> &netlist,
             if (pos.y > ymax)
                 ymax = pos.y;
         }
-        hpwl += (xmax - xmin) + (ymax - ymin);
+        int exp = 1;
+        char* dist_exp = std::getenv("PNR_PLACER_EXP");
+        if (dist_exp != NULL) {
+            exp = std::stoi(dist_exp);
+        }
+        hpwl += std::pow((xmax - xmin) + (ymax - ymin), exp);
     }
     return hpwl;
 }
