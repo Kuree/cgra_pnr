@@ -19,7 +19,6 @@ if [[ "$OS" == "linux" ]]; then
     fi
 
 elif [[ "$OS" == "osx" ]]; then
-    export PNR_PLACER_EXP=1
     python --version
     cd thunder && CXX=g++-9 python setup.py bdist_wheel
     pip install dist/*.whl
