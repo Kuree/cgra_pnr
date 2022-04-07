@@ -281,9 +281,10 @@ void DetailedPlacer::set_fold_reg(const ::vector<::string> &cluster_blocks,
 
 void DetailedPlacer::set_placer_cost_exp() {
     int exp = 1;
-    if (std::getenv("PNR_PLACER_EXP")) {
-        exp = std::stoi(std::getenv("PNR_PLACER_EXP"));
-    }
+    char* dist_exp = std::getenv("PNR_PLACER_EXP");
+    //if (dist_exp != nullptr) {
+    //    exp = std::stoi(dist_exp);
+    //}
     this->placer_cost_exp = exp;
 }
 
