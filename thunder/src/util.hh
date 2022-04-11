@@ -6,6 +6,7 @@
 #include <climits>
 #include <iterator>
 #include <set>
+#include <optional>
 
 struct Net;
 
@@ -55,6 +56,8 @@ struct Net {
 
 double get_hpwl(const std::vector<Net> &netlist,
                 const std::vector<Instance> &instances);
+
+void set_hpwl_exp_param(std::optional<uint32_t> value);
 
 std::map<std::string, std::vector<std::string>> group_reg_nets(
         std::map<std::string, std::vector<std::string>> &netlist);

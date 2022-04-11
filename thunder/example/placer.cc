@@ -193,6 +193,18 @@ bool disable_global_placement() {
     return (std::getenv("DISABLE_GP") != nullptr) || (std::getenv("SKIP_GP") != nullptr);  // NOLINT
 }
 
+std::optional<uint32_t> get_hpwl_exp() {
+    if (auto *str_value = std::getenv("PNR_PLACER_EXP")) {
+        try {
+            auto res = std::stoul(str_value);
+            return res;
+        } catch (const std::invalid_argument &) {
+
+        } catch (const std::out_of_range &) {}
+    }
+    return std::nullopt;
+}
+
 int main(int argc, char *argv[]) {
     auto const[layout_file, netlist_file, result_filename, use_prefix] =
     parse_cli_args(argc, argv);
@@ -272,6 +284,9 @@ int main(int argc, char *argv[]) {
 
         gp_result = gp.realize();
     }
+
+    auto hpwl_exp_param = get_hpwl_exp();
+    set_hpwl_exp_param(hpwl_exp_param);
 
     map<string, pair<int, int>> dp_result = detailed_placement(clusters,
                                                                netlist,

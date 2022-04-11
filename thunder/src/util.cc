@@ -12,6 +12,8 @@ using std::vector;
 using std::string;
 using std::set;
 
+std::optional<uint32_t> hpwl_exp_param = {};
+
 bool operator< (const Point &p1, const Point &p2) {
     return ::pair<int, int>({p1.x, p1.y}) < ::pair<int, int>({p2.x, p2.y});
 }
@@ -23,6 +25,10 @@ bool operator== (const Point &p1, const Point &p2) {
 std::ostream& operator<<(std::ostream& os, const Point &p) {
     os << "x: " << p.x << " y: " << p.y;
     return os;
+}
+
+void set_hpwl_exp_param(std::optional<uint32_t> value) {
+    hpwl_exp_param = value;
 }
 
 double get_hpwl(const ::vector<Net> &netlist,
@@ -44,7 +50,11 @@ double get_hpwl(const ::vector<Net> &netlist,
             if (pos.y > ymax)
                 ymax = pos.y;
         }
-        hpwl += (xmax - xmin) + (ymax - ymin);
+        double diff = (xmax - xmin) + (ymax - ymin);
+        if (hpwl_exp_param) {
+            diff = std::pow(diff, static_cast<double>(*hpwl_exp_param));
+        }
+        hpwl += diff;
     }
     return hpwl;
 }
