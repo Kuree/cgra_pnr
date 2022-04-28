@@ -4,7 +4,7 @@ set -e
 if [[ "$OS" == "linux" ]]; then
     if [[ "$BUILD_WHEEL" == true ]]; then
         docker pull keyiz/manylinux2010-igraph
-        docker run -d --name manylinux --rm -it --mount type=bind,source="$(pwd)"/../cgra_pnr,target=/cgra_pnr keyiz/manylinux-igraph bash
+        docker run -d --name manylinux --rm -it --mount type=bind,source="$(pwd)"/../cgra_pnr,target=/cgra_pnr keyiz/manylinux2010-igraph bash
 
         docker exec -i manylinux bash -c 'cd /cgra_pnr/thunder && python setup.py bdist_wheel'
         docker exec -i manylinux bash -c 'cd /cgra_pnr/thunder && auditwheel show dist/*'
