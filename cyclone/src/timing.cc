@@ -2,6 +2,7 @@
 #include "thunder_io.hh"
 #include "io.hh"
 #include <unordered_set>
+#include <optional>
 
 #include <queue>
 
