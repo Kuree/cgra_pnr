@@ -428,9 +428,11 @@ void DetailedPlacer::legalize_reg(const ::map<char, ::vector<::pair<int,
         working_set.insert(ins.id);
     }
 
-    auto const &pos_list = available_pos.at(REG_BLK_TYPE);
-    for (auto const &pos: pos_list)
-        available_pos_r.insert({pos.first, pos.second});
+    if (available_pos.find(REG_BLK_TYPE) != available_pos.end()) {
+        auto const &pos_list = available_pos.at(REG_BLK_TYPE);
+        for (auto const &pos: pos_list)
+            available_pos_r.insert({pos.first, pos.second});
+    }
 
     // focus on the regs that drives nets
     for (auto const id : working_set) {
