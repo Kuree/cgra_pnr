@@ -44,7 +44,7 @@ public:
 
     void solve();
     void anneal() override;
-    std::map<std::string, std::map<char, std::set<std::pair<int, int>>>>
+    std::map<std::string, std::map<char, std::vector<std::pair<int, int>>>>
     realize();
     void set_seed(uint32_t seed);
 
@@ -75,7 +75,7 @@ private:
     double compute_hpwl() const;
     void
     find_exterior_set(const std::vector<std::vector<bool>> &bboard,
-                      const std::set<std::pair<int, int>> &assigned,
+                      const std::vector<std::pair<int, int>> &assigned,
                       std::vector<std::pair<int, int>> &empty_cells,
                       const int &max_dist) const;
 

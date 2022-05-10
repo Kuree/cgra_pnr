@@ -174,7 +174,7 @@ filter_clusters(const std::map<int, std::set<std::string>> &clusters,
 std::map<std::string, std::pair<int, int>>
 compute_centroids(const ::map<std::string,
                               ::map<char,
-                                    std::set<std::pair<int, int>>>> &clusters) {
+                                    std::vector<std::pair<int, int>>>> &clusters) {
     std::map<std::string, std::pair<int, int>> result;
     for (auto const &[cluster_id, positions] : clusters) {
         int x_sum = 0;

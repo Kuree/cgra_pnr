@@ -80,7 +80,7 @@ filter_clusters(const std::map<int, std::set<std::string>> &clusters,
 std::map<std::string, std::pair<int, int>>
 compute_centroids(const std::map<std::string,
                                  std::map<char,
-                                          std::set<std::pair<int,
+                                          std::vector<std::pair<int,
                                                              int>>>> &clusters);
 
 std::map<std::string, std::vector<std::string>>

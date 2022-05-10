@@ -170,7 +170,7 @@ void parse_layout(::ifstream &in, Layout &layout,
         throw ::runtime_error("expect layer header. got " + line);
     }
 
-    ::vector<::vector<bool>> layer;
+    ::vector<::vector<int>> layer;
     // we expect BEGIN token
     std::getline(in, line);
     trim(line);
@@ -183,15 +183,12 @@ void parse_layout(::ifstream &in, Layout &layout,
         trim(line);
         if (line == END)
             break;
-        ::vector<bool> row;
-        for (const auto c : line) {
-            if (c == '1')
-                row.emplace_back(true);
-            else if (c == '0')
-                row.emplace_back(false);
-            else
-                throw ::runtime_error("expect either 1 or 0, got " +
-                                      ::string(1, c));
+        ::vector<int> row;
+
+        auto tokens = get_tokens(line);
+        
+        for (const auto s : tokens) {
+            row.emplace_back(std::stoi(s));  
         }
         if (!layer.empty()) {
             if (layer[0].size() != row.size()) {
@@ -206,8 +203,7 @@ void parse_layout(::ifstream &in, Layout &layout,
     for (uint32_t y = 0; y < layer.size(); y++) {
         auto const &row = layer[y];
         for (uint32_t x = 0; x < row.size(); x++) {
-            if (layer[y][x])
-                l.mark_available(x, y);
+            l.mark_available(x, y, layer[y][x]);
         }
     }
     layout.add_layer(l, major, minor);

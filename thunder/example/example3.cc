@@ -18,7 +18,7 @@ int main() {
     auto layer = Layer('p', size, size);
     for (uint32_t x = 0; x < size; x++)
         for (uint32_t y = 0; y < size; y++)
-            layer.mark_available(x, y);
+            layer.mark_available(x, y, 1);
     layout.add_layer(layer);
 
     // two nets

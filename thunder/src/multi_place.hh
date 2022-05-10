@@ -9,7 +9,7 @@
 std::map<std::string, std::pair<int, int>>  multi_place(
         const std::map<std::string, std::set<std::string>> &clusters,
         const std::map<std::string, std::map<char,
-                                    std::set<std::pair<int, int>>>> &cells,
+                                    std::vector<std::pair<int, int>>>> &cells,
         const std::map<std::string, std::map<std::string,
                                     std::vector<std::string>>> &netlists,
         const std::map<std::string, std::map<std::string,
@@ -19,7 +19,7 @@ std::map<std::string, std::pair<int, int>>  multi_place(
 std::map<std::string, std::pair<int, int>>  multi_place(
         const std::map<std::string, std::set<std::string>> &clusters,
         const std::map<std::string, std::map<char,
-                std::set<std::pair<int, int>>>> &cells,
+                std::vector<std::pair<int, int>>>> &cells,
         const std::map<std::string, std::map<std::string,
                 std::vector<std::string>>> &netlists,
         const std::map<std::string, std::map<std::string,
@@ -32,7 +32,7 @@ detailed_placement(const std::map<std::string, std::set<std::string>> &clusters,
                    const std::map<std::string, std::pair<int, int>> &fixed_pos,
                    const std::map<std::string,
                          std::map<char,
-                                  std::set<std::pair<int, int>>>> &gp_result,
+                                  std::vector<std::pair<int, int>>>> &gp_result,
                    const Layout &layout);
 
 #endif //THUNDER_MULTI_PLACE_HH

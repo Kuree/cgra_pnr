@@ -8,7 +8,7 @@ def main():
     layer = pythunder.Layer('p', size, size)
     for x in range(size):
         for y in range(size):
-            layer.mark_available(x, y)
+            layer.mark_available(x, y, 1)
     layout.add_layer(layer)
 
     # two nets

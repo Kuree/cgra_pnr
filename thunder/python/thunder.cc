@@ -60,7 +60,7 @@ void init_layout(py::module &m) {
     py::class_<Layout>(m, "Layout")
             .def(py::init<>())
             .def(py::init<const std::map<char,
-                    std::vector<std::vector<bool>>> &>())
+                    std::vector<std::vector<int>>> &>())
             .def(py::init<const std::vector<std::vector<char>> &>())
             .def("add_layer",
                  py::overload_cast<const Layer&>(&Layout::add_layer))
@@ -155,13 +155,13 @@ void init_pythunder(py::module &m) {
 void init_detailed_placement(py::module &m) {
     m.def("detailed_placement",
             py::overload_cast<const ::map<::string, std::set<std::string>>&,
-            const ::map<::string, ::map<char, std::set<std::pair<int, int>>>>&,
+            const ::map<::string, ::map<char, std::vector<std::pair<int, int>>>>&,
             const ::map<::string, ::map<std::string, std::vector<std::string>>>&,
             const ::map<::string, ::map<std::string, std::pair<int, int>>>&,
             char, bool>(&multi_place))
       .def("detailed_placement",
              py::overload_cast<const ::map<::string, std::set<std::string>>&,
-             const ::map<::string, ::map<char, std::set<std::pair<int, int>>>>&,
+             const ::map<::string, ::map<char, std::vector<std::pair<int, int>>>>&,
              const ::map<::string, ::map<::string, std::vector<std::string>>>&,
              const ::map<::string, ::map<::string, std::pair<int, int>>>&,
              char, bool, uint32_t>(&multi_place))

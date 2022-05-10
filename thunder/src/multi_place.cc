@@ -15,7 +15,7 @@ using std::set;
 
 ::map<std::string, std::pair<int, int>>  multi_place(
         const ::map<::string, ::set<::string>> &clusters,
-        const ::map<::string, ::map<char, ::set<std::pair<int, int>>>> &cells,
+        const ::map<::string, ::map<char, ::vector<std::pair<int, int>>>> &cells,
         const ::map<::string, ::map<::string, ::vector<::string>>> &netlists,
         const ::map<::string, ::map<::string, ::pair<int, int>>> &fixed_blocks,
         char clb_type, bool fold_reg, uint32_t seed) {
@@ -103,7 +103,7 @@ using std::set;
 
 ::map<std::string, std::pair<int, int>>  multi_place(
         const ::map<::string, ::set<::string>> &clusters,
-        const ::map<::string, ::map<char, ::set<std::pair<int, int>>>> &cells,
+        const ::map<::string, ::map<char, ::vector<std::pair<int, int>>>> &cells,
         const ::map<::string, ::map<::string, ::vector<::string>>> &netlists,
         const ::map<::string, ::map<::string, ::pair<int, int>>> &fixed_blocks,
         char clb_type, bool fold_reg) {
@@ -118,7 +118,7 @@ detailed_placement(const std::map<std::string, std::set<std::string>> &clusters,
                    const std::map<std::string, std::pair<int, int>> &fixed_pos,
                    const std::map<std::string,
                                   std::map<char,
-                                  std::set<std::pair<int, int>>>> &gp_result,
+                                  std::vector<std::pair<int, int>>>> &gp_result,
                    const Layout &layout) {
     auto centroids = compute_centroids(gp_result);
     // substitutes the clusters

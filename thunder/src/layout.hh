@@ -17,20 +17,21 @@ public:
 
     Layer(char blk_type, uint32_t width, uint32_t height);
     Layer(const Layer &layer);
-    bool operator[](const std::pair<uint32_t, uint32_t> &pos) const;
-    std::vector<bool> operator[](uint32_t row) const
-    { return std::vector<bool>(layout_[row].begin(), layout_[row].end()); }
+    int operator[](const std::pair<uint32_t, uint32_t> &pos) const;
+    std::vector<int> operator[](uint32_t row) const
+    { return std::vector<int>(layout_[row].begin(), layout_[row].end()); }
     std::pair<uint64_t, uint64_t> get_size() const;
 
     std::vector<std::pair<uint32_t, uint32_t>> produce_available_pos() const;
 
 private:
-    std::vector<std::vector<bool>> layout_;
+    std::vector<std::vector<int>> layout_;
 public:
     inline void mark_available(uint32_t x,
-                               uint32_t y) { layout_[y][x] = true; }
+                               uint32_t y,
+                               uint32_t avail) { layout_[y][x] = avail; }
     inline void mark_unavailable(uint32_t x,
-                                 uint32_t y) { layout_[y][x] = false; }
+                                 uint32_t y) { layout_[y][x] = 0; }
 };
 
 class LayerMask {
@@ -57,7 +58,7 @@ public:
 
     Layout() = default;
     explicit Layout(const std::map<char,
-                                   std::vector<std::vector<bool>>> &layers);
+                                   std::vector<std::vector<int>>> &layers);
     explicit Layout(const std::vector<std::vector<char>> &layers);
 
     void add_layer(const Layer &layer);

@@ -7,14 +7,14 @@ using std::runtime_error;
 
 Layer::Layer(char blk_type, uint32_t width,
              uint32_t height) : blk_type(blk_type),
-                                layout_(height, ::vector<bool>(width, false)) {}
+                                layout_(height, ::vector<int>(width, 0)) {}
 
 Layer::Layer(const Layer &layer) {
     auto height = layer.layout_.size();
     blk_type = layer.blk_type;
     layout_.reserve(height);
     for (auto const &row: layer.layout_) {
-        auto vec = std::vector<bool>(row.begin(), row.end());
+        auto vec = std::vector<int>(row.begin(), row.end());
         layout_.emplace_back(vec);
     }
 }
@@ -25,14 +25,15 @@ Layer::produce_available_pos() const {
 
     for (uint32_t y = 0; y < layout_.size(); y++) {
         for (uint32_t x = 0; x < layout_[y].size(); x++) {
-            if (layout_[y][x])
+            for (int z = 0; z < layout_[y][x]; z++) {
                 result.emplace_back(std::make_pair(x, y));
+            }
         }
     }
     return result;
 }
 
-bool Layer::operator[](const std::pair<uint32_t, uint32_t> &pos) const {
+int Layer::operator[](const std::pair<uint32_t, uint32_t> &pos) const {
     auto [x, y] = pos;
     return layout_[y][x];
 }
@@ -41,7 +42,7 @@ std::pair<uint64_t, uint64_t> Layer::get_size() const {
     return {layout_[0].size(), layout_.size()};
 }
 
-Layout::Layout(const std::map<char, std::vector<std::vector<bool>>> &layers) {
+Layout::Layout(const std::map<char, std::vector<std::vector<int>>> &layers) {
     for (auto &[blk_type, layer]: layers) {
         auto height = static_cast<uint32_t>(layer.size());
         auto width = static_cast<uint32_t>(layer[0].size());
@@ -49,8 +50,7 @@ Layout::Layout(const std::map<char, std::vector<std::vector<bool>>> &layers) {
         Layer l(blk_type, width, height);
         for (uint32_t y = 0; y < height; y++) {
             for (uint32_t x = 0; x < width; x++) {
-                if (layer[y][x])
-                    l.mark_available(x, y);
+                l.mark_available(x, y, layer[y][x]);
             }
         }
         add_layer(l);
@@ -73,7 +73,7 @@ Layout::Layout(const std::vector<std::vector<char>> &layers) {
         for (uint32_t x = 0; x < width; x++) {
             auto const blk_type = layers[y][x];
             auto &layer = layers_.at(blk_type);
-            layer.mark_available(x, y);
+            layer.mark_available(x, y, 1);
         }
     }
 }
@@ -175,8 +175,10 @@ Layout::produce_available_pos() const {
         for (uint32_t y = 0; y < height_; y++) {
             auto blks = get_blk_types(x, y);
             for (auto const &blk : blks) {
-                auto &lst = result[blk];
-                lst.emplace_back(std::make_pair(x, y));
+                auto const &layer = layers_.at(blk);
+                for (int z = 0; z < layer[{x, y}]; z++) {
+                    result[blk].emplace_back(std::make_pair(x, y));
+                }
             }
         }
     }

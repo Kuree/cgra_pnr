@@ -43,6 +43,7 @@ DetailedPlacer
                  reg_no_pos_(),
                  loc_instances_(),
                  fixed_pos_(fixed_pos) {
+
     // intelligently set the fold reg option
     set_fold_reg(cluster_blocks, fold_reg);
 
@@ -185,13 +186,13 @@ void DetailedPlacer
     for (const auto &iter : blk_counts) {
         uint64_t start_index = instances_.size();
         const char blk_type = iter.first;
-        set<Point> working_set;
+        vector<Point> working_set;
         for (const auto &pos_iter : available_pos[blk_type]) {
-            working_set.insert(Point{pos_iter});
+            working_set.emplace_back(Point{pos_iter});
         }
         for (const auto &ins_iter : blk_counts[blk_type]) {
             auto const pos = Point(init_placement[ins_iter]);
-            if (working_set.find(pos) == working_set.end()) {
+            if (std::find(working_set.begin(), working_set.end(), pos) == working_set.end()) {
                 // we need to be extra careful as it might be prefixed
                 if (fixed_pos.find(ins_iter) != fixed_pos.end()) {
                     continue;
@@ -203,7 +204,7 @@ void DetailedPlacer
             Instance ins(ins_iter, pos,
                          (int) instances_.size());
             instances_.emplace_back(ins);
-            working_set.erase(pos);
+            working_set.erase(std::find(working_set.begin(),working_set.end(),pos));
             instance_ids_.emplace_back(ins.id);
             blk_id_dict[ins.name] = ins.id;
         }
@@ -212,7 +213,7 @@ void DetailedPlacer
             auto pos = *working_set.begin();
             Instance ins(string(1, blk_type), pos, (int) instances_.size());
             instances_.emplace_back(ins);
-            working_set.erase(pos);
+            working_set.erase(std::find(working_set.begin(),working_set.end(),pos));
         }
         if (!working_set.empty())
             throw ::runtime_error("working set not empty!");

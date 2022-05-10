@@ -766,9 +766,9 @@ double GlobalPlacer::compute_hpwl() const {
     return hpwl;
 }
 
-::map<::string, ::map<char, ::set<::pair<int, int>>>>
+::map<::string, ::map<char, ::vector<::pair<int, int>>>>
 GlobalPlacer::realize() {
-    ::map<::string, ::map<char, ::set<::pair<int, int>>>> result;
+    ::map<::string, ::map<char, ::vector<::pair<int, int>>>> result;
     // several problem to solve
     // 1. assign clb cells
     // 2. coordinates remapping
@@ -862,9 +862,6 @@ GlobalPlacer::realize() {
             if (blk_type == REGISTER)
                 continue;
             if (blk_type != clb_type_) {
-                // printf("new_y: %d new_x: %d %c\n", new_y, new_x,
-                //         blk_type);
-                // printf("pos x: %d y: %d\n", pos.x, pos.y);
                 throw std::runtime_error("error in assign clb cells "
                     "got cell type " + std::string(1, blk_type));
             }
@@ -872,9 +869,15 @@ GlobalPlacer::realize() {
             bboard[new_y][new_x] = false;
         }
         for (auto const &clb_type : clb_types_) {
-            auto cells = ::set<::pair<int, int>>(clb_cells.begin(),
+            auto cells = ::vector<::pair<int, int>>(clb_cells.begin(),
                                                  clb_cells.end());
-            result[boxes_[box_index].id][clb_type] = cells;
+            result[boxes_[box_index].id][clb_type] = {};
+
+            for (auto cell: cells) {
+                for (int z = 0; z < board_layout_.get_layer(clb_type)[{cell.first, cell.second}]; z++) {
+                    result[boxes_[box_index].id][clb_type].emplace_back(cell);
+                }
+            }
         }
     }
     // fill in the one based one which one needs most
@@ -928,7 +931,9 @@ GlobalPlacer::realize() {
                     uint32_t ii = cell_index[i];
                     auto[x, y] = cells[ii];
                     for (auto const &clb_type : clb_types_) {
-                        result[boxes_[index].id][clb_type].insert(cells[ii]);
+                        for (int z = 0; z < board_layout_.get_layer(clb_type)[{cells[ii].first, cells[ii].second}]; z++) {
+                            result[boxes_[index].id][clb_type].emplace_back(cells[ii]);
+                        }                        
                     }
                     bboard[y][x] = false;
                     needed--;
@@ -989,14 +994,12 @@ GlobalPlacer::realize() {
             for (int i = 0; i < total_num_blocks; i++) {
                 auto cell_i = blk_index[i];
                 auto cell = cells[cell_i];
-                result[boxes_[index].id][blk_type].insert(cell);
+                result[boxes_[index].id][blk_type].emplace_back(cell);
                 auto [x, y] = cell;
                 bboard[y][x] = false;
             }
-
         }
     }
-
     return result;
 }
 
@@ -1238,7 +1241,7 @@ void GlobalPlacer::commit_changes() {
 
 void GlobalPlacer
 ::find_exterior_set(const ::vector<::vector<bool>> &bboard,
-                    const ::set<::pair<int, int>> &assigned,
+                    const ::vector<::pair<int, int>> &assigned,
                     ::vector<::pair<int, int>> &empty_cells,
                     const int &max_dist) const  {
     ::vector<int> xs;
@@ -1266,8 +1269,9 @@ void GlobalPlacer
             auto blk_type =
                     board_layout_.get_blk_type(static_cast<uint32_t>(x),
                                                static_cast<uint32_t>(y));
-            if (bboard[y][x] and blk_type == clb_type_)
+            if (bboard[y][x] and blk_type == clb_type_) {
                 empty_cells.emplace_back(std::make_pair(x, y));
+            }
         }
     }
 }

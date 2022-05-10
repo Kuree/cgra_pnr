@@ -117,11 +117,7 @@ check_placement(const ::map<::string,
     }
     // making sure the positions are correct
     auto available_pos = layout.produce_available_pos();
-    ::map<char, std::set<::pair<int, int>>> pos_set;
-    for (auto const &[blk_type, pos_list] : available_pos) {
-        pos_set[blk_type] = std::set<::pair<int, int>>(pos_list.begin(),
-                                                       pos_list.end());
-    }
+
     for (auto const &[blk_id, pos] : placement) {
         char blk_type = blk_id[0];
         // hack here
@@ -129,11 +125,12 @@ check_placement(const ::map<::string,
         if (blk_type == 'i' || blk_type == 'I')
             continue;
         auto const[x, y] = pos;
-        auto &blk_pos = pos_set.at(blk_type);
-        if (blk_pos.find(pos) == blk_pos.end())
+        auto &blk_pos = available_pos.at(blk_type);
+        if (std::find(blk_pos.begin(),blk_pos.end(),pos) == blk_pos.end())
             throw std::runtime_error("over use position " + std::to_string(x)
                                      + " " + std::to_string(y));
-        blk_pos.erase(pos);
+
+        blk_pos.erase(std::find(blk_pos.begin(),blk_pos.end(),pos));
     }
 }
 
@@ -239,7 +236,7 @@ int main(int argc, char *argv[]) {
     auto clusters = convert_clusters(raw_clusters, fixed_pos);
     // notice that if there is only one cluster and the board is very small
     // we just do it flat
-    ::map<::string, ::map<char, std::set<::pair<int, int>>>> gp_result;
+    ::map<::string, ::map<char, std::vector<::pair<int, int>>>> gp_result;
     const auto &size = layout.get_size();
     if ((clusters.size() == 1)
         || (size.first <= dim_threshold && size.second <= dim_threshold)
@@ -253,7 +250,7 @@ int main(int argc, char *argv[]) {
         gp_result["x0"] = {};
         for (auto const &[blk_type, pos]: pos_collections) {
             gp_result["x0"][blk_type] =
-                    std::set<::pair<int, int>>(pos.begin(), pos.end());
+                    std::vector<::pair<int, int>>(pos.begin(), pos.end());
         }
         clusters = new_cluster;
 
