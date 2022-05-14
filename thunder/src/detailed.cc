@@ -479,47 +479,37 @@ void DetailedPlacer::compute_reg_no_pos(
         const std::vector<std::string> &cluster_blocks,
         std::map<std::string, std::vector<std::string>> &nets,
         std::map<std::string, int> &blk_id_dict) {
-    // direct translate from Python implementation
     if (this->fold_reg_) {
-        auto linked_net = group_reg_nets(nets);
-        for (auto const &iter : linked_net) {
-            auto net_id = iter.first;
-            auto net = ::vector<::string>();
-            net.insert(net.end(), nets[net_id].begin(), nets[net_id].end());
-            if (linked_net.find(net_id) != linked_net.end()) {
-                for (auto const  &reg_net_id : linked_net[net_id]) {
-                    if (nets.find(reg_net_id) != nets.end()) {
-                        auto temp_net = nets[reg_net_id];
-                        net.insert(net.end(), temp_net.begin(), temp_net.end());
-                    }
-                }
+        for (auto const &iter : nets) {
+            auto net_blks = iter.second;
+            auto curr_blk = net_blks[0];
+
+            int curr_blk_id = blk_id_dict[curr_blk];
+
+            reg_no_pos_.insert({curr_blk_id, {}});
+
+            // First add all destinations of curr_blk
+            for (auto const &dest : net_blks) {
+                if (dest == curr_blk) 
+                    continue;
+                reg_no_pos_[curr_blk_id].insert(blk_id_dict[dest]);
             }
 
-            for (auto const &blk : net) {
-                // we only care about the wire it's driving
-                if (std::find(cluster_blocks.begin(),
-                              cluster_blocks.end(),
-                              blk) != cluster_blocks.end()) {
-                    int blk_id = blk_id_dict[blk];
-                    if (reg_no_pos_.find(blk_id) == reg_no_pos_.end()) {
-                        reg_no_pos_.insert({blk_id, {}});
-                    }
-                    if (blk[0] == REG_BLK_TYPE) {
-                        for (auto const &bb : net) {
-                            if (bb[0] != REG_BLK_TYPE)
-                                reg_no_pos_[blk_id].insert(blk_id_dict[bb]);
-                        }
-                    } else {
-                        // only put registers there
-                        for (auto const &bb : net) {
-                            if (bb[0] == REG_BLK_TYPE)
-                                reg_no_pos_[blk_id].insert(blk_id_dict[bb]);
-                        }
+            // Then find all sources of curr_blk blk
+            for (auto const &iter2 : nets) {
+                auto source = iter2.second[0];
+                for (auto const &dest2 : iter2.second) {
+                    if (dest2 == source) 
+                        continue;
+                    if (dest2 == curr_blk) {
+                        reg_no_pos_[curr_blk_id].insert(blk_id_dict[source]);
                     }
                 }
             }
         }
     }
+    cluster_blocks[0];
+
 }
 
 bool DetailedPlacer::is_reg_net(const Instance &ins, const Point &next_pos) {
