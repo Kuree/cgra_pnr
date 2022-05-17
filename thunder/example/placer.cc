@@ -282,6 +282,10 @@ int main(int argc, char *argv[]) {
         gp_result = gp.realize();
     }
 
+
+    std::cout << "Finished global placement" << std::endl;
+
+
     auto hpwl_exp_param = get_hpwl_exp();
     set_hpwl_exp_param(hpwl_exp_param);
 

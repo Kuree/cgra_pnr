@@ -55,10 +55,6 @@ GlobalPlacer::GlobalPlacer(const ::map<::string, ::set<::string>> &clusters,
     netlists_ = nets;
     intra_count_ = intra_count;
 
-    /*
-    for (auto const &iter : intra_count)
-        printf("%s %d\n", iter.first.c_str(), iter.second);
-    */
 
     // random setup
     global_rand_.seed(0);

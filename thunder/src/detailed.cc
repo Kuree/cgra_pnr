@@ -85,13 +85,18 @@ void DetailedPlacer::set_seed(uint32_t seed) {
 
 void DetailedPlacer::index_loc() {
     // index to loc
+// std::cout << "\nindex_loc" << std::endl;
     for (const auto &instance : instances_) {
         auto pos = instance.pos;
         const char blk_type = instance.name[0];
         if (loc_instances_.find(blk_type) == loc_instances_.end())
             loc_instances_[blk_type] = {};
-        loc_instances_[blk_type].insert({{pos.x, pos.y}, instance.id});
+        if (loc_instances_[blk_type].find({pos.x, pos.y}) == loc_instances_[blk_type].end())
+            loc_instances_[blk_type].insert({{pos.x, pos.y}, {}});
+        loc_instances_[blk_type][{pos.x, pos.y}].insert(instance.id);
+// std::cout << instance.id  << " : " << pos.x << "," << pos.y << std::endl;
     }
+// std::cout << std::endl;
 }
 
 void
@@ -179,7 +184,6 @@ void DetailedPlacer
     ::map<char, ::vector<::string>> blk_counts;
     ::map<char, int64_t> empty_spaces;
     compute_blk_pos(cluster_blocks, available_pos, blk_counts, empty_spaces);
-
 
     // create instances as well as dummies
     // also set up the pos index
@@ -418,7 +422,7 @@ DetailedPlacer::init_place_reg(const ::vector<::string> &cluster_blocks,
 
 void DetailedPlacer::legalize_reg(const ::map<char, ::vector<::pair<int,
         int>>> &available_pos) {
-    ::set<Point> available_pos_r;
+    ::vector<Point> available_pos_r;
     ::set<int> finished_set;
     ::set<int> working_set;
 
@@ -430,8 +434,9 @@ void DetailedPlacer::legalize_reg(const ::map<char, ::vector<::pair<int,
     }
 
     auto const &pos_list = available_pos.at(REG_BLK_TYPE);
-    for (auto const &pos: pos_list)
-        available_pos_r.insert({pos.first, pos.second});
+    for (auto const &pos: pos_list) {
+        available_pos_r.emplace_back(Point(pos.first, pos.second));
+    }
 
     // focus on the regs that drives nets
     for (auto const id : working_set) {
@@ -451,7 +456,8 @@ void DetailedPlacer::legalize_reg(const ::map<char, ::vector<::pair<int,
                 instances_[id].pos = pos;
                 found = true;
                 finished_set.insert(id);
-                available_pos_r.erase(pos);
+                if (std::find(available_pos_r.begin(),available_pos_r.end(),pos) != available_pos_r.end())
+                    available_pos_r.erase(std::find(available_pos_r.begin(),available_pos_r.end(),pos));
                 break;
             }
         }
@@ -470,7 +476,8 @@ void DetailedPlacer::legalize_reg(const ::map<char, ::vector<::pair<int,
             break;
         Point pos = *available_pos_r.begin();
         instances_[id].pos = pos;
-        available_pos_r.erase(pos);
+        if (std::find(available_pos_r.begin(),available_pos_r.end(),pos) != available_pos_r.end())
+            available_pos_r.erase(std::find(available_pos_r.begin(),available_pos_r.end(),pos));
     }
 
 }
@@ -549,9 +556,9 @@ void DetailedPlacer::move() {
         const auto &instance = instances_[id];
         const auto blk_type = instance.name[0];
         auto pos = std::make_pair(instance.pos.x, instance.pos.y);
-        if (loc_instances_[blk_type][pos] != id) {
-            std::cout << instance.name << " "
-                      << instances_[loc_instances_[blk_type][pos]].id << "\n";
+        if (loc_instances_[blk_type][pos].find(id) == loc_instances_[blk_type][pos].end()) {
+            std::cout << instance.pos.x << "," << instance.pos.y << "\n";
+            std::cout << instance.name << "\n";
             throw ::runtime_error("loc checking is wrong");
         }
     }
@@ -588,7 +595,7 @@ void DetailedPlacer::move() {
             == loc_instances_[blk_type].end())
             return;
 
-        const int id = loc_instances_[blk_type][pos];
+        const int id = *loc_instances_[blk_type][pos].begin();
         next_ins = instances_[id];
     }
 
@@ -778,9 +785,9 @@ void DetailedPlacer::commit_changes() {
     for (const auto &move : moves_) {
         auto new_pos = std::make_pair(move.new_pos.x, move.new_pos.y);
         const char blk_type = instances_[move.blk_id].name[0];
-        loc_instances_[blk_type][new_pos] = move.blk_id;
-
         int blk_id = move.blk_id;
+
+        loc_instances_[blk_type][new_pos].insert(blk_id);
         instances_[blk_id].pos = Point(move.new_pos);
     }
 }
@@ -791,9 +798,11 @@ double DetailedPlacer::init_energy() {
 
 ::map<std::string, std::pair<int, int>> DetailedPlacer::realize() {
     map<::string, ::pair<int, int>> result;
+
     for (auto const &ins : instances_) {
-        if (ins.name.length() > 1)
+        if (ins.name.length() > 1) {
             result[ins.name] = {ins.pos.x, ins.pos.y};
+        }
     }
     return result;
 }
