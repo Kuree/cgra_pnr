@@ -85,7 +85,6 @@ void DetailedPlacer::set_seed(uint32_t seed) {
 
 void DetailedPlacer::index_loc() {
     // index to loc
-// std::cout << "\nindex_loc" << std::endl;
     for (const auto &instance : instances_) {
         auto pos = instance.pos;
         const char blk_type = instance.name[0];
@@ -94,9 +93,7 @@ void DetailedPlacer::index_loc() {
         if (loc_instances_[blk_type].find({pos.x, pos.y}) == loc_instances_[blk_type].end())
             loc_instances_[blk_type].insert({{pos.x, pos.y}, {}});
         loc_instances_[blk_type][{pos.x, pos.y}].insert(instance.id);
-// std::cout << instance.id  << " : " << pos.x << "," << pos.y << std::endl;
     }
-// std::cout << std::endl;
 }
 
 void
@@ -489,27 +486,28 @@ void DetailedPlacer::compute_reg_no_pos(
     if (this->fold_reg_) {
         for (auto const &iter : nets) {
             auto net_blks = iter.second;
-            auto curr_blk = net_blks[0];
 
-            int curr_blk_id = blk_id_dict[curr_blk];
+            for (auto const &curr_blk : net_blks) {
+                int curr_blk_id = blk_id_dict[curr_blk];
 
-            reg_no_pos_.insert({curr_blk_id, {}});
+                reg_no_pos_.insert({curr_blk_id, {}});
 
-            // First add all destinations of curr_blk
-            for (auto const &dest : net_blks) {
-                if (dest == curr_blk) 
-                    continue;
-                reg_no_pos_[curr_blk_id].insert(blk_id_dict[dest]);
-            }
-
-            // Then find all sources of curr_blk blk
-            for (auto const &iter2 : nets) {
-                auto source = iter2.second[0];
-                for (auto const &dest2 : iter2.second) {
-                    if (dest2 == source) 
+                // First add all destinations of curr_blk
+                for (auto const &dest : net_blks) {
+                    if (dest == curr_blk) 
                         continue;
-                    if (dest2 == curr_blk) {
-                        reg_no_pos_[curr_blk_id].insert(blk_id_dict[source]);
+                    reg_no_pos_[curr_blk_id].insert(blk_id_dict[dest]);
+                }
+
+                // Then find all sources of curr_blk blk
+                for (auto const &iter2 : nets) {
+                    auto source = iter2.second[0];
+                    for (auto const &dest2 : iter2.second) {
+                        if (dest2 == source) 
+                            continue;
+                        if (dest2 == curr_blk) {
+                            reg_no_pos_[curr_blk_id].insert(blk_id_dict[source]);
+                        }
                     }
                 }
             }

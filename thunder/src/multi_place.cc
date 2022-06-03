@@ -27,7 +27,6 @@ using std::set;
     uint32_t num_cpus = std::thread::hardware_concurrency();
     // 0 will be returned if it's not detected.
     num_cpus = std::max(1u, num_cpus);
-    std::cout << "Num cpus " << num_cpus << ", Num clusters " << num_clusters << std::endl;
     // use as much resource as possible
     num_cpus = std::min((uint32_t)num_clusters, num_cpus);
 

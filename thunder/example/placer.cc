@@ -238,23 +238,12 @@ int main(int argc, char *argv[]) {
     // we just do it flat
     ::map<::string, ::map<char, std::vector<::pair<int, int>>>> gp_result;
     const auto &size = layout.get_size();
-    if ((clusters.size() == 1)
+    
+    bool skip_gp = ((clusters.size() == 1)
         || (size.first <= dim_threshold && size.second <= dim_threshold)
-        || (fixed_ratio >= partial_reconfigure_ratio) || disable_global_placement()) {
-        // merge into one-single cluster, if more than one
-        std::map<std::string, std::set<std::string>> new_cluster;
-        for (auto const &it: clusters) {
-            new_cluster["x0"].insert(it.second.begin(), it.second.end());
-        }
-        auto const &pos_collections = layout.produce_available_pos();
-        gp_result["x0"] = {};
-        for (auto const &[blk_type, pos]: pos_collections) {
-            gp_result["x0"][blk_type] =
-                    std::vector<::pair<int, int>>(pos.begin(), pos.end());
-        }
-        clusters = new_cluster;
+        || (fixed_ratio >= partial_reconfigure_ratio) || disable_global_placement());
 
-    } else {
+    if (!skip_gp) {
         // global placement
         auto gp = GlobalPlacer(clusters, netlist, fixed_pos, layout);
         gp.set_seed(seed);
@@ -279,12 +268,28 @@ int main(int argc, char *argv[]) {
         gp.solve();
         gp.anneal();
 
-        gp_result = gp.realize();
+        try {
+            gp_result = gp.realize();
+        } catch (...) {
+            std::cout << "Global placement failed, trying detailed placement" << std::endl;
+            skip_gp = true;
+        }
     }
 
-
-    std::cout << "Finished global placement" << std::endl;
-
+    if (skip_gp) {
+        // merge into one-single cluster, if more than one
+        std::map<std::string, std::set<std::string>> new_cluster;
+        for (auto const &it: clusters) {
+            new_cluster["x0"].insert(it.second.begin(), it.second.end());
+        }
+        auto const &pos_collections = layout.produce_available_pos();
+        gp_result["x0"] = {};
+        for (auto const &[blk_type, pos]: pos_collections) {
+            gp_result["x0"][blk_type] =
+                    std::vector<::pair<int, int>>(pos.begin(), pos.end());
+        }
+        clusters = new_cluster;
+    }
 
     auto hpwl_exp_param = get_hpwl_exp();
     set_hpwl_exp_param(hpwl_exp_param);
