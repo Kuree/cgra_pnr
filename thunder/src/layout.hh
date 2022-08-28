@@ -65,6 +65,7 @@ public:
                    uint32_t priority_minor);
     bool is_legal(const std::string &blk_id, uint32_t x, uint32_t y);
     const Layer& get_layer(char blk_type) const { return layers_.at(blk_type); }
+    [[nodiscard]] bool has_layer(char blk_type) const { return layers_.find(blk_type) != layers_.end(); }
     char get_blk_type(uint32_t x, uint32_t y) const;
     std::vector<char> get_blk_types(uint32_t x, uint32_t y) const;
 

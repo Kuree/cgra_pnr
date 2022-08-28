@@ -67,6 +67,9 @@ prefixed_placement(const std::map<std::string,
         return a[0] == 'i';
     });
 
+    // if it doesn't have I layer, return
+    if (!layout.has_layer('I')) return result;
+
     const auto &io_layout = layout.get_layer('I');
     const auto available_pos = io_layout.produce_available_pos();
     if (available_pos.size() < working_set.size())
