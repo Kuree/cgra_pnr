@@ -42,6 +42,11 @@ void GlobalRouter::route() {
     group_reg_nets();
     auto reordered_netlist = reorder_reg_nets();
 
+std::cout << "\nreordered netlist:" << std::endl;
+for (auto i: reordered_netlist)
+    std::cout << i << ' ';
+std::cout << "\n" << std::endl;
+
     for (uint32_t it = 0; it < num_iteration_; it++) {
         auto time_start = std::chrono::system_clock::now();
 

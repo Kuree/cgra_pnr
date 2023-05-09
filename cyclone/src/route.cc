@@ -139,13 +139,15 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
     return route_a_star(start, same_node(end), ::move(cost_f), ::move(h_f));
 }
 
-
 std::vector<std::shared_ptr<Node>> Router::route_a_star(
         const std::shared_ptr<Node> &start,
         std::function<bool(const std::shared_ptr<Node> &)> end_f,
         std::function<double(const std::shared_ptr<Node> &,
                                const std::shared_ptr<Node> &)> cost_f,
         std::function<double(const ::shared_ptr<Node> &)> h_f) {
+            
+    int req_regs = 0;
+
     ::unordered_set<::shared_ptr<Node>> visited;
     ::unordered_map<::shared_ptr<Node>, double> g_score = {{start, 0}};
 
@@ -157,6 +159,8 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         return f_score.at(a) > f_score.at(b);
     };
 
+    ::unordered_set<::shared_ptr<Node>> blockages;
+
     ::priority_queue<::shared_ptr<Node>,
             ::vector<::shared_ptr<Node>>,
             decltype(cost_comp)> working_set(cost_comp);
@@ -165,6 +169,7 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
     open_set.insert(start);
 
     ::map<::shared_ptr<Node>, ::shared_ptr<Node>> trace;
+    ::vector<::shared_ptr<Node>> routed_path;
 
     ::shared_ptr<Node> head = nullptr;
 
@@ -172,8 +177,42 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
 
         // get the one with lowest cost
         head = working_set.top();
-        if (end_f(head))
-            break;
+
+        if (end_f(head)) {
+            routed_path.clear();
+            auto head_t = head;
+
+            int avail_regs = 0;
+            while (head_t != start) {
+                routed_path.emplace_back(head_t);
+                if (head_t->type == NodeType::Generic and trace.at(head_t)->type == NodeType::SwitchBox)
+                    avail_regs++;
+                head_t = trace.at(head_t);
+            }
+            routed_path.emplace_back(head_t);
+            std::cout << "\navail regs: " << avail_regs << std::endl;
+
+            if (avail_regs < req_regs) {
+                // Add blockage
+                int blockage_idx = routed_path.size() / 2;
+                blockages.insert(routed_path[blockage_idx]);
+                std::cout << "adding blockage " << blockage_idx << std::endl;
+                std::cout << "blockages len " << blockages.size() << std::endl;
+                
+                // Reset everything and retry
+                while (!working_set.empty()) {
+                    working_set.pop();
+                }
+                working_set.push(start);
+                open_set = {};
+                open_set.insert(start);
+                visited = {};
+                trace.clear();
+                continue;
+            } else {
+                break;
+            }       
+        }
 
         working_set.pop();
         open_set.erase(head);
@@ -184,12 +223,16 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         visited.insert(head);
 
         for (auto const &node : *head) {
+            if (blockages.find(node.lock()) != blockages.end())
+                continue;
+
             if (visited.find(node.lock()) != visited.end())
                 continue;
 
             double tentative_score = g_score.at(head)
                                      + head->get_edge_cost(node.lock())
                                      + cost_f(head, node.lock());
+
             if (open_set.find(node.lock()) == open_set.end()) {
                 g_score[node.lock()] = tentative_score;
                 f_score[node.lock()] = g_score.at(node.lock())
@@ -216,14 +259,14 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         throw UnableRouteException("unable to route from "
                                    + start->to_string());
 
-    ::vector<::shared_ptr<Node>> routed_path;
-    // back trace the route
-    // head is the end
-    while (head != start) {
-        routed_path.emplace_back(head);
-        head = trace.at(head);
-    }
-    routed_path.emplace_back(head);
+    // ::vector<::shared_ptr<Node>> routed_path;
+    // // back trace the route
+    // // head is the end
+    // while (head != start) {
+    //     routed_path.emplace_back(head);
+    //     head = trace.at(head);
+    // }
+    // routed_path.emplace_back(head);
 
     std::reverse(routed_path.begin(), routed_path.end());
     return routed_path;
@@ -241,6 +284,7 @@ void Router::group_reg_nets() {
         auto const &net = iter.second;
         for (uint32_t i = 1; i < net.size(); i++) {
             auto const &pin = net[i];
+std::cout << "netlist: " << pin.name << " " << net.id << std::endl;
             if (pin.port == REG and pin.name[0] == 'r') {
                 // we assume it's already packed
                 driven_by.insert({pin.name, net.id});
@@ -264,6 +308,11 @@ void Router::group_reg_nets() {
             name = netlist_[driven_by.at(name)][0].name;
         }
         auto squashed = squash_net(src_id);
+
+std::cout << "result:" << src_id << std::endl;
+for (auto i: squashed)
+    std::cout << i << ' ';
+std::cout << "\n" << std::endl;
 
         reg_net_order_.insert({src_id, squashed});
     }
