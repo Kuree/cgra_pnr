@@ -149,6 +149,8 @@ void GlobalPlacer::create_boxes() {
     legal_spline_.resize(boxes_.size() + clusters_.size());
     for (const auto &iter : clusters_) {
         auto const &cluster_id = iter.first;
+        std::cout << "\ncluster_id: " << cluster_id << std::endl;
+
         int box_index = (int)boxes_.size();
         ::map<char, int> dsp_blocks;
         ClusterBox box;
@@ -199,7 +201,7 @@ void GlobalPlacer::create_boxes() {
             ::vector<double> x_data;
             auto dsp_columns = hidden_columns[blk_type];
             // sanity check
-            if (reduced_width_ < static_cast<uint32_t>(width)) {
+            if (reduced_width_ <= static_cast<uint32_t>(width)) {
                 throw std::runtime_error("Invalid layout. Tile array is too small");
             }
             for (uint32_t x = 0; x < reduced_width_ - width; x++) {
@@ -220,6 +222,7 @@ void GlobalPlacer::create_boxes() {
                     cost.emplace_back(blk_need);
                 x_data.emplace_back(x);
             }
+            std::cout << "blk type: " << blk_type << std::endl;
             // compute the spline for this cost function
             tk::spline spline;
             spline.set_points(x_data, cost);
@@ -762,6 +765,10 @@ double GlobalPlacer::compute_hpwl() const {
     return hpwl;
 }
 
+const char* bool_cast(const bool b) {
+    return b ? "1" : "0";
+}
+
 ::map<::string, ::map<char, ::vector<::pair<int, int>>>>
 GlobalPlacer::realize() {
     ::map<::string, ::map<char, ::vector<::pair<int, int>>>> result;
@@ -970,9 +977,10 @@ GlobalPlacer::realize() {
                     }
                 }
             }
-            if (blk_index.size() < (uint32_t)iter.second)
+            if (blk_index.size() < (uint32_t)iter.second) {
                 throw std::runtime_error("not enough space for blk type " +
                                          ::string(1, blk_type));
+            }
             std::sort(blk_index.begin(), blk_index.end(),
                       [=](const auto &p1,
                           const auto &p2) {

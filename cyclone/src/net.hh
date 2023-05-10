@@ -36,10 +36,12 @@ public:
     [[nodiscard]] std::vector<Pin>::const_iterator end() const { return pins_.end(); }
 
     void add_pin(const Pin &pin);
+    void remove_pin(const uint32_t &pin_id);
     inline uint64_t size() const { return pins_.size(); }
     inline Pin& operator[](const uint64_t &index) { return pins_[index]; }
     inline const Pin& operator[](const uint64_t &index) const
     { return pins_[index]; }
+
 private:
     std::vector<Pin> pins_;
 };

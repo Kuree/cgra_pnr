@@ -54,6 +54,7 @@ protected:
     std::map<int, Net> netlist_;
     std::map<std::string, std::pair<uint32_t, uint32_t>> placement_;
     std::map<int, std::vector<int>> reg_net_order_;
+    std::map<int, int> needed_regs_;
     std::map<std::string, int> reg_net_src_;
     // a list of routing segments indexed by net id
     std::map<int,
@@ -89,6 +90,14 @@ protected:
 
     std::vector<std::shared_ptr<Node>>
     route_a_star(const std::shared_ptr<Node> &start,
+                 const std::shared_ptr<Node> &end,
+                 std::function<double(const std::shared_ptr<Node> &,
+                                      const std::shared_ptr<Node> &)> cost_f,
+                                                                int req_regs);
+
+
+    std::vector<std::shared_ptr<Node>>
+    route_a_star(const std::shared_ptr<Node> &start,
                  const std::pair<uint32_t, uint32_t> &end,
                  std::function<double(const std::shared_ptr<Node> &,
                                       const std::shared_ptr<Node> &)> cost_f);
@@ -105,6 +114,14 @@ protected:
                  const std::shared_ptr<Node> &end,
                  std::function<double(const std::shared_ptr<Node> &,
                                       const std::shared_ptr<Node> &)> cost_f,
+                 std::function<double(const std::shared_ptr<Node> &)> h_f,
+                 int req_regs);
+
+    std::vector<std::shared_ptr<Node>>
+    route_a_star(const std::shared_ptr<Node> &start,
+                 std::function<bool(const std::shared_ptr<Node> &)> end_f,
+                 std::function<double(const std::shared_ptr<Node> &,
+                                      const std::shared_ptr<Node> &)> cost_f,
                  std::function<double(const std::shared_ptr<Node> &)> h_f);
 
     // this is the actual routing engine shared by Dijkstra and A*
@@ -114,7 +131,10 @@ protected:
                  std::function<bool(const std::shared_ptr<Node> &)> end_f,
                  std::function<double(const std::shared_ptr<Node> &,
                                       const std::shared_ptr<Node> &)> cost_f,
-                 std::function<double(const std::shared_ptr<Node> &)> h_f);
+                 std::function<double(const std::shared_ptr<Node> &)> h_f,
+                 int req_regs);
+
+
 
     std::shared_ptr<Node> get_port(const uint32_t &x,
                                    const uint32_t &y,
@@ -123,6 +143,7 @@ protected:
     // group the nets to determine the relative net placement order
     // this is because we assign register locations on the fly
     void group_reg_nets();
+    void squash_non_broadcast_reg_nets();
     std::vector<uint32_t> reorder_reg_nets();
 
 

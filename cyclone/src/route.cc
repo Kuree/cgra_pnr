@@ -1,6 +1,7 @@
 #include <map>
 #include <queue>
 #include <algorithm>
+#include <string>
 #include <cmath>
 #include <unordered_set>
 #include "route.hh"
@@ -115,6 +116,15 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
 
 std::vector<std::shared_ptr<Node>>
 Router::route_a_star(const std::shared_ptr<Node> &start,
+                     const std::shared_ptr<Node> &end,
+                     ::function<double(const ::shared_ptr<Node> &,
+                                         const ::shared_ptr<Node> &)> cost_f,
+                                                                int req_regs) {
+    return route_a_star(start, end, ::move(cost_f), manhattan_distance(end), req_regs);
+}
+
+std::vector<std::shared_ptr<Node>>
+Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::pair<uint32_t, uint32_t> &end,
                      ::function<double(const ::shared_ptr<Node> &,
                                          const ::shared_ptr<Node> &)> cost_f) {
@@ -135,8 +145,8 @@ Router::route_a_star(const std::shared_ptr<Node> &start,
                      const std::shared_ptr<Node> &end,
                      ::function<double(const ::shared_ptr<Node> &,
                                          const ::shared_ptr<Node> &)> cost_f,
-                     ::function<double(const ::shared_ptr<Node>&)> h_f) {
-    return route_a_star(start, same_node(end), ::move(cost_f), ::move(h_f));
+                     ::function<double(const ::shared_ptr<Node>&)> h_f, int req_regs) {
+    return route_a_star(start, same_node(end), ::move(cost_f), ::move(h_f), req_regs);
 }
 
 std::vector<std::shared_ptr<Node>> Router::route_a_star(
@@ -145,9 +155,17 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         std::function<double(const std::shared_ptr<Node> &,
                                const std::shared_ptr<Node> &)> cost_f,
         std::function<double(const ::shared_ptr<Node> &)> h_f) {
-            
-    int req_regs = 0;
+            return route_a_star(start, end_f, cost_f, h_f, 0);
+        }
 
+std::vector<std::shared_ptr<Node>> Router::route_a_star(
+        const std::shared_ptr<Node> &start,
+        std::function<bool(const std::shared_ptr<Node> &)> end_f,
+        std::function<double(const std::shared_ptr<Node> &,
+                               const std::shared_ptr<Node> &)> cost_f,
+        std::function<double(const ::shared_ptr<Node> &)> h_f,
+        int req_regs) {
+            
     ::unordered_set<::shared_ptr<Node>> visited;
     ::unordered_map<::shared_ptr<Node>, double> g_score = {{start, 0}};
 
@@ -184,19 +202,21 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
 
             int avail_regs = 0;
             while (head_t != start) {
+                std::cout << "\t" << head_t->to_string() << std::endl;
                 routed_path.emplace_back(head_t);
                 if (head_t->type == NodeType::Generic and trace.at(head_t)->type == NodeType::SwitchBox)
                     avail_regs++;
                 head_t = trace.at(head_t);
             }
+            std::cout << "\t" << head_t->to_string() << std::endl;
             routed_path.emplace_back(head_t);
-            std::cout << "\navail regs: " << avail_regs << std::endl;
+            std::cout << "\n\tavail regs: " << avail_regs << std::endl << std::endl;
 
             if (avail_regs < req_regs) {
                 // Add blockage
-                int blockage_idx = routed_path.size() / 2;
+                int blockage_idx = (routed_path.size() / 2) - 1;
                 blockages.insert(routed_path[blockage_idx]);
-                std::cout << "adding blockage " << blockage_idx << std::endl;
+                std::cout << "adding blockage " << routed_path[blockage_idx]->to_string() << std::endl;
                 std::cout << "blockages len " << blockages.size() << std::endl;
                 
                 // Reset everything and retry
@@ -259,15 +279,6 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
         throw UnableRouteException("unable to route from "
                                    + start->to_string());
 
-    // ::vector<::shared_ptr<Node>> routed_path;
-    // // back trace the route
-    // // head is the end
-    // while (head != start) {
-    //     routed_path.emplace_back(head);
-    //     head = trace.at(head);
-    // }
-    // routed_path.emplace_back(head);
-
     std::reverse(routed_path.begin(), routed_path.end());
     return routed_path;
 }
@@ -284,7 +295,6 @@ void Router::group_reg_nets() {
         auto const &net = iter.second;
         for (uint32_t i = 1; i < net.size(); i++) {
             auto const &pin = net[i];
-std::cout << "netlist: " << pin.name << " " << net.id << std::endl;
             if (pin.port == REG and pin.name[0] == 'r') {
                 // we assume it's already packed
                 driven_by.insert({pin.name, net.id});
@@ -309,14 +319,10 @@ std::cout << "netlist: " << pin.name << " " << net.id << std::endl;
         }
         auto squashed = squash_net(src_id);
 
-std::cout << "result:" << src_id << std::endl;
-for (auto i: squashed)
-    std::cout << i << ' ';
-std::cout << "\n" << std::endl;
-
         reg_net_order_.insert({src_id, squashed});
     }
 }
+
 
 std::vector<int> Router::squash_net(int src_id) {
     // an algorithm to group the register nets in order
@@ -335,6 +341,77 @@ std::vector<int> Router::squash_net(int src_id) {
 
     return result;
 }
+
+void Router::squash_non_broadcast_reg_nets() {
+    ::unordered_set<int> delete_ids;
+
+
+    std::cout << "\nBefore netlist squashing" << std::endl;
+    for (auto &iter : netlist_) {
+        needed_regs_[iter.first] = 0;
+        std::cout << iter.first << " : ";
+        auto const &net = iter.second;
+        for (uint32_t j = 0; j < net.size(); j++) {
+            std::cout << net[j].name << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    for (auto &iter : netlist_) {
+        
+        auto &net = iter.second;
+
+        // Skip broadcast signals for now
+        if (net.size() > 2)
+            continue;
+        
+
+        auto origin_pin = net[0];
+
+        if (origin_pin.port == REG and origin_pin.name[0] == 'r') {
+            
+            // Need to squash this net
+            for (auto &iter2 : netlist_) {
+                bool found_squash = false;
+                auto &net2 = iter2.second;
+                if (net2.size() > 2)
+                    continue;
+                for (uint32_t i = 1; i < net2.size(); i++) {
+                    if (origin_pin.name.compare(net2[i].name) == 0) {
+                        net2.remove_pin(i);
+                        needed_regs_[iter2.first] += 1;
+                        for (uint32_t j = 1; j < net.size(); j++) {
+                            net2.add_pin(net[j]);
+                        }
+                        delete_ids.insert(iter.first);
+                        found_squash = true;
+                        break;
+                    }
+                }
+                if (found_squash)
+                    break;
+            }
+        }
+    }
+
+    // Removing extra nets
+    for (auto delete_id : delete_ids) {
+        netlist_.erase(delete_id);
+    }
+
+    std::cout << "\nAfter netlist squashing" << std::endl;
+    for (auto &iter : netlist_) {
+        std::cout << iter.first << " : ";
+        auto &net = iter.second;
+        for (uint32_t j = 0; j < net.size(); j++) {
+            std::cout << net[j].name << " ";
+        }
+        std::cout << "\tneeded regs: " << needed_regs_[iter.first] << std::endl;
+    }
+
+}
+
+
 
 std::vector<uint32_t>
 Router::reorder_reg_nets() {

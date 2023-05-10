@@ -25,6 +25,7 @@ enum class RoutingStrategy {
     CongestionDriven
 };
 
+
 void GlobalRouter::route() {
     // the actual routing part
     // algorithm based on PathFinder with modification for CGRA architecture
@@ -39,13 +40,14 @@ void GlobalRouter::route() {
     //    to use. either RSMT or shortest-path for each pin pairs
     // 3. actually perform iterations (described in PathFiner)
 
+    squash_non_broadcast_reg_nets();
     group_reg_nets();
     auto reordered_netlist = reorder_reg_nets();
 
-std::cout << "\nreordered netlist:" << std::endl;
-for (auto i: reordered_netlist)
-    std::cout << i << ' ';
-std::cout << "\n" << std::endl;
+// std::cout << "\nreordered netlist:" << std::endl;
+// for (auto i: reordered_netlist)
+//     std::cout << i << ' ';
+// std::cout << "\n" << std::endl;
 
     for (uint32_t it = 0; it < num_iteration_; it++) {
         auto time_start = std::chrono::system_clock::now();
@@ -150,26 +152,63 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
     }
 }
 
+void GlobalRouter::add_regs_post_route(::vector<::shared_ptr<Node>> &segment, int req_regs) {
+    if (req_regs == 0) 
+        return;
+
+    ::vector<int> avail_reg_idx;
+
+    for (uint32_t i = 1; i < segment.size(); i++) {
+        if (segment[i-1]->type == NodeType::SwitchBox and segment[i]->type == NodeType::Generic) {
+            avail_reg_idx.emplace_back(i-1);
+        }
+    }
+
+    std::cout << "\n\tavail regs " << avail_reg_idx.size() << " need " << req_regs << std::endl;
+
+    // Add reg nodes spaced evenly
+    float reg_spacing = avail_reg_idx.size() / req_regs;
+    for (int i = 0; i < req_regs; i++) {
+        int idx = ceil(0.5*reg_spacing + i*reg_spacing);
+        auto head = segment[avail_reg_idx[idx]];
+        for (auto const &node : *head) {
+            if (node.lock()->type == NodeType::Register) {
+                std::cout << "\tinserting reg " << node.lock()->to_string() << std::endl;
+                segment.insert(segment.begin() + avail_reg_idx[idx] + 1, node.lock());
+            }
+        }
+    }
+
+}
+
 void
 GlobalRouter::route_net(int net_id, uint32_t it) {
+
+std::cout << "\nRoute net id " << net_id << std::endl;
+
     ::vector<::shared_ptr<Node>> current_path;
     auto pin_indices = reorder_pins(netlist_[net_id]);
     for (uint32_t pin_index = 0; pin_index < pin_indices.size(); pin_index++) {
         // we may update the src while routing, i.e. for reg nets, so we pull
         // the src info for every pins
         auto &net = netlist_[net_id];
+std::cout << "\tsrc pin " << net[0].name << std::endl;
         const auto &src = net[0].node;
         if (src == nullptr)
             throw ::runtime_error("unable to find src when route net");
 
         auto seg_index = pin_indices[pin_index];
         auto const &sink_node = net[seg_index];
+std::cout << "\tseg_index " << seg_index << std::endl;
+std::cout << "\tsink_node " << sink_node.name << std::endl;
+
         auto slack_entry = make_pair(src, sink_node.name);
         auto sink_coord = std::make_pair(sink_node.x, sink_node.y);
         double slack = slack_ratio_.at({net.id, seg_index});
         RoutingStrategy strategy = slack > route_strategy_ratio ?
                                    RoutingStrategy::DelayDriven :
                                    RoutingStrategy::CongestionDriven;
+
         ::shared_ptr<Node> src_node = src;
         // choose src_node
         if (strategy == RoutingStrategy::CongestionDriven
@@ -186,6 +225,10 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
                     // it has to be a switch box
                     continue;
                 }
+                // has to be an in switch box so that we can switch tracks
+                auto sb = std::dynamic_pointer_cast<SwitchBoxNode>(node);
+                if (sb->io == SwitchBoxIO::SB_OUT)
+                    continue;
                 // it can't be overflowed already
                 if (conn.size() > 1) {
                     continue;
@@ -209,13 +252,9 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
                 if (!empty)
                     continue;
 
-                // has to be an in switch box so that we can switch tracks
-                auto sb = std::dynamic_pointer_cast<SwitchBoxNode>(node);
-                if (sb->io == SwitchBoxIO::SB_OUT)
-                    continue;
-
                 if (manhattan_distance(node, sink_coord) < min_dist) {
                     src_node = node;
+                    min_dist = manhattan_distance(node, sink_coord);
                 }
             }
         }
@@ -235,9 +274,18 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
              *        in this way the router can handle both sparse and
              *        rich register resources.
             */
+            int req_regs = needed_regs_[net_id];
+
+            if (net[0].name[0] == 'r') {
+                req_regs++;
+            }
+
+
             auto end_f = get_free_switch(end);
             auto h_f = manhattan_distance(end);
-            auto segment = route_a_star(src_node, end_f, cost_f, h_f);
+            auto segment = route_a_star(src_node, end_f, cost_f, h_f, req_regs);
+
+            add_regs_post_route(segment, needed_regs_[net_id]);
 
             if (segment.back()->type != NodeType::SwitchBox) {
                 throw ::runtime_error("cannot connect to the reg tile");
@@ -260,19 +308,48 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
             // store the segment
             current_routes[net.id][sink_node.id] = segment;
 
+
             // add some metadata information so that we can fix the reg net very
             // quickly later
             reg_net_table_.insert({reg_net_id, {net.id, sink_node.id}});
 
         } else {
+
+
             if (sink_node.node == nullptr)
                 throw ::runtime_error("unable to find node for block"
                                       " " + sink_node.name);
-            auto segment = route_a_star(src_node, sink_node.node, cost_f);
+            int req_regs = needed_regs_[net_id];
+
+            if (net[0].name[0] == 'r') {
+                req_regs++;
+            }
+
+std::cout << "\tsource " << src_node->to_string() << std::endl;
+std::cout << "\tsink " << sink_node.name << std::endl;
+std::cout << "\tnet_id " << net.id << std::endl;
+std::cout << "\tsink_id " << sink_node.id << std::endl;
+std::cout << "\treq regs " << req_regs << std::endl << std::endl;
+
+
+            auto segment = route_a_star(src_node, sink_node.node, cost_f, req_regs);
             if (segment.back() != sink_node.node) {
                 throw ::runtime_error("unable to route to port " +
                                       sink_node.node->name);
             }
+
+            std::cout << "\tBefore adding regs post route" << std::endl;
+            for (auto node : segment){
+                std::cout << "\t" << node->to_string() << std::endl;
+            }
+
+            add_regs_post_route(segment, needed_regs_[net_id]);
+
+            std::cout << "\n\tAfter adding regs post route" << std::endl;
+            for (auto node : segment){
+                std::cout << "\t" << node->to_string() << std::endl;
+            }
+
             current_routes[net.id][sink_node.id] = segment;
         }
 
@@ -288,9 +365,17 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
 
         // also put segment into the current path
         const auto &segment = current_routes[net.id][sink_node.id];
+
+
         current_path.insert(current_path.end(), segment.begin(), segment.end());
         // assign it to the node_connections
         assign_net_segment(segment, net.id);
+
+        std::cout << "\n\tfinal segment for net id: " << net.id << std::endl;
+        for (auto node : segment){
+            std::cout << "\t" << node->to_string() << std::endl;
+        }
+        std::cout << std::endl;
     }
 }
 
@@ -479,3 +564,5 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
     if (reg_sink_pin.name[0] != 'r')
         throw ::runtime_error("assigning registers to a wrong pin");
 }
+
+

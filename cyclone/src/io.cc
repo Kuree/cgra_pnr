@@ -432,7 +432,7 @@ void dump_routing_result(const Router &r, const std::string &filename) {
         }
         if (!has_src) {
             // it has to be the src
-            throw ::runtime_error("unexpected state: src has to be"
+            throw ::runtime_error("unexpected state: src has to be "
                                   "the beginning of the net "
                                   "segments");
         }
