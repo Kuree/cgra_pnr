@@ -125,10 +125,12 @@ check_placement(const ::map<::string,
         if (blk_type == 'i' || blk_type == 'I')
             continue;
         auto const[x, y] = pos;
+        // std::cout << blk_id << " : " << x << ", " << y << std::endl;
         auto &blk_pos = available_pos.at(blk_type);
         if (std::find(blk_pos.begin(),blk_pos.end(),pos) == blk_pos.end())
             throw std::runtime_error("over use position " + std::to_string(x)
-                                     + " " + std::to_string(y));
+                                     + " " + std::to_string(y) + " block_id " 
+                                     + blk_id);
 
         blk_pos.erase(std::find(blk_pos.begin(),blk_pos.end(),pos));
     }
@@ -268,12 +270,12 @@ int main(int argc, char *argv[]) {
         gp.solve();
         gp.anneal();
 
-        try {
-            gp_result = gp.realize();
-        } catch (...) {
-            std::cout << "Global placement failed, trying detailed placement" << std::endl;
-            skip_gp = true;
-        }
+        // try {
+        gp_result = gp.realize();
+        // } catch (...) {
+        //     std::cout << "Global placement failed, trying detailed placement" << std::endl;
+        //     skip_gp = true;
+        // }
     }
 
     if (skip_gp) {
@@ -300,11 +302,18 @@ int main(int argc, char *argv[]) {
                                                                gp_result,
                                                                layout);
 
+    // for (auto iter : dp_result) {
+    //     std::cout << iter.first << " " << iter.second.first << " " << iter.second.second << std::endl;
+    // }
+    
+    // std::cout << "\nRefining" << std::endl;
+
     // global refinement
     auto global_refine = DetailedPlacer(dp_result,
                                         netlist,
                                         layout.produce_available_pos(),
                                         fixed_pos,
+                                        layout,
                                         layout.get_clb_type(),
                                         true);
     // compute the refine parameters

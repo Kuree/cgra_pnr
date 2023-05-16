@@ -164,7 +164,7 @@ void GlobalRouter::add_regs_post_route(::vector<::shared_ptr<Node>> &segment, in
         }
     }
 
-    std::cout << "\n\tavail regs " << avail_reg_idx.size() << " need " << req_regs << std::endl;
+    // std::cout << "\n\tavail regs " << avail_reg_idx.size() << " need " << req_regs << std::endl;
 
     // Add reg nodes spaced evenly
     float reg_spacing = avail_reg_idx.size() / req_regs;
@@ -173,7 +173,7 @@ void GlobalRouter::add_regs_post_route(::vector<::shared_ptr<Node>> &segment, in
         auto head = segment[avail_reg_idx[idx]];
         for (auto const &node : *head) {
             if (node.lock()->type == NodeType::Register) {
-                std::cout << "\tinserting reg " << node.lock()->to_string() << std::endl;
+                // std::cout << "\tinserting reg " << node.lock()->to_string() << std::endl;
                 segment.insert(segment.begin() + avail_reg_idx[idx] + 1, node.lock());
             }
         }
@@ -184,7 +184,7 @@ void GlobalRouter::add_regs_post_route(::vector<::shared_ptr<Node>> &segment, in
 void
 GlobalRouter::route_net(int net_id, uint32_t it) {
 
-std::cout << "\nRoute net id " << net_id << std::endl;
+// std::cout << "\nRoute net id " << net_id << std::endl;
 
     ::vector<::shared_ptr<Node>> current_path;
     auto pin_indices = reorder_pins(netlist_[net_id]);
@@ -192,15 +192,15 @@ std::cout << "\nRoute net id " << net_id << std::endl;
         // we may update the src while routing, i.e. for reg nets, so we pull
         // the src info for every pins
         auto &net = netlist_[net_id];
-std::cout << "\tsrc pin " << net[0].name << std::endl;
+// std::cout << "\tsrc pin " << net[0].name << std::endl;
         const auto &src = net[0].node;
         if (src == nullptr)
             throw ::runtime_error("unable to find src when route net");
 
         auto seg_index = pin_indices[pin_index];
         auto const &sink_node = net[seg_index];
-std::cout << "\tseg_index " << seg_index << std::endl;
-std::cout << "\tsink_node " << sink_node.name << std::endl;
+// std::cout << "\tseg_index " << seg_index << std::endl;
+// std::cout << "\tsink_node " << sink_node.name << std::endl;
 
         auto slack_entry = make_pair(src, sink_node.name);
         auto sink_coord = std::make_pair(sink_node.x, sink_node.y);
@@ -338,17 +338,17 @@ std::cout << "\treq regs " << req_regs << std::endl << std::endl;
                                       sink_node.node->name);
             }
 
-            std::cout << "\tBefore adding regs post route" << std::endl;
-            for (auto node : segment){
-                std::cout << "\t" << node->to_string() << std::endl;
-            }
+            // std::cout << "\tBefore adding regs post route" << std::endl;
+            // for (auto node : segment){
+            //     std::cout << "\t" << node->to_string() << std::endl;
+            // }
 
             add_regs_post_route(segment, needed_regs_[net_id]);
 
-            std::cout << "\n\tAfter adding regs post route" << std::endl;
-            for (auto node : segment){
-                std::cout << "\t" << node->to_string() << std::endl;
-            }
+            // std::cout << "\n\tAfter adding regs post route" << std::endl;
+            // for (auto node : segment){
+            //     std::cout << "\t" << node->to_string() << std::endl;
+            // }
 
             current_routes[net.id][sink_node.id] = segment;
         }
@@ -371,11 +371,11 @@ std::cout << "\treq regs " << req_regs << std::endl << std::endl;
         // assign it to the node_connections
         assign_net_segment(segment, net.id);
 
-        std::cout << "\n\tfinal segment for net id: " << net.id << std::endl;
-        for (auto node : segment){
-            std::cout << "\t" << node->to_string() << std::endl;
-        }
-        std::cout << std::endl;
+        // std::cout << "\n\tfinal segment for net id: " << net.id << std::endl;
+        // for (auto node : segment){
+        //     std::cout << "\t" << node->to_string() << std::endl;
+        // }
+        // std::cout << std::endl;
     }
 }
 

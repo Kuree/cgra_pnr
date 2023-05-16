@@ -2,6 +2,8 @@
 #include <cmath>
 #include <limits>
 #include "global.hh"
+#include <iostream>
+#include <fstream>
 
 using std::map;
 using std::vector;
@@ -50,6 +52,8 @@ GlobalPlacer::GlobalPlacer(const ::map<::string, ::set<::string>> &clusters,
     // set up the boxes
     create_boxes();
 
+
+
     // setup reduced netlist
     auto [nets, intra_count] = this->collapse_netlist(netlists);
     netlists_ = nets;
@@ -61,6 +65,8 @@ GlobalPlacer::GlobalPlacer(const ::map<::string, ::set<::string>> &clusters,
 
     // init placement
     init_place();
+    
+
 
     // set annealing parameters
     this->tmax = tmin * 2;
@@ -149,7 +155,6 @@ void GlobalPlacer::create_boxes() {
     legal_spline_.resize(boxes_.size() + clusters_.size());
     for (const auto &iter : clusters_) {
         auto const &cluster_id = iter.first;
-        std::cout << "\ncluster_id: " << cluster_id << std::endl;
 
         int box_index = (int)boxes_.size();
         ::map<char, int> dsp_blocks;
@@ -222,7 +227,6 @@ void GlobalPlacer::create_boxes() {
                     cost.emplace_back(blk_need);
                 x_data.emplace_back(x);
             }
-            std::cout << "blk type: " << blk_type << std::endl;
             // compute the spline for this cost function
             tk::spline spline;
             spline.set_points(x_data, cost);
@@ -328,8 +332,9 @@ void GlobalPlacer::get_clb_types_() {
     auto blk_types = board_layout_.get_layer_types();
     auto priority_major = board_layout_.get_priority_major(clb_type_);
     for (const auto &blk_type : blk_types) {
-        if (board_layout_.get_priority_major(blk_type) == priority_major)
+        if (board_layout_.get_priority_major(blk_type) == priority_major) {
             clb_types_.insert(blk_type);
+        }
     }
 
     // set the margin here
@@ -1134,6 +1139,15 @@ void GlobalPlacer::move() {
         bound_box(current_move_.box1);
     if (current_move_.box2.index >= 0)
         bound_box(current_move_.box2);
+        
+    std::ofstream myfile;
+    myfile.open ("boxes.txt", std::ios::app);
+
+    for (auto box : boxes_) {
+        myfile << box.xmin << " " << box.xmax << " " << box.ymin << " " << box.ymax << std::endl;
+    }
+    myfile << std::endl;
+    myfile.close();
 }
 
 void GlobalPlacer::bound_box(ClusterBox &box) {

@@ -17,6 +17,7 @@ void SimAnneal::anneal() {
         auto t = tmax * exp(t_factor * current_step / steps);
         // make changes
         move();
+
         double new_energy = energy();
         double de = new_energy - this->curr_energy;
         if (de > 0.0 && exp(-de / t) < rand_.uniform<double>(0.0, 1.0)) {

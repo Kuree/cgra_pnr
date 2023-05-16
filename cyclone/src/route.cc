@@ -202,22 +202,25 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
 
             int avail_regs = 0;
             while (head_t != start) {
-                std::cout << "\t" << head_t->to_string() << std::endl;
+                // std::cout << "\t" << head_t->to_string() << std::endl;
                 routed_path.emplace_back(head_t);
                 if (head_t->type == NodeType::Generic and trace.at(head_t)->type == NodeType::SwitchBox)
                     avail_regs++;
                 head_t = trace.at(head_t);
             }
-            std::cout << "\t" << head_t->to_string() << std::endl;
+            // std::cout << "\t" << head_t->to_string() << std::endl;
             routed_path.emplace_back(head_t);
-            std::cout << "\n\tavail regs: " << avail_regs << std::endl << std::endl;
+            // std::cout << "\n\tavail regs: " << avail_regs << std::endl << std::endl;
 
             if (avail_regs < req_regs) {
                 // Add blockage
                 int blockage_idx = (routed_path.size() / 2) - 1;
+                // if (routed_path[blockage_idx]->type == NodeType::Port) {
+                //     blockage_idx += 1;
+                // }
                 blockages.insert(routed_path[blockage_idx]);
                 std::cout << "adding blockage " << routed_path[blockage_idx]->to_string() << std::endl;
-                std::cout << "blockages len " << blockages.size() << std::endl;
+                // std::cout << "blockages len " << blockages.size() << std::endl;
                 
                 // Reset everything and retry
                 while (!working_set.empty()) {
@@ -275,9 +278,10 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
 
     }
 
-    if (!end_f(head))
+    if (!end_f(head)) {
         throw UnableRouteException("unable to route from "
-                                   + start->to_string());
+                                   + start->to_string() + " req_regs " + std::to_string(req_regs));
+    }
 
     std::reverse(routed_path.begin(), routed_path.end());
     return routed_path;
@@ -346,15 +350,15 @@ void Router::squash_non_broadcast_reg_nets() {
     ::unordered_set<int> delete_ids;
 
 
-    std::cout << "\nBefore netlist squashing" << std::endl;
+    // std::cout << "\nBefore netlist squashing" << std::endl;
     for (auto &iter : netlist_) {
         needed_regs_[iter.first] = 0;
-        std::cout << iter.first << " : ";
+        // std::cout << iter.first << " : ";
         auto const &net = iter.second;
         for (uint32_t j = 0; j < net.size(); j++) {
-            std::cout << net[j].name << " ";
+            // std::cout << net[j].name << " ";
         }
-        std::cout << std::endl;
+        // std::cout << std::endl;
     }
 
     for (auto &iter : netlist_) {
@@ -374,7 +378,7 @@ void Router::squash_non_broadcast_reg_nets() {
             for (auto &iter2 : netlist_) {
                 bool found_squash = false;
                 auto &net2 = iter2.second;
-                if (net2.size() > 2)
+                if (net2.size() > 2 || net2[0].name[0] == 'r')
                     continue;
                 for (uint32_t i = 1; i < net2.size(); i++) {
                     if (origin_pin.name.compare(net2[i].name) == 0) {
@@ -399,14 +403,14 @@ void Router::squash_non_broadcast_reg_nets() {
         netlist_.erase(delete_id);
     }
 
-    std::cout << "\nAfter netlist squashing" << std::endl;
+    // std::cout << "\nAfter netlist squashing" << std::endl;
     for (auto &iter : netlist_) {
-        std::cout << iter.first << " : ";
+        // std::cout << iter.first << " : ";
         auto &net = iter.second;
         for (uint32_t j = 0; j < net.size(); j++) {
-            std::cout << net[j].name << " ";
+            // std::cout << net[j].name << " ";
         }
-        std::cout << "\tneeded regs: " << needed_regs_[iter.first] << std::endl;
+        // std::cout << "\tneeded regs: " << needed_regs_[iter.first] << std::endl;
     }
 
 }
