@@ -164,12 +164,10 @@ void GlobalRouter::add_regs_post_route(::vector<::shared_ptr<Node>> &segment, in
         }
     }
 
-    // std::cout << "\n\tavail regs " << avail_reg_idx.size() << " need " << req_regs << std::endl;
-
     // Add reg nodes spaced evenly
     float reg_spacing = avail_reg_idx.size() / req_regs;
     for (int i = 0; i < req_regs; i++) {
-        int idx = ceil(0.5*reg_spacing + i*reg_spacing);
+        int idx = int(0.5*reg_spacing + i*reg_spacing);
         auto head = segment[avail_reg_idx[idx]];
         for (auto const &node : *head) {
             if (node.lock()->type == NodeType::Register) {
@@ -208,6 +206,7 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
         RoutingStrategy strategy = slack > route_strategy_ratio ?
                                    RoutingStrategy::DelayDriven :
                                    RoutingStrategy::CongestionDriven;
+
 
         ::shared_ptr<Node> src_node = src;
         // choose src_node
@@ -260,6 +259,18 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
         }
         auto an = slack * slack_factor_;
         auto cost_f = create_cost_function(an, it, net.id);
+        int req_regs = needed_regs_[net_id];
+        if (net[0].name[0] == 'r' && pin_index == 0) {
+            req_regs++;
+        }
+
+// std::cout << "source " << net[0].name << std::endl;
+// std::cout << "source node " << src_node->to_string() << std::endl;
+// std::cout << "sink " << sink_node.name << std::endl;
+// std::cout << "net_id " << net.id << std::endl;
+// std::cout << "sink_id " << sink_node.id << std::endl;
+// std::cout << "req regs " << req_regs << std::endl << std::endl;
+
 
         // find the routes
         if (sink_node.name[0] == 'r') {
@@ -274,13 +285,6 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
              *        in this way the router can handle both sparse and
              *        rich register resources.
             */
-            int req_regs = needed_regs_[net_id];
-
-            if (net[0].name[0] == 'r') {
-                req_regs++;
-            }
-
-
             auto end_f = get_free_switch(end);
             auto h_f = manhattan_distance(end);
             auto segment = route_a_star(src_node, end_f, cost_f, h_f, req_regs);
@@ -315,22 +319,9 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
 
         } else {
 
-
             if (sink_node.node == nullptr)
                 throw ::runtime_error("unable to find node for block"
                                       " " + sink_node.name);
-            int req_regs = needed_regs_[net_id];
-
-            if (net[0].name[0] == 'r') {
-                req_regs++;
-            }
-
-std::cout << "\tsource " << src_node->to_string() << std::endl;
-std::cout << "\tsink " << sink_node.name << std::endl;
-std::cout << "\tnet_id " << net.id << std::endl;
-std::cout << "\tsink_id " << sink_node.id << std::endl;
-std::cout << "\treq regs " << req_regs << std::endl << std::endl;
-
 
             auto segment = route_a_star(src_node, sink_node.node, cost_f, req_regs);
             if (segment.back() != sink_node.node) {
@@ -338,21 +329,14 @@ std::cout << "\treq regs " << req_regs << std::endl << std::endl;
                                       sink_node.node->name);
             }
 
-            // std::cout << "\tBefore adding regs post route" << std::endl;
-            // for (auto node : segment){
-            //     std::cout << "\t" << node->to_string() << std::endl;
-            // }
-
             add_regs_post_route(segment, needed_regs_[net_id]);
-
-            // std::cout << "\n\tAfter adding regs post route" << std::endl;
-            // for (auto node : segment){
-            //     std::cout << "\t" << node->to_string() << std::endl;
-            // }
 
             current_routes[net.id][sink_node.id] = segment;
         }
 
+// for (auto node : current_routes[net.id][sink_node.id]){
+//     std::cout << "\t" << node->to_string() << std::endl;
+// }
         // fix the reg net
         if (net[0].name[0] == 'r') {
             if (pin_index != 0 && src->type != NodeType::Register) {
@@ -472,13 +456,6 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
     if (src_node->type != NodeType::SwitchBox)
         throw ::runtime_error("the beginning of a reg fix has to be a sb");
 
-    // found all nodes width that tile
-    ::set<::shared_ptr<Node>> tile_nodes;
-    for (auto const &node : segment) {
-        //if (node->x == pin.x && node->y == pin.y)
-            tile_nodes.insert(node);
-    }
-
     /* Note:
      * search to see if there any registers connected to them.
      * it is safe to assume that the registers are pipeline registers
@@ -487,7 +464,9 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
     ::shared_ptr<Node> reg_node = nullptr;
     ::shared_ptr<Node> pre_node = nullptr;
     for (const auto &node : segment) {
+// std::cout << "\t" << node->to_string() << std::endl;
         for (const auto &next : *node) {
+// std::cout << "\t  " << next.lock()->to_string() << std::endl;
             if (next.lock()->type == NodeType::Register) {
                 if (!node_connections_.at(next.lock()).empty()) {
                     continue;

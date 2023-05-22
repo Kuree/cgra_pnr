@@ -245,6 +245,9 @@ int main(int argc, char *argv[]) {
         || (size.first <= dim_threshold && size.second <= dim_threshold)
         || (fixed_ratio >= partial_reconfigure_ratio) || disable_global_placement());
 
+    // Global placement doesnt work right now
+    skip_gp = true;
+
     if (!skip_gp) {
         // global placement
         auto gp = GlobalPlacer(clusters, netlist, fixed_pos, layout);

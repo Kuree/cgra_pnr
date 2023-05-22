@@ -733,9 +733,9 @@ void DetailedPlacer::anneal() {
     // estimate the overall iterations
     sa_setup();
     tqdm bar;
-    // uint32_t total_swaps = estimate_num_swaps() * num_swap_;
+    uint32_t total_swaps = estimate_num_swaps() * num_swap_;
     double temp = tmax;
-    // uint32_t current_swap = 0;
+    uint32_t current_swap = 0;
     while (temp >= tmin) {
         uint32_t accept = 0;
         for (uint32_t i = 0; i < num_swap_; i++) {
@@ -784,8 +784,8 @@ void DetailedPlacer::anneal() {
         // }
         temp *= 0.99;
 
-        std::cout << temp << " " << curr_energy << std::endl;
-        // bar.progress(current_swap++, total_swaps);
+        // std::cout << temp << " " << curr_energy << std::endl;
+        bar.progress(current_swap++, total_swaps);
 
         double r_accept = (double)accept / num_swap_;
         d_limit_ = d_limit_ * (1 - 0.44 + r_accept);
@@ -822,7 +822,6 @@ void DetailedPlacer::sa_setup() {
     // very very rare cases
     if (tmax <= tmin) {
         cerr << "Unable to determine tmax. Use default temperature\n";
-        std::cout << "diff sum " << diff_sum << " num_blocks_ " << num_blocks_ << " tmax " << tmax << std::endl;  
         tmax = 3000;
     }
 }
@@ -858,7 +857,7 @@ uint32_t DetailedPlacer::estimate_num_swaps() const {
     //     num_swaps++;
     // }
     while (temp >= tmin) {
-        temp *= 0.99;
+        temp *= 0.97;
         num_swaps++;
     }
     return num_swaps;
@@ -911,12 +910,14 @@ void DetailedPlacer::commit_changes() {
         int source_blk_id = move.source_blk_id;
 
         loc_instances_[blk_type][source_pos].insert(move.dest_blk_id);
-        loc_instances_[blk_type][source_pos].erase(std::find(loc_instances_[blk_type][source_pos].begin(), loc_instances_[blk_type][source_pos].end(), move.source_blk_id));
+        if (std::find(loc_instances_[blk_type][source_pos].begin(), loc_instances_[blk_type][source_pos].end(), move.source_blk_id) != loc_instances_[blk_type][source_pos].end())
+            loc_instances_[blk_type][source_pos].erase(std::find(loc_instances_[blk_type][source_pos].begin(), loc_instances_[blk_type][source_pos].end(), move.source_blk_id));
         
         instances_[move.dest_blk_id].pos = Point(move.source_pos);
 
         loc_instances_[blk_type][dest_pos].insert(source_blk_id);
-        loc_instances_[blk_type][dest_pos].erase(std::find(loc_instances_[blk_type][dest_pos].begin(), loc_instances_[blk_type][dest_pos].end(), move.dest_blk_id));
+        if (std::find(loc_instances_[blk_type][dest_pos].begin(), loc_instances_[blk_type][dest_pos].end(), move.dest_blk_id) != loc_instances_[blk_type][dest_pos].end())
+            loc_instances_[blk_type][dest_pos].erase(std::find(loc_instances_[blk_type][dest_pos].begin(), loc_instances_[blk_type][dest_pos].end(), move.dest_blk_id));
         instances_[source_blk_id].pos = Point(move.dest_pos);
 
         assert(instances_[move.source_blk_id].name.size() > 1);
