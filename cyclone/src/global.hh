@@ -34,7 +34,7 @@ private:
 
     std::vector<uint32_t> reorder_pins(const Net &net);
     void fix_register_net(int net_id, Pin &pin);
-    void add_regs_post_route(std::vector<std::shared_ptr<Node>> &segment, int req_regs);
+    void add_regs_post_route(int net_id, Pin &pin, int req_regs);
 };
 
 

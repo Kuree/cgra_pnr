@@ -212,8 +212,10 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
             if (avail_regs < req_regs) {
                 // Add blockage
                 int blockage_idx = (routed_path.size() / 2);
+                if (routed_path[blockage_idx-1]->type == NodeType::Register && (blockage_idx + 1) < int(routed_path.size()))
+                    blockage_idx++;
 
-                std::cout << "adding blockage " << routed_path[blockage_idx]->to_string() << " " << routed_path[blockage_idx-1]->to_string() << std::endl;
+                // std::cout << "adding blockage " << routed_path[blockage_idx]->to_string() << " " << routed_path[blockage_idx-1]->to_string() << std::endl;
                 blockages.emplace(std::make_pair(routed_path[blockage_idx], routed_path[blockage_idx-1]));
                 
                 // Reset everything and retry
@@ -383,6 +385,7 @@ void Router::squash_non_broadcast_reg_nets() {
                 for (uint32_t i = 1; i < net2.size(); i++) {
                     if (origin_pin.name.compare(net2[i].name) == 0) {
                         net2.remove_pin(i);
+                        needed_regs_[iter2.first] += needed_regs_[iter.first];
                         needed_regs_[iter2.first] += 1;
                         for (uint32_t j = 1; j < net.size(); j++) {
                             net2.add_pin(net[j]);
@@ -473,6 +476,7 @@ Router::reorder_reg_nets() {
 }
 
 bool Router::overflow() {
+    std::cout << "Overflowed" << std::endl;
     return overflowed_;
 }
 

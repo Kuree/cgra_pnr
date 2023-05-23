@@ -152,30 +152,52 @@ void GlobalRouter::compute_slack_ratio(uint32_t current_iter) {
     }
 }
 
-void GlobalRouter::add_regs_post_route(::vector<::shared_ptr<Node>> &segment, int req_regs) {
+void GlobalRouter::add_regs_post_route(int net_id, Pin &pin, int req_regs) {
     if (req_regs == 0) 
         return;
 
+    auto segment = current_routes[net_id][pin.id];
+
     ::vector<int> avail_reg_idx;
 
-    for (uint32_t i = 1; i < segment.size(); i++) {
-        if (segment[i-1]->type == NodeType::SwitchBox and segment[i]->type == NodeType::Generic) {
-            avail_reg_idx.emplace_back(i-1);
-        }
-    }
-
-    // Add reg nodes spaced evenly
-    float reg_spacing = avail_reg_idx.size() / req_regs;
-    for (int i = 0; i < req_regs; i++) {
-        int idx = int(0.5*reg_spacing + i*reg_spacing);
-        auto head = segment[avail_reg_idx[idx]];
-        for (auto const &node : *head) {
-            if (node.lock()->type == NodeType::Register) {
-                // std::cout << "\tinserting reg " << node.lock()->to_string() << std::endl;
-                segment.insert(segment.begin() + avail_reg_idx[idx] + 1, node.lock());
+    for (uint32_t i = 0; i < segment.size() - 1; i++) {
+        if (segment[i]->type == NodeType::SwitchBox) { 
+            for (auto const &node : *segment[i]) {
+                if (node.lock()->type == NodeType::Register) {
+                    avail_reg_idx.emplace_back(i);
+                    break;
+                }
             }
         }
     }
+
+// std::cout << "\tavail " << avail_reg_idx.size() << std::endl;
+    // Add reg nodes spaced evenly
+    float reg_spacing = avail_reg_idx.size() / req_regs;
+    for (int i = 0; i < req_regs; i++) {
+        bool added_reg = false;
+        int idx = floor(0.5*reg_spacing + i*reg_spacing);
+// std::cout << "\tfloor idx " << idx << std::endl;
+
+        if (idx >= int(avail_reg_idx.size()))
+            throw ::runtime_error("Index calculation for register insertion is wrong");
+
+
+        // Every time we add a register segment grows so we need + i
+        auto head = segment[avail_reg_idx[idx] + i];
+        for (auto const &node : *head) {
+// std::cout << "\ttrying " << node.lock()->to_string() << std::endl;
+            if (node.lock()->type == NodeType::Register) {
+// std::cout << "\tinserting reg " << node.lock()->to_string() << std::endl;
+                segment.insert(segment.begin() + avail_reg_idx[idx] + 1 + i, node.lock());
+                added_reg = true;
+            }
+        }
+        if (!added_reg)
+            throw ::runtime_error("unable to add reg to segment post route");
+    }
+
+    current_routes[net_id][pin.id] = segment;
 
 }
 
@@ -289,8 +311,6 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
             auto h_f = manhattan_distance(end);
             auto segment = route_a_star(src_node, end_f, cost_f, h_f, req_regs);
 
-            add_regs_post_route(segment, needed_regs_[net_id]);
-
             if (segment.back()->type != NodeType::SwitchBox) {
                 throw ::runtime_error("cannot connect to the reg tile");
             }
@@ -329,8 +349,6 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
                                       sink_node.node->name);
             }
 
-            add_regs_post_route(segment, needed_regs_[net_id]);
-
             current_routes[net.id][sink_node.id] = segment;
         }
 
@@ -346,6 +364,7 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
                 fix_register_net(net.id, net[seg_index]);
             }
         }
+        add_regs_post_route(net.id, net[seg_index], needed_regs_[net.id]);
 
         // also put segment into the current path
         const auto &segment = current_routes[net.id][sink_node.id];
