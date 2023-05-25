@@ -22,7 +22,7 @@ using std::set;
 char DetailedPlacer::REG_BLK_TYPE = 'r';
 
 bool operator< (const DetailedMove &m1, const DetailedMove &m2) {
-    return m1.source_blk_id < m2.source_blk_id;
+    return m1.blk_id < m2.blk_id;
 }
 
 DetailedPlacer
@@ -30,7 +30,6 @@ DetailedPlacer
                  ::map<::string, ::vector<::string>> netlist,
                  ::map<char, ::vector<::pair<int, int>>> available_pos,
                  const ::map<::string, ::pair<int, int>> &fixed_pos,
-                 const Layout &board_layout,
                  char clb_type,
                  bool fold_reg) :
                  SimAnneal(),
@@ -43,8 +42,7 @@ DetailedPlacer
                  fold_reg_(fold_reg),
                  reg_no_pos_(),
                  loc_instances_(),
-                 fixed_pos_(fixed_pos),
-                 board_layout_(board_layout) {
+                 fixed_pos_(fixed_pos) {
 
     // intelligently set the fold reg option
     set_fold_reg(cluster_blocks, fold_reg);
@@ -122,7 +120,6 @@ DetailedPlacer
                  ::map<::string, ::vector<::string>> netlist,
                  ::map<char, ::vector<::pair<int, int>>> available_pos,
                  ::map<::string, ::pair<int, int>> fixed_pos,
-                 const Layout &board_layout,
                  char clb_type,
                  bool fold_reg) :
                  SimAnneal(),
@@ -134,8 +131,7 @@ DetailedPlacer
                  clb_type_(clb_type),
                  fold_reg_(fold_reg),
                  reg_no_pos_(),
-                 loc_instances_(),
-                 board_layout_(board_layout) {
+                 loc_instances_() {
     // re-make cluster blocks
     ::vector<::string> cluster_blocks;
     cluster_blocks.reserve(init_placement.size());
@@ -566,169 +562,69 @@ void DetailedPlacer::move() {
     }
 
 #endif
+    this->moves_.clear();
+    auto curr_ins_id =
+            instance_ids_[detail_rand_.uniform<uint64_t>
+                          (0, instance_ids_.size() - 1)];
+    auto curr_ins = instances_[curr_ins_id];
+    if (curr_ins.fixed)
+        return;
 
-    // we have a couple of choices
-    // 1. translate a little bit
-    // 2. swap locations
-    // 3. teleport
-    moves_.clear();
-    double action = detail_rand_.uniform(0.0, 1.0);
-
-    if (action < 0.1) {
-        // Translate
-        auto curr_ins_id =
-                instance_ids_[detail_rand_.uniform<uint64_t>
-                            (0, instance_ids_.size() - 1)];
-        auto curr_ins = instances_[curr_ins_id];
-        if (curr_ins.fixed)
-            return;
-        
-        char blk_type = curr_ins.name[0];
-        
-        const auto curr_pos = curr_ins.pos;
-
-        int moveX = 0;
-        int moveY = 0;
-
-        if (action <= 0.05) {
-            moveX = detail_rand_.uniform<int>(-10, 10);
-        } else {
-            moveY = detail_rand_.uniform<int>(-10, 10);
-        }
-
-        if (moveX == 0 && moveY == 0)
-            return;
-
-
-        const auto pos = std::make_pair(curr_pos.x + moveX, curr_pos.y + moveY);
-
-        // std::cout << curr_ins.name << " " << blk_type << " " << moveX << " " << moveY << " " << pos.first << " " << pos.second << std::endl;
-
-
-        if (pos.first < 0 || pos.second < 0 || pos.first >= (int)board_layout_.width() || pos.second >= (int)board_layout_.height()) {
-            return;
-        }
-
-        if (!board_layout_.is_legal(curr_ins.name, pos.first, pos.second)) {
-            return;
-        }
-
-        if (loc_instances_[blk_type].find(pos) == loc_instances_[blk_type].end()) {
-            return;
-        }
-
-        auto position = std::find(avail_pos_anneal_[blk_type].begin(), avail_pos_anneal_[blk_type].end(), pos);
-        if (position == avail_pos_anneal_[blk_type].end()) {
-            return;
-        } 
-
-    // for (auto iter : avail_pos_anneal_) {
-    //     std::cout << "\n" << iter.first << std::endl;
-    //     for (auto iter2 : iter.second) {
-    //         std::cout << iter2.first << "," << iter2.second << " ";
-    //     }
-    // }
-
-        const int dest_id = *loc_instances_[blk_type][pos].begin();
-        // std::cout << "\ncompleted move for " << curr_ins.name << std::endl;
-        moves_.insert(DetailedMove{.source_blk_id = curr_ins.id, .source_pos = Point(curr_pos),
-                                   .dest_blk_id = dest_id, .dest_pos = Point(pos)});
-    // } else if (action <= 0.5) {
+    // only swap with the same type
+    char blk_type = curr_ins.name[0];
+    // search for x, y that is within the d_limit
+    const auto curr_pos = curr_ins.pos;
+    Instance next_ins;
+    if (d_limit_ >= max_dim_) {
+        auto[start_index, end_index] = instance_type_index_[blk_type];
+        next_ins = instances_[detail_rand_.uniform<uint64_t>(start_index,
+                                                                  end_index)];
     } else {
-        // Swap
-        
-        auto curr_ins_id =
-                instance_ids_[detail_rand_.uniform<uint64_t>
-                            (0, instance_ids_.size() - 1)];
-        auto curr_ins = instances_[curr_ins_id];
-        if (curr_ins.fixed)
+        int r = (int)(d_limit_ / 2);
+        r = r > 0 ? r : 1;
+        const int x_start = CLAMP(curr_pos.x - r, 0, max_dim_);
+        const int x_end = CLAMP(curr_pos.x + r, 0, max_dim_);
+        const int y_start = CLAMP(curr_pos.y - r, 0, max_dim_);
+        const int y_end = CLAMP(curr_pos.y + r, 0, max_dim_);
+        const int next_x = detail_rand_.uniform(x_start, x_end);
+        const int next_y = detail_rand_.uniform(y_start, y_end);
+        const auto pos = std::make_pair(next_x, next_y);
+        if (loc_instances_[blk_type].find(pos)
+            == loc_instances_[blk_type].end())
             return;
 
-        // only swap with the same type
-        char blk_type = curr_ins.name[0];
-        // search for x, y that is within the d_limit
-        const auto curr_pos = curr_ins.pos;
-        Instance next_ins;
-        if (d_limit_ >= max_dim_) {
-            auto[start_index, end_index] = instance_type_index_[blk_type];
-            next_ins = instances_[detail_rand_.uniform<uint64_t>(start_index,
-                                                                    end_index)];
-        } else {
-            int r = (int)(d_limit_ / 2);
-            r = r > 0 ? r : 1;
-            const int x_start = CLAMP(curr_pos.x - r, 0, max_dim_);
-            const int x_end = CLAMP(curr_pos.x + r, 0, max_dim_);
-            const int y_start = CLAMP(curr_pos.y - r, 0, max_dim_);
-            const int y_end = CLAMP(curr_pos.y + r, 0, max_dim_);
-            const int next_x = detail_rand_.uniform(x_start, x_end);
-            const int next_y = detail_rand_.uniform(y_start, y_end);
-            const auto pos = std::make_pair(next_x, next_y);
-            if (loc_instances_[blk_type].find(pos)
-                == loc_instances_[blk_type].end())
-                return;
-
-            const int id = *loc_instances_[blk_type][pos].begin();
-            next_ins = instances_[id];
-        }
-
-        if (curr_ins.name[0] != next_ins.name[0])
-            throw ::runtime_error("unexpected move selection error");
-
-        // if (next_ins.name.size() == 1)
-        //     return;
-
-        if (curr_ins.name == next_ins.name)
-            return;
-
-        // can't be a fixed instance
-        // we also need to some optimization to avoid unnecessary look up
-        // which is the case in most of the time. Unless you want to do
-        // partial reconfiguration
-        if (has_clb_fixed_ && next_ins.fixed)
-            return;
-
-        // check if it's legal in reg net
-        if (fold_reg_) {
-            if ((!is_reg_net(curr_ins, next_ins.pos))
-            || (!is_reg_net(next_ins, curr_ins.pos)))
-                return;
-        }
-
-        // std::cout << "completed swap for " << curr_ins.name << std::endl;
-        // swap
-        // moves_.insert(DetailedMove{.blk_id = curr_ins.id,
-        //                                 .new_pos = next_ins.pos,
-        //                                 .old_pos = curr_ins.pos});
-        // moves_.insert(DetailedMove{.blk_id = next_ins.id,
-        //                                 .new_pos = curr_ins.pos,
-        //                                 .old_pos = next_ins.pos});
-
-        moves_.insert(DetailedMove{.source_blk_id = curr_ins.id, .source_pos = curr_ins.pos,
-                                   .dest_blk_id = next_ins.id, .dest_pos = next_ins.pos});
-
-    // } else {
-        // Teleport
-
+        const int id = *loc_instances_[blk_type][pos].begin();
+        next_ins = instances_[id];
     }
+
+    if (curr_ins.name[0] != next_ins.name[0])
+        throw ::runtime_error("unexpected move selection error");
+
+    if (curr_ins.name == next_ins.name)
+        return;
+
+    // can't be a fixed instance
+    // we also need to some optimization to avoid unnecessary look up
+    // which is the case in most of the time. Unless you want to do
+    // partial reconfiguration
+    if (has_clb_fixed_ && next_ins.fixed)
+        return;
+
+    // check if it's legal in reg net
+    if (fold_reg_) {
+        if ((!is_reg_net(curr_ins, next_ins.pos))
+        || (!is_reg_net(next_ins, curr_ins.pos)))
+            return;
+    }
+
+    // swap
+    this->moves_.insert(DetailedMove{.blk_id = curr_ins.id,
+                                     .new_pos = next_ins.pos});
+    this->moves_.insert(DetailedMove{.blk_id = next_ins.id,
+                                     .new_pos = curr_ins.pos});
 }
 
 void DetailedPlacer::anneal() {
-
-    avail_pos_anneal_ = board_layout_.produce_available_pos();
-
-    for (auto const &ins : instances_) {
-        auto blk_type = ins.name[0];
-        if (ins.name.length() > 1) {
-            auto pos = std::make_pair(ins.pos.x, ins.pos.y);
-            auto position = std::find(avail_pos_anneal_[blk_type].begin(), avail_pos_anneal_[blk_type].end(), pos);
-            if (position != avail_pos_anneal_[blk_type].end()) {
-                avail_pos_anneal_[blk_type].erase(position);
-                // std::cout << "erasing " << pos.first << " " << pos.second << std::endl;
-            }
-        }
-    }
-
-
     // the anneal schedule is different from VPR's because we want to
     // estimate the overall iterations
     sa_setup();
@@ -739,18 +635,6 @@ void DetailedPlacer::anneal() {
     while (temp >= tmin) {
         uint32_t accept = 0;
         for (uint32_t i = 0; i < num_swap_; i++) {
-    
-    // for (auto const &ins : instances_) {
-    //     if (ins.name.length() > 1) {
-    //         std::cout << ins.name << ": " << ins.pos.x << "," << ins.pos.y << std::endl;
-    //     }
-    // }
-    // for (auto iter : avail_pos_anneal_) {
-    //     std::cout << "\n" << iter.first << std::endl;
-    //     for (auto iter2 : iter.second) {
-    //         std::cout << iter2.first << "," << iter2.second << " ";
-    //     }
-    // }
             move();
             double new_energy = energy();
             double de = new_energy - this->curr_energy;
@@ -767,24 +651,22 @@ void DetailedPlacer::anneal() {
 
         // same schedule as estimation
         // 0.5
-        // if (temp == tmax) {
-        //     temp /= 2;
-        // }
-        // // 0.9
-        // else if (temp >= tmax * 0.1) {
-        //     temp *= 0.9;
-        // }
-        // // 0.95
-        // else if (temp >= tmax * 0.0001) {
-        //     temp *= 0.95;
-        // }
-        // // 0.8
-        // else if (temp >= tmin) {
-        //     temp *= 0.8;
-        // }
-        temp *= 0.99;
+        if (temp == tmax) {
+            temp /= 2;
+        }
+        // 0.9
+        else if (temp >= tmax * 0.1) {
+            temp *= 0.9;
+        }
+        // 0.95
+        else if (temp >= tmax * 0.0001) {
+            temp *= 0.95;
+        }
+        // 0.8
+        else if (temp >= tmin) {
+            temp *= 0.8;
+        }
 
-        // std::cout << temp << " " << curr_energy << std::endl;
         bar.progress(current_swap++, total_swaps);
 
         double r_accept = (double)accept / num_swap_;
@@ -803,7 +685,6 @@ void DetailedPlacer::sa_setup() {
     for (uint32_t i = 0; i < num_blocks_; i++) {
         moves_.clear();
         move();
-        commit_changes();
         auto new_e = energy();
         diff_e[i] = new_e;
     }
@@ -839,25 +720,21 @@ uint32_t DetailedPlacer::estimate_num_swaps() const {
     uint32_t num_swaps = 0;
     auto temp = tmax;
     // 0.5
-    // temp /= 2;
+    temp /= 2;
     num_swaps++;
     // 0.9
-    // while (temp >= tmax * 0.1) {
-    //     temp *= 0.9;
-    //     num_swaps++;
-    // }
-    // // 0.95
-    // while (temp >= tmax * 0.0002) {
-    //     temp *= 0.95;
-    //     num_swaps++;
-    // }
-    // // 0.8
-    // while (temp >= tmin) {
-    //     temp *= 0.8;
-    //     num_swaps++;
-    // }
+    while (temp >= tmax * 0.1) {
+        temp *= 0.9;
+        num_swaps++;
+    }
+    // 0.95
+    while (temp >= tmax * 0.0002) {
+        temp *= 0.95;
+        num_swaps++;
+    }
+    // 0.8
     while (temp >= tmin) {
-        temp *= 0.97;
+        temp *= 0.8;
         num_swaps++;
     }
     return num_swaps;
@@ -865,12 +742,12 @@ uint32_t DetailedPlacer::estimate_num_swaps() const {
 
 
 double DetailedPlacer::energy() {
-    if (!moves_.empty()) {
+    if (!this->moves_.empty()) {
         map<int, Point> original;
         set<int> changed_net;
-        for (auto const &move : moves_) {
-            original[move.source_blk_id] = Point(instances_[move.source_blk_id].pos);
-            for (const int net: instances_[move.source_blk_id].nets) {
+        for (auto const &move : this->moves_) {
+            original[move.blk_id] = Point(instances_[move.blk_id].pos);
+            for (const int net: instances_[move.blk_id].nets) {
                 changed_net.insert(net);
             }
         }
@@ -884,8 +761,8 @@ double DetailedPlacer::energy() {
 
         // change the locations
         for (const auto &move : moves_) {
-            int source_blk_id = move.source_blk_id;
-            instances_[source_blk_id].pos = Point(move.dest_pos);
+            int blk_id = move.blk_id;
+            instances_[blk_id].pos = Point(move.new_pos);
         }
 
         // compute the new hpwl
@@ -904,39 +781,12 @@ double DetailedPlacer::energy() {
 
 void DetailedPlacer::commit_changes() {
     for (const auto &move : moves_) {
-        auto source_pos = std::make_pair(move.source_pos.x, move.source_pos.y);
-        auto dest_pos = std::make_pair(move.dest_pos.x, move.dest_pos.y);
-        const char blk_type = instances_[move.source_blk_id].name[0];
-        int source_blk_id = move.source_blk_id;
+        auto new_pos = std::make_pair(move.new_pos.x, move.new_pos.y);
+        const char blk_type = instances_[move.blk_id].name[0];
+        int blk_id = move.blk_id;
 
-        loc_instances_[blk_type][source_pos].insert(move.dest_blk_id);
-        if (std::find(loc_instances_[blk_type][source_pos].begin(), loc_instances_[blk_type][source_pos].end(), move.source_blk_id) != loc_instances_[blk_type][source_pos].end())
-            loc_instances_[blk_type][source_pos].erase(std::find(loc_instances_[blk_type][source_pos].begin(), loc_instances_[blk_type][source_pos].end(), move.source_blk_id));
-        
-        instances_[move.dest_blk_id].pos = Point(move.source_pos);
-
-        loc_instances_[blk_type][dest_pos].insert(source_blk_id);
-        if (std::find(loc_instances_[blk_type][dest_pos].begin(), loc_instances_[blk_type][dest_pos].end(), move.dest_blk_id) != loc_instances_[blk_type][dest_pos].end())
-            loc_instances_[blk_type][dest_pos].erase(std::find(loc_instances_[blk_type][dest_pos].begin(), loc_instances_[blk_type][dest_pos].end(), move.dest_blk_id));
-        instances_[source_blk_id].pos = Point(move.dest_pos);
-
-        assert(instances_[move.source_blk_id].name.size() > 1);
-
-        // std::cout << "\tcommit " << instances_[move.source_blk_id].name << " -> " << instances_[move.dest_blk_id].name << std::endl;
-
-        if (instances_[move.dest_blk_id].name.size() == 1) {
-            // std::cout << "\t  erasing " << instances_[move.source_blk_id].name << " " << instances_[move.source_blk_id].name[0] << " " << move.dest_pos.x << " " << move.dest_pos.y << std::endl;
-            // std::cout << "\t  adding " << instances_[move.dest_blk_id].name << " " << instances_[move.source_blk_id].name[0] << " " << move.source_pos.x << " " << move.source_pos.y << std::endl;
-            // Simple move
-            auto new_position = std::find(avail_pos_anneal_[blk_type].begin(), avail_pos_anneal_[blk_type].end(), std::make_pair(move.dest_pos.x, move.dest_pos.y));
-            avail_pos_anneal_[blk_type].erase(new_position);
-            
-            auto old_position = std::find(avail_pos_anneal_[blk_type].begin(), avail_pos_anneal_[blk_type].end(), std::make_pair(move.source_pos.x, move.source_pos.y));
-            if (blk_type != 'r' && old_position != avail_pos_anneal_[blk_type].end()) {
-                throw ::runtime_error("trying to add position that already exists!");
-            }
-            avail_pos_anneal_[blk_type].push_back(std::make_pair(move.source_pos.x, move.source_pos.y));
-        } 
+        loc_instances_[blk_type][new_pos].insert(blk_id);
+        instances_[blk_id].pos = Point(move.new_pos);
     }
 }
 
@@ -957,21 +807,6 @@ double DetailedPlacer::init_energy() {
 
 void DetailedPlacer::refine(int num_iter, double threshold,
                           bool print_improvement) {
-
-    avail_pos_anneal_ = board_layout_.produce_available_pos();
-
-    for (auto const &ins : instances_) {
-        auto blk_type = ins.name[0];
-        if (ins.name.length() > 1) {
-            auto pos = std::make_pair(ins.pos.x, ins.pos.y);
-            auto position = std::find(avail_pos_anneal_[blk_type].begin(), avail_pos_anneal_[blk_type].end(), pos);
-            if (position != avail_pos_anneal_[blk_type].end()) {
-                avail_pos_anneal_[blk_type].erase(position);
-                // std::cout << "erasing " << pos.first << " " << pos.second << std::endl;
-            }
-        }
-    }
-
     d_limit_ = sqrt(max_dim_) * 2;
     SimAnneal::refine(num_iter, threshold, print_improvement);
 }
