@@ -44,11 +44,6 @@ void GlobalRouter::route() {
     group_reg_nets();
     auto reordered_netlist = reorder_reg_nets();
 
-// std::cout << "\nreordered netlist:" << std::endl;
-// for (auto i: reordered_netlist)
-//     std::cout << i << ' ';
-// std::cout << "\n" << std::endl;
-
     for (uint32_t it = 0; it < num_iteration_; it++) {
         auto time_start = std::chrono::system_clock::now();
 
@@ -171,13 +166,11 @@ void GlobalRouter::add_regs_post_route(int net_id, Pin &pin, int req_regs) {
         }
     }
 
-// std::cout << "\tavail " << avail_reg_idx.size() << std::endl;
     // Add reg nodes spaced evenly
     float reg_spacing = avail_reg_idx.size() / req_regs;
     for (int i = 0; i < req_regs; i++) {
         bool added_reg = false;
         int idx = floor(0.5*reg_spacing + i*reg_spacing);
-// std::cout << "\tfloor idx " << idx << std::endl;
 
         if (idx >= int(avail_reg_idx.size()))
             throw ::runtime_error("Index calculation for register insertion is wrong");
@@ -186,9 +179,7 @@ void GlobalRouter::add_regs_post_route(int net_id, Pin &pin, int req_regs) {
         // Every time we add a register segment grows so we need + i
         auto head = segment[avail_reg_idx[idx] + i];
         for (auto const &node : *head) {
-// std::cout << "\ttrying " << node.lock()->to_string() << std::endl;
             if (node.lock()->type == NodeType::Register) {
-// std::cout << "\tinserting reg " << node.lock()->to_string() << std::endl;
                 segment.insert(segment.begin() + avail_reg_idx[idx] + 1 + i, node.lock());
                 added_reg = true;
             }
@@ -204,7 +195,6 @@ void GlobalRouter::add_regs_post_route(int net_id, Pin &pin, int req_regs) {
 void
 GlobalRouter::route_net(int net_id, uint32_t it) {
 
-// std::cout << "\nRoute net id " << net_id << std::endl;
 
     ::vector<::shared_ptr<Node>> current_path;
     auto pin_indices = reorder_pins(netlist_[net_id]);
@@ -212,15 +202,12 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
         // we may update the src while routing, i.e. for reg nets, so we pull
         // the src info for every pins
         auto &net = netlist_[net_id];
-// std::cout << "\tsrc pin " << net[0].name << std::endl;
         const auto &src = net[0].node;
         if (src == nullptr)
             throw ::runtime_error("unable to find src when route net");
 
         auto seg_index = pin_indices[pin_index];
         auto const &sink_node = net[seg_index];
-// std::cout << "\tseg_index " << seg_index << std::endl;
-// std::cout << "\tsink_node " << sink_node.name << std::endl;
 
         auto slack_entry = make_pair(src, sink_node.name);
         auto sink_coord = std::make_pair(sink_node.x, sink_node.y);
@@ -228,7 +215,6 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
         RoutingStrategy strategy = slack > route_strategy_ratio ?
                                    RoutingStrategy::DelayDriven :
                                    RoutingStrategy::CongestionDriven;
-
 
         ::shared_ptr<Node> src_node = src;
         // choose src_node
@@ -286,27 +272,14 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
             req_regs++;
         }
 
-// std::cout << "source " << net[0].name << std::endl;
-// std::cout << "source node " << src_node->to_string() << std::endl;
-// std::cout << "sink " << sink_node.name << std::endl;
-// std::cout << "net_id " << net.id << std::endl;
-// std::cout << "sink_id " << sink_node.id << std::endl;
-// std::cout << "req regs " << req_regs << std::endl << std::endl;
-
-
         // find the routes
         if (sink_node.name[0] == 'r') {
             ::pair<uint32_t, uint32_t> end = {sink_node.x, sink_node.y};
             if (it != 0 && sink_node.node == nullptr) {
                 throw ::runtime_error("iteration 0 failed to assign registers");
             }
+
             // for now just find the switch in and decides the register later
-            /*
-             * FIXME: in the future where the register is sparse, change this
-             *        route to the register, then roll back to the switch in.
-             *        in this way the router can handle both sparse and
-             *        rich register resources.
-            */
             auto end_f = get_free_switch(end);
             auto h_f = manhattan_distance(end);
             auto segment = route_a_star(src_node, end_f, cost_f, h_f, req_regs);
@@ -352,9 +325,6 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
             current_routes[net.id][sink_node.id] = segment;
         }
 
-// for (auto node : current_routes[net.id][sink_node.id]){
-//     std::cout << "\t" << node->to_string() << std::endl;
-// }
         // fix the reg net
         if (net[0].name[0] == 'r') {
             if (pin_index != 0 && src->type != NodeType::Register) {
@@ -373,12 +343,6 @@ GlobalRouter::route_net(int net_id, uint32_t it) {
         current_path.insert(current_path.end(), segment.begin(), segment.end());
         // assign it to the node_connections
         assign_net_segment(segment, net.id);
-
-        // std::cout << "\n\tfinal segment for net id: " << net.id << std::endl;
-        // for (auto node : segment){
-        //     std::cout << "\t" << node->to_string() << std::endl;
-        // }
-        // std::cout << std::endl;
     }
 }
 
@@ -483,9 +447,7 @@ void GlobalRouter::fix_register_net(int net_id, Pin &pin) {
     ::shared_ptr<Node> reg_node = nullptr;
     ::shared_ptr<Node> pre_node = nullptr;
     for (const auto &node : segment) {
-// std::cout << "\t" << node->to_string() << std::endl;
         for (const auto &next : *node) {
-// std::cout << "\t  " << next.lock()->to_string() << std::endl;
             if (next.lock()->type == NodeType::Register) {
                 if (!node_connections_.at(next.lock()).empty()) {
                     continue;

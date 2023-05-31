@@ -568,13 +568,13 @@ void DetailedPlacer::move() {
 #endif
 
     // we have a couple of choices
-    // 1. translate a little bit
+    // 1. translate in either x or y direction
     // 2. swap locations
-    // 3. teleport
+
     moves_.clear();
     double action = detail_rand_.uniform(0.0, 1.0);
 
-    if (action < 0.1) {
+    if (action < 0.2) {
         // Translate
         auto curr_ins_id =
                 instance_ids_[detail_rand_.uniform<uint64_t>
@@ -590,7 +590,7 @@ void DetailedPlacer::move() {
         int moveX = 0;
         int moveY = 0;
 
-        if (action <= 0.05) {
+        if (action <= 0.1) {
             moveX = detail_rand_.uniform<int>(-10, 10);
         } else {
             moveY = detail_rand_.uniform<int>(-10, 10);
@@ -601,8 +601,6 @@ void DetailedPlacer::move() {
 
 
         const auto pos = std::make_pair(curr_pos.x + moveX, curr_pos.y + moveY);
-
-        // std::cout << curr_ins.name << " " << blk_type << " " << moveX << " " << moveY << " " << pos.first << " " << pos.second << std::endl;
 
 
         if (pos.first < 0 || pos.second < 0 || pos.first >= (int)board_layout_.width() || pos.second >= (int)board_layout_.height()) {
@@ -622,18 +620,9 @@ void DetailedPlacer::move() {
             return;
         } 
 
-    // for (auto iter : avail_pos_anneal_) {
-    //     std::cout << "\n" << iter.first << std::endl;
-    //     for (auto iter2 : iter.second) {
-    //         std::cout << iter2.first << "," << iter2.second << " ";
-    //     }
-    // }
-
         const int dest_id = *loc_instances_[blk_type][pos].begin();
-        // std::cout << "\ncompleted move for " << curr_ins.name << std::endl;
         moves_.insert(DetailedMove{.source_blk_id = curr_ins.id, .source_pos = Point(curr_pos),
                                    .dest_blk_id = dest_id, .dest_pos = Point(pos)});
-    // } else if (action <= 0.5) {
     } else {
         // Swap
         
@@ -674,9 +663,6 @@ void DetailedPlacer::move() {
         if (curr_ins.name[0] != next_ins.name[0])
             throw ::runtime_error("unexpected move selection error");
 
-        // if (next_ins.name.size() == 1)
-        //     return;
-
         if (curr_ins.name == next_ins.name)
             return;
 
@@ -694,20 +680,8 @@ void DetailedPlacer::move() {
                 return;
         }
 
-        // std::cout << "completed swap for " << curr_ins.name << std::endl;
-        // swap
-        // moves_.insert(DetailedMove{.blk_id = curr_ins.id,
-        //                                 .new_pos = next_ins.pos,
-        //                                 .old_pos = curr_ins.pos});
-        // moves_.insert(DetailedMove{.blk_id = next_ins.id,
-        //                                 .new_pos = curr_ins.pos,
-        //                                 .old_pos = next_ins.pos});
-
         moves_.insert(DetailedMove{.source_blk_id = curr_ins.id, .source_pos = curr_ins.pos,
                                    .dest_blk_id = next_ins.id, .dest_pos = next_ins.pos});
-
-    // } else {
-        // Teleport
 
     }
 }
@@ -723,7 +697,6 @@ void DetailedPlacer::anneal() {
             auto position = std::find(avail_pos_anneal_[blk_type].begin(), avail_pos_anneal_[blk_type].end(), pos);
             if (position != avail_pos_anneal_[blk_type].end()) {
                 avail_pos_anneal_[blk_type].erase(position);
-                // std::cout << "erasing " << pos.first << " " << pos.second << std::endl;
             }
         }
     }
@@ -739,18 +712,6 @@ void DetailedPlacer::anneal() {
     while (temp >= tmin) {
         uint32_t accept = 0;
         for (uint32_t i = 0; i < num_swap_; i++) {
-    
-    // for (auto const &ins : instances_) {
-    //     if (ins.name.length() > 1) {
-    //         std::cout << ins.name << ": " << ins.pos.x << "," << ins.pos.y << std::endl;
-    //     }
-    // }
-    // for (auto iter : avail_pos_anneal_) {
-    //     std::cout << "\n" << iter.first << std::endl;
-    //     for (auto iter2 : iter.second) {
-    //         std::cout << iter2.first << "," << iter2.second << " ";
-    //     }
-    // }
             move();
             double new_energy = energy();
             double de = new_energy - this->curr_energy;
@@ -767,24 +728,22 @@ void DetailedPlacer::anneal() {
 
         // same schedule as estimation
         // 0.5
-        // if (temp == tmax) {
-        //     temp /= 2;
-        // }
-        // // 0.9
-        // else if (temp >= tmax * 0.1) {
-        //     temp *= 0.9;
-        // }
-        // // 0.95
-        // else if (temp >= tmax * 0.0001) {
-        //     temp *= 0.95;
-        // }
-        // // 0.8
-        // else if (temp >= tmin) {
-        //     temp *= 0.8;
-        // }
-        temp *= 0.99;
+        if (temp == tmax) {
+            temp /= 2;
+        }
+        // 0.9
+        else if (temp >= tmax * 0.1) {
+            temp *= 0.9;
+        }
+        // 0.95
+        else if (temp >= tmax * 0.0001) {
+            temp *= 0.95;
+        }
+        // 0.8
+        else if (temp >= tmin) {
+            temp *= 0.8;
+        }
 
-        // std::cout << temp << " " << curr_energy << std::endl;
         bar.progress(current_swap++, total_swaps);
 
         double r_accept = (double)accept / num_swap_;
@@ -922,11 +881,8 @@ void DetailedPlacer::commit_changes() {
 
         assert(instances_[move.source_blk_id].name.size() > 1);
 
-        // std::cout << "\tcommit " << instances_[move.source_blk_id].name << " -> " << instances_[move.dest_blk_id].name << std::endl;
 
         if (instances_[move.dest_blk_id].name.size() == 1) {
-            // std::cout << "\t  erasing " << instances_[move.source_blk_id].name << " " << instances_[move.source_blk_id].name[0] << " " << move.dest_pos.x << " " << move.dest_pos.y << std::endl;
-            // std::cout << "\t  adding " << instances_[move.dest_blk_id].name << " " << instances_[move.source_blk_id].name[0] << " " << move.source_pos.x << " " << move.source_pos.y << std::endl;
             // Simple move
             auto new_position = std::find(avail_pos_anneal_[blk_type].begin(), avail_pos_anneal_[blk_type].end(), std::make_pair(move.dest_pos.x, move.dest_pos.y));
             avail_pos_anneal_[blk_type].erase(new_position);
@@ -967,7 +923,6 @@ void DetailedPlacer::refine(int num_iter, double threshold,
             auto position = std::find(avail_pos_anneal_[blk_type].begin(), avail_pos_anneal_[blk_type].end(), pos);
             if (position != avail_pos_anneal_[blk_type].end()) {
                 avail_pos_anneal_[blk_type].erase(position);
-                // std::cout << "erasing " << pos.first << " " << pos.second << std::endl;
             }
         }
     }
