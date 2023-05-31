@@ -215,7 +215,6 @@ std::vector<std::shared_ptr<Node>> Router::route_a_star(
                 if (routed_path[blockage_idx-1]->type == NodeType::Register && (blockage_idx + 1) < int(routed_path.size()))
                     blockage_idx++;
 
-                // std::cout << "adding blockage " << routed_path[blockage_idx]->to_string() << " " << routed_path[blockage_idx-1]->to_string() << std::endl;
                 blockages.emplace(std::make_pair(routed_path[blockage_idx], routed_path[blockage_idx-1]));
                 
                 // Reset everything and retry
@@ -345,16 +344,8 @@ std::vector<int> Router::squash_net(int src_id) {
 void Router::squash_non_broadcast_reg_nets() {
     ::unordered_set<int> delete_ids;
 
-
-    std::cout << "\nBefore netlist squashing" << std::endl;
     for (auto &iter : netlist_) {
         needed_regs_[iter.first] = 0;
-        std::cout << iter.first << " : ";
-        auto const &net = iter.second;
-        for (uint32_t j = 0; j < net.size(); j++) {
-            std::cout << net[j].name << " ";
-        }
-        std::cout << std::endl;
     }
 
     for (auto &iter : netlist_) {
@@ -405,17 +396,6 @@ void Router::squash_non_broadcast_reg_nets() {
     for (auto delete_id : delete_ids) {
         netlist_.erase(delete_id);
     }
-
-    std::cout << "\nAfter netlist squashing" << std::endl;
-    for (auto &iter : netlist_) {
-        std::cout << iter.first << " : ";
-        auto &net = iter.second;
-        for (uint32_t j = 0; j < net.size(); j++) {
-            std::cout << net[j].name << " ";
-        }
-        std::cout << "\tneeded regs: " << needed_regs_[iter.first] << std::endl;
-    }
-
 }
 
 
@@ -476,7 +456,6 @@ Router::reorder_reg_nets() {
 }
 
 bool Router::overflow() {
-    std::cout << "Overflowed" << std::endl;
     return overflowed_;
 }
 
