@@ -3,13 +3,10 @@
 
 #include "util.hh"
 #include "anneal.hh"
-#include "layout.hh"
 
 struct DetailedMove {
-    int source_blk_id;
-    Point source_pos;
-    int dest_blk_id;
-    Point dest_pos;
+    int blk_id;
+    Point new_pos;
 };
 bool operator< (const DetailedMove &m1, const DetailedMove &m2);
 
@@ -20,7 +17,6 @@ public:
                    std::map<char,
                             std::vector<std::pair<int, int>>> available_pos,
                    const std::map<std::string, std::pair<int, int>> &fixed_pos,
-                   const Layout &board_layout,
                    char clb_type,
                    bool fold_reg);
     DetailedPlacer(std::map<std::string, std::pair<int, int>> init_placement,
@@ -28,7 +24,6 @@ public:
                    std::map<char,
                             std::vector<std::pair<int, int>>> available_pos,
                    std::map<std::string, std::pair<int, int>> fixed_pos,
-                   const Layout &board_layout,
                    char clb_type,
                    bool fold_reg);
     double energy() override;
@@ -62,7 +57,6 @@ protected:
     std::map<int, std::set<int>> reg_no_pos_;
 
     std::map<char, std::map<std::pair<int, int>, std::set<int>>> loc_instances_;
-    std::map<char, std::vector<std::pair<int, int>>> avail_pos_anneal_;
     double d_limit_ = 0;
     int max_dim_ = 0;
     uint32_t num_blocks_ = 0;
@@ -129,7 +123,6 @@ private:
     uint32_t estimate_num_swaps() const;
 
     std::map<std::string, std::pair<int, int>> fixed_pos_;
-    Layout board_layout_;
 };
 
 

@@ -2,8 +2,6 @@
 #include <cmath>
 #include <limits>
 #include "global.hh"
-#include <iostream>
-#include <fstream>
 
 using std::map;
 using std::vector;
@@ -52,8 +50,6 @@ GlobalPlacer::GlobalPlacer(const ::map<::string, ::set<::string>> &clusters,
     // set up the boxes
     create_boxes();
 
-
-
     // setup reduced netlist
     auto [nets, intra_count] = this->collapse_netlist(netlists);
     netlists_ = nets;
@@ -65,8 +61,6 @@ GlobalPlacer::GlobalPlacer(const ::map<::string, ::set<::string>> &clusters,
 
     // init placement
     init_place();
-    
-
 
     // set annealing parameters
     this->tmax = tmin * 2;
@@ -155,7 +149,6 @@ void GlobalPlacer::create_boxes() {
     legal_spline_.resize(boxes_.size() + clusters_.size());
     for (const auto &iter : clusters_) {
         auto const &cluster_id = iter.first;
-
         int box_index = (int)boxes_.size();
         ::map<char, int> dsp_blocks;
         ClusterBox box;
@@ -206,7 +199,7 @@ void GlobalPlacer::create_boxes() {
             ::vector<double> x_data;
             auto dsp_columns = hidden_columns[blk_type];
             // sanity check
-            if (reduced_width_ <= static_cast<uint32_t>(width)) {
+            if (reduced_width_ < static_cast<uint32_t>(width)) {
                 throw std::runtime_error("Invalid layout. Tile array is too small");
             }
             for (uint32_t x = 0; x < reduced_width_ - width; x++) {
@@ -332,9 +325,8 @@ void GlobalPlacer::get_clb_types_() {
     auto blk_types = board_layout_.get_layer_types();
     auto priority_major = board_layout_.get_priority_major(clb_type_);
     for (const auto &blk_type : blk_types) {
-        if (board_layout_.get_priority_major(blk_type) == priority_major) {
+        if (board_layout_.get_priority_major(blk_type) == priority_major)
             clb_types_.insert(blk_type);
-        }
     }
 
     // set the margin here
@@ -770,10 +762,6 @@ double GlobalPlacer::compute_hpwl() const {
     return hpwl;
 }
 
-const char* bool_cast(const bool b) {
-    return b ? "1" : "0";
-}
-
 ::map<::string, ::map<char, ::vector<::pair<int, int>>>>
 GlobalPlacer::realize() {
     ::map<::string, ::map<char, ::vector<::pair<int, int>>>> result;
@@ -982,10 +970,9 @@ GlobalPlacer::realize() {
                     }
                 }
             }
-            if (blk_index.size() < (uint32_t)iter.second) {
+            if (blk_index.size() < (uint32_t)iter.second)
                 throw std::runtime_error("not enough space for blk type " +
                                          ::string(1, blk_type));
-            }
             std::sort(blk_index.begin(), blk_index.end(),
                       [=](const auto &p1,
                           const auto &p2) {
@@ -1139,15 +1126,6 @@ void GlobalPlacer::move() {
         bound_box(current_move_.box1);
     if (current_move_.box2.index >= 0)
         bound_box(current_move_.box2);
-        
-    std::ofstream myfile;
-    myfile.open ("boxes.txt", std::ios::app);
-
-    for (auto box : boxes_) {
-        myfile << box.xmin << " " << box.xmax << " " << box.ymin << " " << box.ymax << std::endl;
-    }
-    myfile << std::endl;
-    myfile.close();
 }
 
 void GlobalPlacer::bound_box(ClusterBox &box) {

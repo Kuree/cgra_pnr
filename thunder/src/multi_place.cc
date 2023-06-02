@@ -18,7 +18,6 @@ using std::set;
         const ::map<::string, ::map<char, ::vector<std::pair<int, int>>>> &cells,
         const ::map<::string, ::map<::string, ::vector<::string>>> &netlists,
         const ::map<::string, ::map<::string, ::pair<int, int>>> &fixed_blocks,
-        const Layout &layout,
         char clb_type, bool fold_reg, uint32_t seed) {
 
     uint64_t num_clusters = clusters.size();
@@ -31,7 +30,7 @@ using std::set;
     // use as much resource as possible
     num_cpus = std::min((uint32_t)num_clusters, num_cpus);
 
-    cxxpool::thread_pool pool{1};
+    cxxpool::thread_pool pool{num_cpus};
 
 
     ::vector<std::future<::map<::string, ::pair<int, int>>>> thread_tasks;
@@ -81,7 +80,7 @@ using std::set;
                 ::map<::string, ::pair<int, int>> f,
                 char c,
                 bool fold) {
-            DetailedPlacer placer(blks, n, p, f, layout, c, fold);
+            DetailedPlacer placer(blks, n, p, f, c, fold);
             placer.set_seed(seed);
             placer.anneal();
             // placer.refine(1000, 0.001, true);
@@ -108,10 +107,9 @@ using std::set;
         const ::map<::string, ::map<char, ::vector<std::pair<int, int>>>> &cells,
         const ::map<::string, ::map<::string, ::vector<::string>>> &netlists,
         const ::map<::string, ::map<::string, ::pair<int, int>>> &fixed_blocks,
-        const Layout &layout,
         char clb_type, bool fold_reg) {
     constexpr uint32_t seed = 0;
-    return multi_place(clusters, cells, netlists, fixed_blocks, layout, clb_type,
+    return multi_place(clusters, cells, netlists, fixed_blocks, clb_type,
                        fold_reg, seed);
 }
 
@@ -142,6 +140,6 @@ detailed_placement(const std::map<std::string, std::set<std::string>> &clusters,
     }
     // multi-core placement
     auto dp_result = multi_place(clusters, gp_result, multi_netlists,
-                                 multi_fixed_pos, layout, layout.get_clb_type(), true);
+                                 multi_fixed_pos, layout.get_clb_type(), true);
     return dp_result;
 }
