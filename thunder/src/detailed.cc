@@ -574,7 +574,7 @@ void DetailedPlacer::move() {
     moves_.clear();
     double action = detail_rand_.uniform(0.0, 1.0);
 
-    if (action < 0.2) {
+    if (action < 0.5) {
         // Translate
         auto curr_ins_id =
                 instance_ids_[detail_rand_.uniform<uint64_t>
@@ -590,11 +590,8 @@ void DetailedPlacer::move() {
         int moveX = 0;
         int moveY = 0;
 
-        if (action <= 0.1) {
-            moveX = detail_rand_.uniform<int>(-10, 10);
-        } else {
-            moveY = detail_rand_.uniform<int>(-10, 10);
-        }
+        moveX = detail_rand_.uniform<int>(-10, 10);
+        moveY = detail_rand_.uniform<int>(-10, 10);
 
         if (moveX == 0 && moveY == 0)
             return;
@@ -706,7 +703,7 @@ void DetailedPlacer::anneal() {
     // estimate the overall iterations
     sa_setup();
     tqdm bar;
-    uint32_t total_swaps = estimate_num_swaps() * num_swap_;
+    uint32_t total_swaps = estimate_num_swaps();
     double temp = tmax;
     uint32_t current_swap = 0;
     while (temp >= tmin) {
@@ -728,23 +725,25 @@ void DetailedPlacer::anneal() {
 
         // same schedule as estimation
         // 0.5
-        if (temp == tmax) {
-            temp /= 2;
-        }
-        // 0.9
-        else if (temp >= tmax * 0.1) {
-            temp *= 0.9;
-        }
-        // 0.95
-        else if (temp >= tmax * 0.0001) {
-            temp *= 0.95;
-        }
-        // 0.8
-        else if (temp >= tmin) {
-            temp *= 0.8;
-        }
+        // if (temp == tmax) {
+        //     temp /= 2;
+        // }
+        // // 0.9
+        // else if (temp >= tmax * 0.1) {
+        //     temp *= 0.9;
+        // }
+        // // 0.95
+        // else if (temp >= tmax * 0.0001) {
+        //     temp *= 0.95;
+        // }
+        // // 0.8
+        // else if (temp >= tmin) {
+        //     temp *= 0.8;
+        // }
+        temp *= 0.99;
 
         bar.progress(current_swap++, total_swaps);
+        // std::cout << current_swap++ << " " << temp << " " << curr_energy <<  std::endl;
 
         double r_accept = (double)accept / num_swap_;
         d_limit_ = d_limit_ * (1 - 0.44 + r_accept);
@@ -762,8 +761,8 @@ void DetailedPlacer::sa_setup() {
     for (uint32_t i = 0; i < num_blocks_; i++) {
         moves_.clear();
         move();
-        commit_changes();
         auto new_e = energy();
+        commit_changes();
         diff_e[i] = new_e;
     }
     // calculate the std dev
@@ -774,11 +773,12 @@ void DetailedPlacer::sa_setup() {
     double diff_sum = 0;
     for (auto const e: diff_e)
         diff_sum += (e - mean) * (e - mean);
+
     tmax = sqrt(diff_sum / (num_blocks_ + 1)) * 20;
     num_swap_ = static_cast<uint32_t>(10 * pow(num_blocks_, 1.33));
     tmin = 0.005 * curr_energy / netlist_.size();
 
-    // very very rare cases
+    // If all random moves did not change energy somehow
     if (tmax <= tmin) {
         cerr << "Unable to determine tmax. Use default temperature\n";
         tmax = 3000;
@@ -799,7 +799,7 @@ uint32_t DetailedPlacer::estimate_num_swaps() const {
     auto temp = tmax;
     // 0.5
     // temp /= 2;
-    num_swaps++;
+    // num_swaps++;
     // 0.9
     // while (temp >= tmax * 0.1) {
     //     temp *= 0.9;
@@ -816,7 +816,7 @@ uint32_t DetailedPlacer::estimate_num_swaps() const {
     //     num_swaps++;
     // }
     while (temp >= tmin) {
-        temp *= 0.97;
+        temp *= 0.99;
         num_swaps++;
     }
     return num_swaps;
