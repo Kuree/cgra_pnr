@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
         }
 
         // set up the router
-        auto r = std::make_unique<GlobalRouter>(100, graph);
+        auto r = std::make_unique<GlobalRouter>(50, graph);
         for (auto const &it: placement) {
             auto[x, y] = it.second;
             r->add_placement(x, y, it.first);

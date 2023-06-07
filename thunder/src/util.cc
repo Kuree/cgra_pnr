@@ -13,6 +13,7 @@ using std::string;
 using std::set;
 
 std::optional<uint32_t> hpwl_exp_param = {};
+std::optional<uint32_t> density_param = {};
 
 bool operator< (const Point &p1, const Point &p2) {
     return ::pair<int, int>({p1.x, p1.y}) < ::pair<int, int>({p2.x, p2.y});
@@ -29,6 +30,10 @@ std::ostream& operator<<(std::ostream& os, const Point &p) {
 
 void set_hpwl_exp_param(std::optional<uint32_t> value) {
     hpwl_exp_param = value;
+}
+
+void set_density_param(std::optional<uint32_t> value) {
+    density_param = value;
 }
 
 double get_hpwl(const ::vector<Net> &netlist,
@@ -51,6 +56,11 @@ double get_hpwl(const ::vector<Net> &netlist,
                 ymax = pos.y;
         }
         double diff = (xmax - xmin) + (ymax - ymin);
+        if (density_param) {
+            double min_length = static_cast<double>(*density_param);
+            if (diff < min_length)
+                diff = (min_length - diff) + min_length;
+        }
         if (hpwl_exp_param) {
             diff = std::pow(diff, static_cast<double>(*hpwl_exp_param));
         }

@@ -14,6 +14,7 @@ std::map<std::string, std::pair<int, int>>  multi_place(
                                     std::vector<std::string>>> &netlists,
         const std::map<std::string, std::map<std::string,
                                     std::pair<int, int>>> &fixed_blocks,
+        const Layout &layout,
         char clb_type, bool fold_reg, uint32_t seed);
 
 std::map<std::string, std::pair<int, int>>  multi_place(
@@ -24,6 +25,7 @@ std::map<std::string, std::pair<int, int>>  multi_place(
                 std::vector<std::string>>> &netlists,
         const std::map<std::string, std::map<std::string,
                 std::pair<int, int>>> &fixed_blocks,
+        const Layout &layout,
         char clb_type, bool fold_reg);
 
 std::map<std::string, std::pair<int, int>>

@@ -125,10 +125,12 @@ check_placement(const ::map<::string,
         if (blk_type == 'i' || blk_type == 'I')
             continue;
         auto const[x, y] = pos;
+        // std::cout << blk_id << " : " << x << ", " << y << std::endl;
         auto &blk_pos = available_pos.at(blk_type);
         if (std::find(blk_pos.begin(),blk_pos.end(),pos) == blk_pos.end())
             throw std::runtime_error("over use position " + std::to_string(x)
-                                     + " " + std::to_string(y));
+                                     + " " + std::to_string(y) + " block_id " 
+                                     + blk_id);
 
         blk_pos.erase(std::find(blk_pos.begin(),blk_pos.end(),pos));
     }
@@ -202,6 +204,18 @@ std::optional<uint32_t> get_hpwl_exp() {
     return std::nullopt;
 }
 
+std::optional<uint32_t> get_density_param() {
+    if (auto *str_value = std::getenv("PNR_PLACER_DENSITY")) {
+        try {
+            auto res = std::stoul(str_value);
+            return res;
+        } catch (const std::invalid_argument &) {
+
+        } catch (const std::out_of_range &) {}
+    }
+    return std::nullopt;
+}
+
 int main(int argc, char *argv[]) {
     auto const[layout_file, netlist_file, result_filename, use_prefix] =
     parse_cli_args(argc, argv);
@@ -243,6 +257,9 @@ int main(int argc, char *argv[]) {
         || (size.first <= dim_threshold && size.second <= dim_threshold)
         || (fixed_ratio >= partial_reconfigure_ratio) || disable_global_placement());
 
+    // Global placement doesnt work right now
+    skip_gp = true;
+
     if (!skip_gp) {
         // global placement
         auto gp = GlobalPlacer(clusters, netlist, fixed_pos, layout);
@@ -268,12 +285,7 @@ int main(int argc, char *argv[]) {
         gp.solve();
         gp.anneal();
 
-        try {
-            gp_result = gp.realize();
-        } catch (...) {
-            std::cout << "Global placement failed, trying detailed placement" << std::endl;
-            skip_gp = true;
-        }
+        gp_result = gp.realize();
     }
 
     if (skip_gp) {
@@ -292,7 +304,9 @@ int main(int argc, char *argv[]) {
     }
 
     auto hpwl_exp_param = get_hpwl_exp();
+    auto density_param = get_density_param();
     set_hpwl_exp_param(hpwl_exp_param);
+    set_density_param(density_param);
 
     map<string, pair<int, int>> dp_result = detailed_placement(clusters,
                                                                netlist,
@@ -305,6 +319,7 @@ int main(int argc, char *argv[]) {
                                         netlist,
                                         layout.produce_available_pos(),
                                         fixed_pos,
+                                        layout,
                                         layout.get_clb_type(),
                                         true);
     // compute the refine parameters

@@ -3,7 +3,6 @@
 #include <vector>
 #include <algorithm>
 #include "../src/detailed.hh"
-#include "../src/vpr.hh"
 #include "../src/global.hh"
 #include "../src/multi_place.hh"
 #include "../src/layout.hh"
@@ -111,12 +110,14 @@ void init_pythunder(py::module &m) {
                  ::map<::string, ::vector<std::string>>,
                  ::map<char, ::vector<::pair<int, int>>>,
                  ::map<::string, ::pair<int, int>>,
+                 const Layout&,
                  char,
                  bool>())
             .def(py::init<::map<::string, ::pair<int, int>>,
                     ::map<::string, ::vector<std::string>>,
                     ::map<char, ::vector<::pair<int, int>>>,
                     ::map<::string, ::pair<int, int>>,
+                    const Layout&,
                     char,
                     bool>())
             .def("anneal", &SimAnneal::anneal)
@@ -128,15 +129,6 @@ void init_pythunder(py::module &m) {
             .def_readwrite("tmax", &DetailedPlacer::tmax)
             .def_readwrite("tmin", &DetailedPlacer::tmin);
 
-    py::class_<VPRPlacer>(m, "VPRPlacer")
-            .def(py::init<std::map<std::string, std::pair<int, int>>,
-                    std::map<std::string, std::vector<std::string>>,
-                    std::map<char, std::vector<std::pair<int, int>>>,
-                    std::map<std::string, std::pair<int, int>>,
-                    char,
-                    bool>())
-            .def("anneal", &VPRPlacer::anneal)
-            .def("realize", &VPRPlacer::realize);
 
     py::class_<GlobalPlacer>(m, "GlobalPlacer")
             .def(py::init<std::map<std::string, std::set<std::string>>,
@@ -158,13 +150,13 @@ void init_detailed_placement(py::module &m) {
             const ::map<::string, ::map<char, std::vector<std::pair<int, int>>>>&,
             const ::map<::string, ::map<std::string, std::vector<std::string>>>&,
             const ::map<::string, ::map<std::string, std::pair<int, int>>>&,
-            char, bool>(&multi_place))
+            const Layout&, char, bool>(&multi_place))
       .def("detailed_placement",
              py::overload_cast<const ::map<::string, std::set<std::string>>&,
              const ::map<::string, ::map<char, std::vector<std::pair<int, int>>>>&,
              const ::map<::string, ::map<::string, std::vector<std::string>>>&,
              const ::map<::string, ::map<::string, std::pair<int, int>>>&,
-             char, bool, uint32_t>(&multi_place))
+             const Layout&, char, bool, uint32_t>(&multi_place))
       .def("detailed_placement", &detailed_placement);
 }
 
