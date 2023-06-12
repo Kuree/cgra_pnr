@@ -12,7 +12,6 @@ void SimAnneal::anneal() {
     auto t_factor = -log(tmax / tmin);
     // random setup
     for (current_step = 0; current_step < steps; current_step++) {
-        std::cout << "Anneal progress: " << current_step << "/" << steps << "\r" << std::flush;
         auto t = tmax * exp(t_factor * current_step / steps);
         // make changes
         move();
@@ -26,7 +25,6 @@ void SimAnneal::anneal() {
             this->curr_energy = new_energy;
         }
     }
-    std::cout << std::endl;
 }
 
 void SimAnneal::refine(int num_iter, double threshold, bool print_improvement) {
@@ -34,7 +32,6 @@ void SimAnneal::refine(int num_iter, double threshold, bool print_improvement) {
     while (true) {
         double old_energy = this->curr_energy;
         for (int i = 0; i < num_iter; i++) {
-            std::cout << "Refine progress: " << i << "/" << num_iter << "\r" << std::flush;
             move();
             double new_energy = energy();
             double de = new_energy - this->curr_energy;
@@ -53,7 +50,6 @@ void SimAnneal::refine(int num_iter, double threshold, bool print_improvement) {
         if (improvement < threshold)
             break;
     }
-    std::cout << std::endl;
 }
 
 double SimAnneal::estimate(const uint32_t steps) {

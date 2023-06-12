@@ -698,14 +698,13 @@ void DetailedPlacer::anneal() {
         }
     }
 
-
     // the anneal schedule is different from VPR's because we want to
     // estimate the overall iterations
     sa_setup();
     // tqdm bar;
-    uint32_t total_swaps = estimate_num_swaps();
+    // uint32_t total_swaps = estimate_num_swaps();
     double temp = tmax;
-    uint32_t current_swap = 0;
+    // uint32_t current_swap = 0;
     while (temp >= tmin) {
         uint32_t accept = 0;
         for (uint32_t i = 0; i < num_swap_; i++) {
@@ -743,14 +742,13 @@ void DetailedPlacer::anneal() {
         temp *= 0.99;
 
         // bar.progress(current_swap++, total_swaps);
-        std::cout << "Progress: " << current_swap++ << "/" << total_swaps << "\r" << std::flush;
+        // std::cout << "Progress: " << current_swap++ << "/" << total_swaps << "\r" << std::flush;
 
         double r_accept = (double)accept / num_swap_;
         d_limit_ = d_limit_ * (1 - 0.44 + r_accept);
         d_limit_ = CLAMP(d_limit_, 1, max_dim_);
     }
     // bar.finish();
-    std::cout << std::endl;
 }
 
 void DetailedPlacer::sa_setup() {
