@@ -239,7 +239,6 @@ char Layout::get_clb_type() const {
             auto blk_type = get_blk_type(x, y);
             auto blk_major = get_priority_major(blk_type);
             auto blk_minor = get_priority_minor(blk_type);
-
             if (blk_major >= major && blk_minor >= minor) {
                 blk = blk_type;
                 major = blk_major;
